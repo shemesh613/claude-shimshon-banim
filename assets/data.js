@@ -10,6 +10,16 @@ window.SITE = {
       "tags": [
         "חדש"
       ]
+    },
+    {
+      "title": "שיעור 2: שיר מלחן, וקאבר",
+      "text": "מעלים לחן ויוצרים עליו שיר, ועושים קאבר לשיר שיצרנו.",
+      "href": "lessons/suno2.html",
+      "icon": "music",
+      "color": "sky",
+      "tags": [
+        "חדש"
+      ]
     }
   ],
   "tools": [
