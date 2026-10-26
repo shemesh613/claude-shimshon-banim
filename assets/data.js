@@ -2,11 +2,11 @@
 window.SITE = {
   "lessons": [
     {
-      "title": "שיעור: יוצרים שיר עם Suno",
-      "text": "מתחברים עם חשבון גוגל, כותבים מילים, בוחרים סגנון ומקבלים שיר שלם.",
-      "href": "lessons/suno.html",
+      "title": "שיעור 3: מהקול שלי, ומנגינה בלי מילים",
+      "text": "זמזום הופך לשיר, מנגינה פשוטה לסרט, וקול קבוע משלי.",
+      "href": "lessons/suno3.html",
       "icon": "music",
-      "color": "coral",
+      "color": "leaf",
       "tags": [
         "חדש"
       ]
@@ -17,6 +17,16 @@ window.SITE = {
       "href": "lessons/suno2.html",
       "icon": "music",
       "color": "sky",
+      "tags": [
+        "חדש"
+      ]
+    },
+    {
+      "title": "שיעור: יוצרים שיר עם Suno",
+      "text": "מתחברים עם חשבון גוגל, כותבים מילים, בוחרים סגנון ומקבלים שיר שלם.",
+      "href": "lessons/suno.html",
+      "icon": "music",
+      "color": "coral",
       "tags": [
         "חדש"
       ]
