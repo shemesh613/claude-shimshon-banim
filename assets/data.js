@@ -17,9 +17,7 @@ window.SITE = {
       "href": "lessons/suno2.html",
       "icon": "music",
       "color": "sky",
-      "tags": [
-        "חדש"
-      ]
+      "tags": []
     },
     {
       "title": "שיעור: יוצרים שיר עם Suno",
@@ -27,9 +25,7 @@ window.SITE = {
       "href": "lessons/suno.html",
       "icon": "music",
       "color": "coral",
-      "tags": [
-        "חדש"
-      ]
+      "tags": []
     }
   ],
   "tools": [
