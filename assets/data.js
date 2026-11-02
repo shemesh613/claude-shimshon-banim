@@ -2,13 +2,23 @@
 window.SITE = {
   "lessons": [
     {
+      "title": "שיעור: ספר מהוראה אחת עם Gemini",
+      "text": "נכנסים ל-Gemini ויוצרים ספר מאויר שלם מהוראה אחת.",
+      "href": "lessons/gemini.html",
+      "icon": "star",
+      "color": "sun",
+      "tags": [
+        "חדש"
+      ]
+    },
+    {
       "title": "שיעור 3: מהקול שלי, ומנגינה בלי מילים",
       "text": "זמזום הופך לשיר, מנגינה פשוטה לסרט, וקול קבוע משלי.",
       "href": "lessons/suno3.html",
       "icon": "music",
       "color": "leaf",
       "tags": [
-        "חדש"
+        
       ]
     },
     {
