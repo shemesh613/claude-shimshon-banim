@@ -2,14 +2,22 @@
 window.SITE = {
   "lessons": [
     {
+      "title": "שיעור: מציירים בגמיני, בכל סגנון",
+      "text": "לוחצים על +, בוחרים יצירת תמונה, ומנסים את אותו ציור בסגנונות שונים.",
+      "href": "lessons/images.html",
+      "icon": "star",
+      "color": "sky",
+      "tags": [
+        "חדש"
+      ]
+    },
+    {
       "title": "שיעור: ספר מהוראה אחת עם Gemini",
       "text": "נכנסים ל-Gemini ויוצרים ספר מאויר שלם מהוראה אחת.",
       "href": "lessons/gemini.html",
       "icon": "star",
       "color": "sun",
-      "tags": [
-        "חדש"
-      ]
+      "tags": []
     },
     {
       "title": "שיעור 3: מהקול שלי, ומנגינה בלי מילים",
@@ -17,9 +25,7 @@ window.SITE = {
       "href": "lessons/suno3.html",
       "icon": "music",
       "color": "leaf",
-      "tags": [
-        
-      ]
+      "tags": []
     },
     {
       "title": "שיעור 2: שיר מלחן, וקאבר",
