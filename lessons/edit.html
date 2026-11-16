@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>משנים תמונה בגמיני</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Varela+Round&family=Rubik:wght@400;500&family=IBM+Plex+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="../assets/site.css?v=2026-10-26-fs">
+<style>
+  .ex-list { display: grid; gap: 22px; margin-top: 16px; max-width: 860px; }
+  .ex { background: var(--surface); border: 2.5px solid var(--line); border-radius: 22px; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+  .ex h3 { margin: 0; font: 600 1.2em/1.3 var(--font-display); }
+  .pair { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 10px; align-items: center; }
+  .pair figure { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+  .pair img, .single img { width: 100%; height: auto; border-radius: 14px; display: block; background: var(--line); }
+  .pair figcaption { font-size: .85em; color: var(--muted); text-align: center; }
+  .arrow { font: 600 1.8em/1 var(--font-display); color: var(--sky, #3a8dde); }
+  .single { max-width: 640px; }
+  .chain { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+  .chain figure { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+  .chain img { width: 100%; height: auto; border-radius: 12px; display: block; }
+  .chain figcaption { font-size: .8em; color: var(--muted); text-align: center; }
+  @media (max-width: 640px) {
+    .pair { grid-template-columns: minmax(0, 1fr); }
+    .arrow { transform: rotate(-90deg); justify-self: center; }
+    .chain { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  .ex .prompt { margin: 0; font-size: .95em; background: var(--bg, #f6f8fc); border-radius: 12px; padding: 8px 12px; }
+  .ex .copy { align-self: flex-start; min-height: 44px; padding: 6px 18px; font-size: .9em; }
+  .idea-list { display: grid; gap: 10px; padding: 0; list-style: none; margin: 14px 0 0; }
+  .idea-list li { background: var(--surface); border: 2.5px dashed var(--line); border-radius: 16px; padding: 10px 14px; }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">דילוג לתוכן</a>
+<div class="wrap">
+  <header class="top"><div class="crumbs"><a href="../index.html">→ חזרה לאתר החוג</a></div><nav aria-label="הגדרות"><button class="size-btn" id="size-btn" type="button" aria-pressed="false" aria-label="הגדלת טקסט">א+ טקסט גדול</button></nav></header>
+<main id="main">
+
+  <section class="lesson-hero">
+    <span class="icon coral"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h3l2-3h6l2 3h3v12H4z"/><circle cx="12" cy="13" r="4"/></svg></span>
+    <div>
+      <h1>משנים תמונה אמיתית בגמיני</h1>
+      <p>מעלים תמונה שצילמנו או מצאנו, ומבקשים מגמיני להוסיף, להחליף או לשנות בה פרטים.</p>
+    </div>
+  </section>
+
+  <p class="fig-note">עוד לא נכנסתם לגמיני? בשיעור ספר מהוראה אחת יש הסבר איך נכנסים: <a href="gemini.html">שיעור ספר מהוראה אחת</a>.</p>
+
+  <h2 class="sec">צופים בסרטון</h2>
+  <div class="player" data-set="E" data-intro="לוחצים ▶ וצופים איך משנים תמונה">
+    <div class="caption"><span class="step-num movie-num">1</span><span class="movie-caption"></span></div>
+    <div class="movie-host"></div>
+    <div class="controls">
+      <button class="btn movie-play" type="button">נגן ▶</button>
+      <button class="btn ghost movie-restart" type="button">מההתחלה</button>
+      <div class="progress movie-progress"></div>
+    </div>
+  </div>
+
+  <section class="step">
+    <div class="step-head"><span class="step-num">1</span><h3>מביאים תמונה</h3></div>
+    <p>מצלמים משהו שיש לנו, למשל את הסלון, החדר או הרחוב. אפשר גם לשמור תמונה מהאינטרנט.</p>
+  </section>
+
+  <section class="step">
+    <div class="step-head"><span class="step-num">2</span><h3>מעלים את התמונה לגמיני</h3></div>
+    <p>בתיבת הכתיבה לוחצים על <b>+</b>, בוחרים <b>העלאת קבצים</b>, ובוחרים את התמונה. התמונה מופיעה קטנה בתוך התיבה.</p>
+    <figure class="real" data-shot="eplus" data-marks="ePlus:2,eUpload:2" aria-label="כפתור הפלוס והאפשרות העלאת קבצים מסומנים"></figure>
+  </section>
+
+  <section class="step">
+    <div class="step-head"><span class="step-num">3</span><h3>כותבים מה לשנות</h3></div>
+    <p>מתחת לתמונה כותבים בדיוק מה רוצים. למשל: <b>שימי קוף שיושב על הספה שלנו</b>. לוחצים על החץ הכחול.</p>
+    <figure class="real" data-shot="etyped" data-marks="eText:3,eSend:3" aria-label="ההוראה וכפתור השליחה מסומנים"></figure>
+  </section>
+
+  <section class="step">
+    <div class="step-head"><span class="step-num">4</span><h3>ממשיכים לשנות</h3></div>
+    <p>התמונה החדשה מוכנה! אפשר להמשיך באותה שיחה ולבקש עוד שינוי, צעד אחרי צעד. גמיני זוכרת את התמונה הקודמת.</p>
+    <figure class="real" data-shot="eresult" data-marks="eResult:4" aria-label="התמונה החדשה"></figure>
+  </section>
+
+  <h2 class="sec">מה עשינו בשיעור</h2>
+  <p class="fig-note">אלה תמונות אמיתיות מהחוג: מימין התמונה המקורית, משמאל מה שגמיני יצרה. לוחצים <b>העתקה</b> כדי לנסות את אותה הוראה על תמונה משלכם.</p>
+  <div class="ex-list" id="examples"></div>
+
+  <h2 class="sec">תורכם לנסות</h2>
+  <ul class="idea-list">
+    <li>🐒 מצלמים את הסלון: <b>שימי קוף שיושב על הספה שלנו</b></li>
+    <li>🦒 מצלמים את החצר: <b>תוסיפי ג׳ירפה שמציצה מעל הגדר</b></li>
+    <li>❄️ מצלמים את הרחוב: <b>תהפכי את זה ליום עם שלג</b></li>
+    <li>🎨 מצלמים את החדר: <b>תצבעי את הקירות בכחול ותוסיפי בלונים</b></li>
+  </ul>
+
+  <div class="note"><b>טיפ:</b> כדאי לכתוב גם מה <b>לא</b> לשנות, למשל: <b>תשאירי את כל השאר בדיוק אותו דבר</b>. ואם רוצים כתב על התמונה, כותבים את המילים בדיוק כמו שהן צריכות להופיע.</div>
+  <div class="note"><b>חשוב:</b> מעלים רק תמונות שלנו, או של מי שהסכים. לא מעלים תמונות של חברים בלי לשאול אותם קודם.</div>
+
+</main>
+  <footer class="footer"><a href="../index.html">→ חזרה לאתר החוג</a></footer>
+</div>
+<script>
+(function () {
+  const EX = [
+    { title: "דובים על הכיסאות", prompt: "שים על הכסאות דובים יושבים", before: "img/ed-bears-before.jpg", after: "img/ed-bears-after.jpg", alt: "חדר אוכל עם כיסאות ריקים, ואחר כך עם דובוני פרווה על הכיסאות" },
+    { title: "דב רוקד סמבה ברחוב", prompt: "שים כאן דב רוקד סמבה", before: "img/ed-samba-before.jpg", after: "img/ed-samba-after.jpg", alt: "רחבה ליד העירייה, ואחר כך עם דב בתלבושת סמבה צבעונית" },
+    { title: "קוף על קופסת הקורנפלקס", prompt: "שימי קוף חמוד שמחזיק כדורסל במקום השחקן שעל קופסת הקורנפלקס, ותשאירי את כל השאר בדיוק אותו דבר", before: "img/ed-cereal-before.jpg", after: "img/ed-cereal-after.jpg", alt: "קופסת קורנפלקס עם שחקן כדורסל, ואחר כך עם קוף שמחזיק כדורסל" }
+  ];
+  const host = document.getElementById("examples");
+  host.innerHTML = EX.map((e, i) => {
+    let media;
+    if (e.single) media = `<div class="single"><img src="${e.single}" alt="${e.alt}" loading="lazy"></div>`;
+    else if (e.chain) media = `<div class="chain">${e.chain.map(([src, cap]) => `<figure><img src="${src}" alt="${cap}" loading="lazy"><figcaption>${cap}</figcaption></figure>`).join("")}</div>`;
+    else media = `<div class="pair"><figure><img src="${e.before}" alt="לפני: ${e.alt}" loading="lazy"><figcaption>לפני</figcaption></figure><span class="arrow" aria-hidden="true">←</span><figure><img src="${e.after}" alt="אחרי: ${e.alt}" loading="lazy"><figcaption>אחרי</figcaption></figure></div>`;
+    return `<div class="ex"><h3>${e.title}</h3>${media}<p class="prompt" id="p${i}">${e.prompt}</p><button class="btn ghost copy" type="button" data-i="${i}">העתקה</button></div>`;
+  }).join("");
+  host.addEventListener("click", (ev) => {
+    const b = ev.target.closest(".copy"); if (!b) return;
+    const text = document.getElementById("p" + b.dataset.i).textContent;
+    const done = () => { b.textContent = "הועתק ✓"; setTimeout(() => (b.textContent = "העתקה"), 1500); };
+    if (navigator.clipboard) navigator.clipboard.writeText(text).then(done, done); else done();
+  });
+})();
+</script>
+<script src="../assets/a11y.js"></script>
+<script src="../assets/shots4.js?v=2026-11-11-edit"></script>
+<script src="../assets/fullscreen.js"></script>
+</body>
+</html>
