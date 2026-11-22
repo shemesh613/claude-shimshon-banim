@@ -1,0 +1,1639 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>חדר גיימינג 3D - עמדת חלומות אינטראקטיבית</title>
+    <!-- טעינת Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- טעינת גופן עברי מודרני Rubik -->
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- טעינת Three.js ו-OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Rubik', sans-serif;
+            background-color: #05050a;
+            user-select: none;
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            outline: none;
+        }
+        /* אפקט זכוכית חלבית כהה (Dark Glassmorphism) */
+        .glass-panel {
+            background: rgba(10, 12, 22, 0.62);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.65);
+        }
+        .btn-active {
+            background: rgba(255, 255, 255, 0.22) !important;
+            border-color: rgba(255, 255, 255, 0.7) !important;
+            box-shadow: 0 0 16px rgba(255, 255, 255, 0.25);
+            color: #ffffff !important;
+        }
+        @keyframes neon-pulse {
+            0%, 100% { opacity: 0.7; transform: scale(0.98); }
+            50% { opacity: 1; transform: scale(1.02); }
+        }
+        .loader-glow {
+            animation: neon-pulse 1.8s infinite ease-in-out;
+        }
+        /* עיצוב מחוונים */
+        input[type=range] {
+            -webkit-appearance: none;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 999px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            height: 16px;
+            width: 16px;
+            border-radius: 50%;
+            background: #38bdf8;
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -5px;
+            box-shadow: 0 0 12px #38bdf8;
+            transition: transform 0.15s ease;
+        }
+        input[type=range]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+    </style>
+</head>
+<body class="text-white antialiased">
+
+    <!-- מסך טעינה -->
+    <div id="loading-screen" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#05050a] transition-opacity duration-700">
+        <div class="w-16 h-16 border-4 border-cyan-400 border-t-fuchsia-500 rounded-full animate-spin mb-4 shadow-[0_0_25px_rgba(34,211,238,0.5)]"></div>
+        <h2 class="text-2xl font-bold tracking-wider bg-gradient-to-l from-cyan-400 to-fuchsia-400 bg-clip-text text-transparent loader-glow">
+            טוען את חדר הגיימינג 3D...
+        </h2>
+        <p class="text-slate-400 text-sm mt-2">מדליק תאורת RGB, מסכים ומערכות קירור</p>
+    </div>
+
+    <!-- קנבס התלת-ממד -->
+    <div id="canvas-container" class="fixed inset-0 z-0"></div>
+
+    <!-- כפתור הצגה/הסתרה של הממשק -->
+    <button id="toggle-ui-btn" title="הסתר/הצג ממשק" class="fixed top-4 left-4 z-30 glass-panel p-3 rounded-full hover:bg-white/20 transition-all duration-300 text-white/90 hover:text-white">
+        <svg id="eye-open-icon" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+        </svg>
+        <svg id="eye-closed-icon" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+        </svg>
+    </button>
+
+    <!-- ממשק משתמש צף (HUD) -->
+    <div id="ui-overlay" class="fixed inset-0 z-10 pointer-events-none flex flex-col justify-between p-4 sm:p-6 transition-opacity duration-500">
+        
+        <!-- כותרת עליונה -->
+        <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pointer-events-auto max-w-md">
+            <div class="glass-panel px-5 py-3.5 rounded-2xl">
+                <div class="flex items-center gap-2.5">
+                    <span id="status-dot" class="w-3 h-3 rounded-full bg-cyan-400 shadow-[0_0_12px_#22d3ee]"></span>
+                    <h1 class="text-xl sm:text-2xl font-bold tracking-tight bg-gradient-to-l from-cyan-300 via-white to-fuchsia-300 bg-clip-text text-transparent">
+                        חדר גיימינג 3D
+                    </h1>
+                </div>
+                <p class="text-xs sm:text-sm text-slate-300 mt-1 font-light">
+                    גרור לסיבוב 360° • גלול לזום • שלוט בתאורה ובמסכים
+                </p>
+            </div>
+        </header>
+
+        <!-- פאנלי שליטה תחתונים -->
+        <div class="flex flex-col xl:flex-row justify-between items-stretch xl:items-end gap-4 w-full">
+            
+            <!-- צד ימין: מצלמה ומצבי מסכים -->
+            <div class="flex flex-col sm:flex-row xl:flex-col gap-3 pointer-events-auto">
+                
+                <!-- זוויות מצלמה -->
+                <div class="glass-panel p-4 rounded-2xl flex flex-col gap-2.5">
+                    <span class="text-xs font-medium text-slate-300 flex items-center gap-1.5">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                        זוויות מצלמה
+                    </span>
+                    <div class="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
+                        <button data-cam="room" class="cam-btn btn-active px-3 py-2 rounded-xl text-xs sm:text-sm bg-white/10 hover:bg-white/20 border border-white/10 transition-all">
+                            מבט כללי
+                        </button>
+                        <button data-cam="setup" class="cam-btn px-3 py-2 rounded-xl text-xs sm:text-sm bg-white/10 hover:bg-white/20 border border-white/10 transition-all">
+                            עמדת הגיימינג
+                        </button>
+                        <button data-cam="chair" class="cam-btn px-3 py-2 rounded-xl text-xs sm:text-sm bg-white/10 hover:bg-white/20 border border-white/10 transition-all">
+                            מבט מהכיסא
+                        </button>
+                        <button data-cam="pc" class="cam-btn px-3 py-2 rounded-xl text-xs sm:text-sm bg-white/10 hover:bg-white/20 border border-white/10 transition-all">
+                            מארז המחשב
+                        </button>
+                        <button id="auto-orbit-btn" class="px-3 py-2 rounded-xl text-xs sm:text-sm bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/40 text-cyan-200 transition-all flex items-center justify-center gap-1.5 col-span-2 sm:col-span-1">
+                            <span id="orbit-dot" class="w-2 h-2 rounded-full bg-cyan-400 animate-ping hidden"></span>
+                            סיור קולנועי
+                        </button>
+                    </div>
+                </div>
+
+                <!-- מצב תצוגת מסכים -->
+                <div class="glass-panel p-4 rounded-2xl flex flex-col gap-2.5">
+                    <span class="text-xs font-medium text-slate-300 flex items-center gap-1.5">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-fuchsia-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                        תצוגת מסכים (3 מסכים)
+                    </span>
+                    <div class="grid grid-cols-3 gap-2">
+                        <button data-screen="gaming" class="screen-btn btn-active px-2.5 py-2 rounded-xl text-xs bg-white/10 hover:bg-white/20 border border-white/10 transition-all">
+                            משחק אקשן
+                        </button>
+                        <button data-screen="stream" class="screen-btn px-2.5 py-2 rounded-xl text-xs bg-white/10 hover:bg-white/20 border border-white/10 transition-all">
+                            סטרימינג וצ'אט
+                        </button>
+                        <button data-screen="lofi" class="screen-btn px-2.5 py-2 rounded-xl text-xs bg-white/10 hover:bg-white/20 border border-white/10 transition-all">
+                            מנוחה Lo-Fi
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- צד שמאל: ערכות תאורה ועוצמת RGB -->
+            <div class="glass-panel p-4 rounded-2xl pointer-events-auto flex flex-col gap-3.5 w-full xl:w-[420px]">
+                <div class="flex justify-between items-center">
+                    <span class="text-xs font-medium text-slate-300 flex items-center gap-1.5">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                        ערכת תאורה ואווירת RGB
+                    </span>
+                    <span id="theme-badge" class="text-xs font-semibold px-2.5 py-0.5 rounded-md bg-cyan-500/20 text-cyan-300 border border-cyan-400/30">
+                        סייברפאנק
+                    </span>
+                </div>
+
+                <!-- כפתורי ערכות צבע -->
+                <div class="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+                    <button data-theme="cyberpunk" class="theme-btn btn-active py-2 px-2 rounded-xl text-xs bg-white/10 hover:bg-white/20 border border-white/10 transition-all">
+                        סייברפאנק
+                    </button>
+                    <button data-theme="synthwave" class="theme-btn py-2 px-2 rounded-xl text-xs bg-white/10 hover:bg-white/20 border border-white/10 transition-all">
+                        סינת'ווייב
+                    </button>
+                    <button data-theme="matrix" class="theme-btn py-2 px-2 rounded-xl text-xs bg-white/10 hover:bg-white/20 border border-white/10 transition-all">
+                        מטריקס
+                    </button>
+                    <button data-theme="cozy" class="theme-btn py-2 px-2 rounded-xl text-xs bg-white/10 hover:bg-white/20 border border-white/10 transition-all">
+                        אווירה חמה
+                    </button>
+                    <button data-theme="rainbow" class="theme-btn py-2 px-2 rounded-xl text-xs bg-gradient-to-r from-rose-500/30 via-emerald-500/30 to-indigo-500/30 hover:opacity-90 border border-white/15 transition-all col-span-2 sm:col-span-1">
+                        ריינבו 🌈
+                    </button>
+                </div>
+
+                <!-- סליידר עוצמת תאורה ומתג אור חדר -->
+                <div class="flex items-center justify-between gap-4 pt-2 border-t border-white/10">
+                    <div class="flex-1 flex flex-col gap-1">
+                        <div class="flex justify-between text-xs text-slate-300">
+                            <span>עוצמת זוהר RGB</span>
+                            <span id="rgb-intensity-val" class="text-cyan-300 font-medium">100%</span>
+                        </div>
+                        <input id="rgb-slider" type="range" min="0.1" max="1.8" step="0.05" value="1.0" class="w-full">
+                    </div>
+
+                    <button id="room-light-btn" class="px-3.5 py-2 rounded-xl text-xs font-medium bg-white/10 hover:bg-white/20 border border-white/15 transition-all flex items-center gap-1.5 shrink-0">
+                        <span id="bulb-icon">💡</span>
+                        <span id="room-light-text">אור חדר: כבוי</span>
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        /**
+         * חדר גיימינג 3D (Gaming Room 3D)
+         * סביבה תלת-ממדית אינטראקטיבית מלאה ב-Three.js עם טקסטורות דינמיות מונפשות בזמן אמת
+         */
+
+        let scene, camera, renderer, controls;
+        let clock = new THREE.Clock();
+
+        // אובייקטי תאורה וחומרים זוהרים
+        let ambientLight, roomCeilingLight, deskPointLight, wallPointLight, windowLight;
+        let primaryEmissiveMats = [];
+        let secondaryEmissiveMats = [];
+        let hexPanelMats = [];
+        let neonSignMat;
+        let pcFans = [];
+        let chairGroup;
+
+        // קנבסים דינמיים למסכים ולחלון
+        let mainScreenCanvas, mainScreenCtx, mainScreenTex;
+        let leftScreenCanvas, leftScreenCtx, leftScreenTex;
+        let rightScreenCanvas, rightScreenCtx, rightScreenTex;
+        let windowCanvas, windowCtx, windowTex;
+
+        // נתוני הנפשה למסכים ולעיר
+        let cityBuildings = [];
+        let rainDrops = [];
+        let spaceEnemies = [];
+        let audioBars = new Array(24).fill(0.3);
+
+        // מצב האפליקציה
+        const state = {
+            theme: 'cyberpunk',
+            screenMode: 'gaming', // 'gaming' | 'stream' | 'lofi'
+            rgbIntensity: 1.0,
+            roomLightOn: false,
+            autoOrbit: false,
+            isTransitioningCam: false,
+            targetCamPos: new THREE.Vector3(3.4, 2.35, 3.6),
+            targetLookAt: new THREE.Vector3(-0.3, 1.15, -0.8)
+        };
+
+        // ערכות צבעים
+        const themes = {
+            cyberpunk: { name: 'סייברפאנק', primary: 0x00f3ff, secondary: 0xff00aa, accent: 0x7000ff },
+            synthwave: { name: 'סינת\'ווייב', primary: 0xff2a85, secondary: 0xff9e00, accent: 0x6a00f4 },
+            matrix:    { name: 'מטריקס',    primary: 0x00ff66, secondary: 0x059669, accent: 0x10b981 },
+            cozy:      { name: 'אווירה חמה', primary: 0xff9e44, secondary: 0xf43f5e, accent: 0xfbbf24 },
+            rainbow:   { name: 'ריינבו דינמי', primary: 0x00f3ff, secondary: 0xff00aa, accent: 0x00ff66 }
+        };
+
+        // זוויות מצלמה מוגדרות מראש
+        const cameraPresets = {
+            room:  { pos: new THREE.Vector3(3.4, 2.35, 3.6),  target: new THREE.Vector3(-0.3, 1.15, -0.8) },
+            setup: { pos: new THREE.Vector3(0.0, 1.48, 0.75), target: new THREE.Vector3(0.0, 1.18, -1.75) },
+            chair: { pos: new THREE.Vector3(0.15, 1.38, -0.15), target: new THREE.Vector3(0.0, 1.18, -1.85) },
+            pc:    { pos: new THREE.Vector3(1.65, 1.42, -0.75), target: new THREE.Vector3(1.18, 1.15, -1.65) }
+        };
+
+        // אתחול ראשי
+        function init() {
+            const container = document.getElementById('canvas-container');
+
+            // 1. סצנה וערפל עומק עדין
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x06070d);
+            scene.fog = new THREE.FogExp2(0x06070d, 0.045);
+
+            // 2. מצלמה
+            camera = new THREE.PerspectiveCamera(52, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.copy(state.targetCamPos);
+
+            // 3. רנדרר איכותי עם צללים
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.15;
+            container.appendChild(renderer.domElement);
+
+            // 4. בקרת מצלמה OrbitControls
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.06;
+            controls.minDistance = 0.9;
+            controls.maxDistance = 6.2;
+            controls.maxPolarAngle = Math.PI / 2 - 0.03;
+            controls.minAzimuthAngle = -0.25; controls.maxAzimuthAngle = 1.65; controls.maxDistance = 6.0; // keep the camera inside the room
+            controls.target.copy(state.targetLookAt);
+
+            controls.addEventListener('start', () => {
+                state.isTransitioningCam = false;
+            });
+
+            // 5. בניית החדר וכל הפריטים
+            setupLights();
+            initDynamicTextures();
+            buildRoomArchitecture();
+            buildWindowWithCity();
+            buildGamingDesk();
+            buildTripleMonitors();
+            buildGamingPC();
+            buildPeripherals();
+            buildGamingChair();
+            buildWallDecorAndShelves();
+            buildMiniFridgeAndExtras();
+
+            // 6. החלת ערכת תאורה והגדרת ממשק
+            applyTheme(state.theme);
+            setupUI();
+            window.addEventListener('resize', onWindowResize);
+
+            // הסתרת מסך הטעינה
+            setTimeout(() => {
+                const loader = document.getElementById('loading-screen');
+                loader.style.opacity = '0';
+                setTimeout(() => loader.remove(), 700);
+            }, 500);
+
+            animate();
+        }
+
+        // הגדרת מערך התאורה בחדר
+        function setupLights() {
+            ambientLight = new THREE.AmbientLight(0x1e243b, 0.45);
+            scene.add(ambientLight);
+
+            // אור תקרה ראשי (נשלט ע"י כפתור אור החדר)
+            roomCeilingLight = new THREE.PointLight(0xfff1e0, 0.15, 14);
+            roomCeilingLight.position.set(0, 3.3, 0.5);
+            roomCeilingLight.castShadow = true;
+            roomCeilingLight.shadow.bias = -0.001;
+            scene.add(roomCeilingLight);
+
+            // תאורת RGB מרכזית מעל השולחן
+            deskPointLight = new THREE.PointLight(0x00f3ff, 1.6, 7.5);
+            deskPointLight.position.set(0, 1.65, -1.35);
+            deskPointLight.castShadow = true;
+            deskPointLight.shadow.bias = -0.001;
+            scene.add(deskPointLight);
+
+            // תאורת אווירה משנית מהקיר והפנלים
+            wallPointLight = new THREE.PointLight(0xff00aa, 1.3, 8);
+            wallPointLight.position.set(-1.5, 2.1, -1.8);
+            scene.add(wallPointLight);
+
+            // אור כחלחל-לילי שנכנס מהחלון השמאלי
+            windowLight = new THREE.DirectionalLight(0x38bdf8, 0.45);
+            windowLight.position.set(-5, 2.5, -0.5);
+            scene.add(windowLight);
+        }
+
+        // אתחול קנבסים דינמיים למסכים ולנוף מהחלון
+        function initDynamicTextures() {
+            // מסך מרכזי רחב (Ultrawide)
+            mainScreenCanvas = document.createElement('canvas');
+            mainScreenCanvas.width = 1024;
+            mainScreenCanvas.height = 440;
+            mainScreenCtx = mainScreenCanvas.getContext('2d');
+            mainScreenTex = new THREE.CanvasTexture(mainScreenCanvas);
+
+            // מסך שמאלי אנכי (צ'אט / Discord / קוד)
+            leftScreenCanvas = document.createElement('canvas');
+            leftScreenCanvas.width = 360;
+            leftScreenCanvas.height = 640;
+            leftScreenCtx = leftScreenCanvas.getContext('2d');
+            leftScreenTex = new THREE.CanvasTexture(leftScreenCanvas);
+
+            // מסך ימני אנכי (אקולייזר מוזיקה ונתוני חומרה)
+            rightScreenCanvas = document.createElement('canvas');
+            rightScreenCanvas.width = 360;
+            rightScreenCanvas.height = 640;
+            rightScreenCtx = rightScreenCanvas.getContext('2d');
+            rightScreenTex = new THREE.CanvasTexture(rightScreenCanvas);
+
+            // חלון לנוף עירוני לילי
+            windowCanvas = document.createElement('canvas');
+            windowCanvas.width = 512;
+            windowCanvas.height = 512;
+            windowCtx = windowCanvas.getContext('2d');
+            windowTex = new THREE.CanvasTexture(windowCanvas);
+
+            // אתחול בנייני העיר לחלון
+            for (let i = 0; i < 16; i++) {
+                const w = 32 + Math.random() * 38;
+                const h = 140 + Math.random() * 240;
+                const x = i * 34 - 10;
+                const winGrid = [];
+                for (let wy = 15; wy < h - 15; wy += 16) {
+                    for (let wx = 6; wx < w - 8; wx += 10) {
+                        winGrid.push({
+                            x: wx,
+                            y: wy,
+                            lit: Math.random() > 0.45,
+                            color: Math.random() > 0.25 ? '#fef08a' : '#38bdf8'
+                        });
+                    }
+                }
+                cityBuildings.push({ x, w, h, color: i % 2 === 0 ? '#0f172a' : '#1e1b4b', winGrid });
+            }
+
+            for (let i = 0; i < 65; i++) {
+                rainDrops.push({
+                    x: Math.random() * 512,
+                    y: Math.random() * 512,
+                    len: 10 + Math.random() * 14,
+                    speed: 6 + Math.random() * 6
+                });
+            }
+
+            // אויבים למשחק החלל במסך המרכזי
+            for (let i = 0; i < 6; i++) {
+                spaceEnemies.push({
+                    x: 150 + i * 140,
+                    y: 120 + (i % 2) * 50,
+                    phase: i * 1.1
+                });
+            }
+        }
+
+        // בניית מבנה החדר: רצפת פרקט, קירות כהים מעוצבים, פנלים מאירים ושטיח
+        function buildRoomArchitecture() {
+            const roomGroup = new THREE.Group();
+            scene.add(roomGroup);
+
+            // יצירת טקסטורת פרקט כהה
+            const woodCanvas = document.createElement('canvas');
+            woodCanvas.width = 512;
+            woodCanvas.height = 512;
+            const wCtx = woodCanvas.getContext('2d');
+            wCtx.fillStyle = '#18151c';
+            wCtx.fillRect(0, 0, 512, 512);
+            for (let y = 0; y < 512; y += 32) {
+                wCtx.fillStyle = (y / 32) % 2 === 0 ? '#1e1a24' : '#16131b';
+                wCtx.fillRect(0, y, 512, 30);
+                wCtx.fillStyle = '#0d0b10';
+                wCtx.fillRect(0, y + 30, 512, 2);
+            }
+            const woodTex = new THREE.CanvasTexture(woodCanvas);
+            woodTex.wrapS = THREE.RepeatWrapping;
+            woodTex.wrapT = THREE.RepeatWrapping;
+            woodTex.repeat.set(4, 4);
+
+            // רצפה
+            const floor = new THREE.Mesh(
+                new THREE.PlaneGeometry(7.2, 6.8),
+                new THREE.MeshStandardMaterial({ map: woodTex, roughness: 0.45, metalness: 0.1 })
+            );
+            floor.rotation.x = -Math.PI / 2;
+            floor.receiveShadow = true;
+            roomGroup.add(floor);
+
+            // תקרה
+            const ceiling = new THREE.Mesh(
+                new THREE.PlaneGeometry(7.2, 6.8),
+                new THREE.MeshStandardMaterial({ color: 0x0c0e17, roughness: 0.9 })
+            );
+            ceiling.rotation.x = Math.PI / 2;
+            ceiling.position.y = 3.6;
+            roomGroup.add(ceiling);
+
+            // חומר קירות מט מודרני
+            const wallMat = new THREE.MeshStandardMaterial({ color: 0x131622, roughness: 0.85, metalness: 0.05 });
+
+            // קיר אחורי (מאחורי עמדת המחשב)
+            const backWall = new THREE.Mesh(new THREE.BoxGeometry(7.2, 3.6, 0.15), wallMat);
+            backWall.position.set(0, 1.8, -2.5);
+            backWall.receiveShadow = true;
+            roomGroup.add(backWall);
+
+            // קיר שמאלי (עם פתח לחלון הגדול)
+            const leftWallLower = new THREE.Mesh(new THREE.BoxGeometry(0.15, 1.0, 6.8), wallMat);
+            leftWallLower.position.set(-3.5, 0.5, 0.8);
+            roomGroup.add(leftWallLower);
+
+            const leftWallUpper = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.7, 6.8), wallMat);
+            leftWallUpper.position.set(-3.5, 3.25, 0.8);
+            roomGroup.add(leftWallUpper);
+
+            const leftWallFront = new THREE.Mesh(new THREE.BoxGeometry(0.15, 1.9, 2.2), wallMat);
+            leftWallFront.position.set(-3.5, 1.95, 2.2);
+            roomGroup.add(leftWallFront);
+
+            const leftWallBack = new THREE.Mesh(new THREE.BoxGeometry(0.15, 1.9, 1.6), wallMat);
+            leftWallBack.position.set(-3.5, 1.95, -1.7);
+            roomGroup.add(leftWallBack);
+
+            // קיר ימני
+            const rightWall = new THREE.Mesh(new THREE.BoxGeometry(0.15, 3.6, 6.8), wallMat);
+            rightWall.position.set(3.5, 1.8, 0.8);
+            rightWall.receiveShadow = true;
+            roomGroup.add(rightWall);
+
+            // קיר קדמי (מאחורי המצלמה לסגירת השתקפויות)
+            const frontWall = new THREE.Mesh(new THREE.BoxGeometry(7.2, 3.6, 0.15), wallMat);
+            frontWall.position.set(0, 1.8, 4.2);
+            roomGroup.add(frontWall);
+
+            // פסי תאורת LED בתקרה ובפנלים התחתונים
+            const ledPrimaryMat = new THREE.MeshStandardMaterial({
+                color: 0x00f3ff,
+                emissive: 0x00f3ff,
+                emissiveIntensity: 1.5
+            });
+            primaryEmissiveMats.push(ledPrimaryMat);
+
+            const ledSecondaryMat = new THREE.MeshStandardMaterial({
+                color: 0xff00aa,
+                emissive: 0xff00aa,
+                emissiveIntensity: 1.5
+            });
+            secondaryEmissiveMats.push(ledSecondaryMat);
+
+            // פס לד תקרה אחורי
+            const ceilingStripBack = new THREE.Mesh(new THREE.BoxGeometry(6.8, 0.04, 0.06), ledPrimaryMat);
+            ceilingStripBack.position.set(0, 3.56, -2.38);
+            roomGroup.add(ceilingStripBack);
+
+            // פס לד תקרה ימני ושמאלי
+            const ceilingStripRight = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.04, 6.4), ledSecondaryMat);
+            ceilingStripRight.position.set(3.38, 3.56, 0.8);
+            roomGroup.add(ceilingStripRight);
+
+            const ceilingStripLeft = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.04, 6.4), ledSecondaryMat);
+            ceilingStripLeft.position.set(-3.38, 3.56, 0.8);
+            roomGroup.add(ceilingStripLeft);
+
+            // שטיח גיימינג עגול מתחת לכיסא
+            const rugGeo = new THREE.CylinderGeometry(1.55, 1.55, 0.02, 48);
+            const rugMat = new THREE.MeshStandardMaterial({ color: 0x161927, roughness: 0.95 });
+            const rug = new THREE.Mesh(rugGeo, rugMat);
+            rug.position.set(0, 0.01, -0.35);
+            rug.receiveShadow = true;
+            roomGroup.add(rug);
+
+            // טבעת LED זוהרת סביב השטיח
+            const rugRing = new THREE.Mesh(
+                new THREE.TorusGeometry(1.55, 0.015, 8, 64),
+                ledPrimaryMat
+            );
+            rugRing.rotation.x = Math.PI / 2;
+            rugRing.position.set(0, 0.02, -0.35);
+            roomGroup.add(rugRing);
+        }
+
+        // בניית החלון הגדול עם נוף העיר הלילית והגשם
+        function buildWindowWithCity() {
+            const winGroup = new THREE.Group();
+            winGroup.position.set(-3.45, 1.95, 0.1);
+            scene.add(winGroup);
+
+            // מסגרת חלון אלומיניום כהה
+            const frameMat = new THREE.MeshStandardMaterial({ color: 0x090a0f, roughness: 0.4, metalness: 0.7 });
+            const topBar = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.08, 2.25), frameMat);
+            topBar.position.y = 0.92;
+            winGroup.add(topBar);
+
+            const botBar = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.08, 2.3), frameMat);
+            botBar.position.y = -0.92;
+            winGroup.add(botBar);
+
+            const midDivider = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.85, 0.06), frameMat);
+            winGroup.add(midDivider);
+
+            // תצוגת הנוף העירוני המונפש מחוץ לחלון
+            const cityPlane = new THREE.Mesh(
+                new THREE.PlaneGeometry(2.15, 1.8),
+                new THREE.MeshBasicMaterial({ map: windowTex })
+            );
+            cityPlane.rotation.y = Math.PI / 2;
+            cityPlane.position.x = -0.05;
+            winGroup.add(cityPlane);
+
+            // אדנית קטנה עם צמח על אדן החלון
+            const pot = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.08, 0.06, 0.14, 12),
+                new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.4 })
+            );
+            pot.position.set(0.06, -0.82, -0.7);
+            winGroup.add(pot);
+
+            const plant = new THREE.Mesh(
+                new THREE.DodecahedronGeometry(0.11, 1),
+                new THREE.MeshStandardMaterial({ color: 0x10b981, roughness: 0.7 })
+            );
+            plant.position.set(0.06, -0.71, -0.7);
+            winGroup.add(plant);
+        }
+
+        // בניית שולחן הגיימינג הרחב עם תאורת RGB היקפית
+        function buildGamingDesk() {
+            const deskGroup = new THREE.Group();
+            deskGroup.position.set(0, 0, -1.65);
+            scene.add(deskGroup);
+
+            // משטח עליון בגימור סיבי פחמן (Carbon Fiber) כהה
+            const topMat = new THREE.MeshStandardMaterial({
+                color: 0x14161f,
+                roughness: 0.35,
+                metalness: 0.3
+            });
+            const deskTop = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.06, 1.05), topMat);
+            deskTop.position.y = 0.78;
+            deskTop.castShadow = true;
+            deskTop.receiveShadow = true;
+            deskGroup.add(deskTop);
+
+            // פס תאורת RGB לאורך שפת השולחן
+            const rgbEdgeMat = new THREE.MeshStandardMaterial({
+                color: 0x00f3ff,
+                emissive: 0x00f3ff,
+                emissiveIntensity: 1.6
+            });
+            primaryEmissiveMats.push(rgbEdgeMat);
+
+            const frontEdge = new THREE.Mesh(new THREE.BoxGeometry(3.22, 0.025, 0.02), rgbEdgeMat);
+            frontEdge.position.set(0, 0.78, 0.53);
+            deskGroup.add(frontEdge);
+
+            const backEdge = new THREE.Mesh(new THREE.BoxGeometry(3.22, 0.025, 0.02), rgbEdgeMat);
+            backEdge.position.set(0, 0.78, -0.53);
+            deskGroup.add(backEdge);
+
+            // רגלי מתכת בצורת Z / T מודרנית
+            const legMat = new THREE.MeshStandardMaterial({ color: 0x0d0f14, roughness: 0.5, metalness: 0.7 });
+            [-1.38, 1.38].forEach(xPos => {
+                const verticalLeg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.76, 0.12), legMat);
+                verticalLeg.position.set(xPos, 0.38, 0);
+                verticalLeg.castShadow = true;
+                deskGroup.add(verticalLeg);
+
+                const foot = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.04, 0.92), legMat);
+                foot.position.set(xPos, 0.02, 0);
+                foot.castShadow = true;
+                deskGroup.add(foot);
+
+                // פס RGB אנכי על הרגל
+                const legLed = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.62, 0.02), rgbEdgeMat);
+                legLed.position.set(xPos, 0.4, 0.065);
+                deskGroup.add(legLed);
+            });
+
+            // פד עכבר רחב במיוחד (Extended RGB Desk Mat)
+            const matMesh = new THREE.Mesh(
+                new THREE.BoxGeometry(1.45, 0.008, 0.48),
+                new THREE.MeshStandardMaterial({ color: 0x0b0d13, roughness: 0.9 })
+            );
+            matMesh.position.set(-0.15, 0.814, 0.2);
+            matMesh.receiveShadow = true;
+            deskGroup.add(matMesh);
+
+            const matBorder = new THREE.Mesh(
+                new THREE.BoxGeometry(1.46, 0.006, 0.49),
+                rgbEdgeMat
+            );
+            matBorder.position.set(-0.15, 0.812, 0.2);
+            deskGroup.add(matBorder);
+        }
+
+        // בניית מערך שלושת המסכים (מרכזי קעור רחב + 2 צדדיים אנכיים)
+        function buildTripleMonitors() {
+            const monitorsGroup = new THREE.Group();
+            monitorsGroup.position.set(-0.15, 0.81, -1.85);
+            scene.add(monitorsGroup);
+
+            const plasticMat = new THREE.MeshStandardMaterial({ color: 0x11131a, roughness: 0.4, metalness: 0.4 });
+            const standMat = new THREE.MeshStandardMaterial({ color: 0x1e222d, roughness: 0.3, metalness: 0.7 });
+
+            // זרוע מרכזית לשולחן
+            const mainArm = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 0.48, 12), standMat);
+            mainArm.position.set(0, 0.24, -0.12);
+            mainArm.castShadow = true;
+            monitorsGroup.add(mainArm);
+
+            const armBase = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.02, 0.22), standMat);
+            armBase.position.set(0, 0.01, -0.1);
+            monitorsGroup.add(armBase);
+
+            // 1. מסך מרכזי רחב (34" Ultrawide)
+            const centerGroup = new THREE.Group();
+            centerGroup.position.set(0, 0.42, 0.02);
+            monitorsGroup.add(centerGroup);
+
+            const centerBezel = new THREE.Mesh(new THREE.BoxGeometry(1.16, 0.52, 0.035), plasticMat);
+            centerBezel.castShadow = true;
+            centerGroup.add(centerBezel);
+
+            const centerDisplay = new THREE.Mesh(
+                new THREE.PlaneGeometry(1.12, 0.48),
+                new THREE.MeshBasicMaterial({ map: mainScreenTex })
+            );
+            centerDisplay.position.z = 0.019;
+            centerGroup.add(centerDisplay);
+
+            // 2. מסך שמאלי אנכי (Vertical Side Monitor)
+            const leftGroup = new THREE.Group();
+            leftGroup.position.set(-0.79, 0.44, 0.14);
+            leftGroup.rotation.y = 0.42;
+            monitorsGroup.add(leftGroup);
+
+            const leftBezel = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.62, 0.03), plasticMat);
+            leftBezel.castShadow = true;
+            leftGroup.add(leftBezel);
+
+            const leftDisplay = new THREE.Mesh(
+                new THREE.PlaneGeometry(0.33, 0.59),
+                new THREE.MeshBasicMaterial({ map: leftScreenTex })
+            );
+            leftDisplay.position.z = 0.017;
+            leftGroup.add(leftDisplay);
+
+            // 3. מסך ימני אנכי (Vertical Side Monitor)
+            const rightGroup = new THREE.Group();
+            rightGroup.position.set(0.79, 0.44, 0.14);
+            rightGroup.rotation.y = -0.42;
+            monitorsGroup.add(rightGroup);
+
+            const rightBezel = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.62, 0.03), plasticMat);
+            rightBezel.castShadow = true;
+            rightGroup.add(rightBezel);
+
+            const rightDisplay = new THREE.Mesh(
+                new THREE.PlaneGeometry(0.33, 0.59),
+                new THREE.MeshBasicMaterial({ map: rightScreenTex })
+            );
+            rightDisplay.position.z = 0.017;
+            rightGroup.add(rightDisplay);
+        }
+
+        // בניית מארז מחשב גיימינג שקוף על הצד הימני של השולחן
+        function buildGamingPC() {
+            const pcGroup = new THREE.Group();
+            pcGroup.position.set(1.18, 0.81, -1.62);
+            pcGroup.rotation.y = -0.25;
+            scene.add(pcGroup);
+
+            const caseMetalMat = new THREE.MeshStandardMaterial({ color: 0x0f1117, roughness: 0.35, metalness: 0.7 });
+            const glassMat = new THREE.MeshPhysicalMaterial({
+                color: 0xffffff,
+                transparent: true,
+                opacity: 0.22,
+                roughness: 0.05,
+                metalness: 0.1,
+                transmission: 0.7
+            });
+
+            const rgbPrimary = new THREE.MeshStandardMaterial({
+                color: 0x00f3ff,
+                emissive: 0x00f3ff,
+                emissiveIntensity: 2.0
+            });
+            primaryEmissiveMats.push(rgbPrimary);
+
+            const rgbSecondary = new THREE.MeshStandardMaterial({
+                color: 0xff00aa,
+                emissive: 0xff00aa,
+                emissiveIntensity: 2.0
+            });
+            secondaryEmissiveMats.push(rgbSecondary);
+
+            // שלדת המארז (תחתית, גג, גב וחזית)
+            const bottom = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.03, 0.52), caseMetalMat);
+            bottom.position.y = 0.015;
+            pcGroup.add(bottom);
+
+            const top = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.03, 0.52), caseMetalMat);
+            top.position.y = 0.52;
+            pcGroup.add(top);
+
+            const backPanel = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.52, 0.52), caseMetalMat);
+            backPanel.position.set(0.115, 0.26, 0);
+            pcGroup.add(backPanel);
+
+            // זכוכית מחוסמת בחזית ובצד השמאלי (הפונה למשתמש)
+            const sideGlass = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.48, 0.49), glassMat);
+            sideGlass.position.set(-0.125, 0.265, 0);
+            pcGroup.add(sideGlass);
+
+            const frontGlass = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.48, 0.01), glassMat);
+            frontGlass.position.set(0, 0.265, 0.255);
+            pcGroup.add(frontGlass);
+
+            // לוח אם פנימי
+            const mobo = new THREE.Mesh(
+                new THREE.BoxGeometry(0.02, 0.34, 0.28),
+                new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.4, metalness: 0.5 })
+            );
+            mobo.position.set(0.08, 0.28, -0.05);
+            pcGroup.add(mobo);
+
+            // כרטיס מסך (GPU) מסיבי עם פס RGB
+            const gpu = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.055, 0.32), caseMetalMat);
+            gpu.position.set(0.02, 0.21, -0.02);
+            pcGroup.add(gpu);
+
+            const gpuStrip = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.012, 0.3), rgbSecondary);
+            gpuStrip.position.set(-0.052, 0.21, -0.02);
+            pcGroup.add(gpuStrip);
+
+            // משאבת קירור נוזלי למעבד (AIO Pump)
+            const cpuBlock = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.04, 20), rgbPrimary);
+            cpuBlock.rotation.z = Math.PI / 2;
+            cpuBlock.position.set(0.05, 0.33, -0.05);
+            pcGroup.add(cpuBlock);
+
+            // 3 מאווררי RGB קדמיים מסתובבים
+            for (let i = 0; i < 3; i++) {
+                const fanGroup = new THREE.Group();
+                fanGroup.position.set(0, 0.12 + i * 0.14, 0.22);
+
+                const ring = new THREE.Mesh(new THREE.TorusGeometry(0.058, 0.007, 8, 24), rgbPrimary);
+                fanGroup.add(ring);
+
+                const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.02, 12), caseMetalMat);
+                hub.rotation.x = Math.PI / 2;
+                fanGroup.add(hub);
+
+                // להבי מאוורר
+                for (let b = 0; b < 5; b++) {
+                    const blade = new THREE.Mesh(
+                        new THREE.BoxGeometry(0.015, 0.045, 0.004),
+                        new THREE.MeshStandardMaterial({ color: 0xe2e8f0, transparent: true, opacity: 0.7 })
+                    );
+                    const angle = (b / 5) * Math.PI * 2;
+                    blade.position.set(Math.cos(angle) * 0.032, Math.sin(angle) * 0.032, 0);
+                    blade.rotation.z = angle + 0.4;
+                    fanGroup.add(blade);
+                }
+
+                pcGroup.add(fanGroup);
+                pcFans.push(fanGroup);
+            }
+        }
+
+        // בניית ציוד היקפי: מקלדת מכנית RGB, עכבר אלחוטי, מיקרופון אולפני, אוזניות ורמקולים
+        function buildPeripherals() {
+            const pGroup = new THREE.Group();
+            pGroup.position.set(0, 0.818, -1.65);
+            scene.add(pGroup);
+
+            const darkMat = new THREE.MeshStandardMaterial({ color: 0x11131a, roughness: 0.4 });
+            const rgbPrimary = new THREE.MeshStandardMaterial({
+                color: 0x00f3ff,
+                emissive: 0x00f3ff,
+                emissiveIntensity: 1.5
+            });
+            primaryEmissiveMats.push(rgbPrimary);
+
+            const rgbSecondary = new THREE.MeshStandardMaterial({
+                color: 0xff00aa,
+                emissive: 0xff00aa,
+                emissiveIntensity: 1.5
+            });
+            secondaryEmissiveMats.push(rgbSecondary);
+
+            // 1. מקלדת מכנית (TKL) עם תאורה מתחת למקשים
+            const kbBase = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.018, 0.16), darkMat);
+            kbBase.position.set(-0.22, 0.009, 0.22);
+            kbBase.castShadow = true;
+            pGroup.add(kbBase);
+
+            const kbGlow = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.008, 0.14), rgbPrimary);
+            kbGlow.position.set(-0.22, 0.018, 0.22);
+            pGroup.add(kbGlow);
+
+            const kbKeys = new THREE.Mesh(
+                new THREE.BoxGeometry(0.41, 0.012, 0.13),
+                new THREE.MeshStandardMaterial({ color: 0x1e222d, roughness: 0.6 })
+            );
+            kbKeys.position.set(-0.22, 0.025, 0.22);
+            pGroup.add(kbKeys);
+
+            // 2. עכבר גיימינג אלחוטי
+            const mouseBody = new THREE.Mesh(new THREE.BoxGeometry(0.068, 0.032, 0.115), darkMat);
+            mouseBody.position.set(0.22, 0.016, 0.22);
+            mouseBody.castShadow = true;
+            pGroup.add(mouseBody);
+
+            const mouseWheel = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.01, 0.025), rgbSecondary);
+            mouseWheel.position.set(0.22, 0.033, 0.19);
+            pGroup.add(mouseWheel);
+
+            // 3. רמקולים שולחניים משני צידי המסכים
+            [-1.12, 0.82].forEach(sx => {
+                const speaker = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.24, 0.16), darkMat);
+                speaker.position.set(sx, 0.12, -0.18);
+                speaker.rotation.y = sx < 0 ? 0.25 : -0.25;
+                speaker.castShadow = true;
+                pGroup.add(speaker);
+
+                const woofer = new THREE.Mesh(new THREE.TorusGeometry(0.045, 0.006, 8, 20), rgbPrimary);
+                woofer.position.set(sx, 0.09, -0.098);
+                woofer.rotation.y = sx < 0 ? 0.25 : -0.25;
+                pGroup.add(woofer);
+            });
+
+            // 4. מעמד אוזניות RGB + אוזניות גיימינג
+            const standBase = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.075, 0.015, 20), darkMat);
+            standBase.position.set(-1.32, 0.008, 0.18);
+            pGroup.add(standBase);
+
+            const standPole = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.28, 12), rgbSecondary);
+            standPole.position.set(-1.32, 0.14, 0.18);
+            pGroup.add(standPole);
+
+            // אוזניות תלויות על המעמד
+            const headband = new THREE.Mesh(new THREE.TorusGeometry(0.085, 0.014, 8, 24, Math.PI), darkMat);
+            headband.position.set(-1.32, 0.22, 0.18);
+            pGroup.add(headband);
+
+            [-0.085, 0.085].forEach(dx => {
+                const earCup = new THREE.Mesh(new THREE.CylinderGeometry(0.042, 0.042, 0.03, 16), darkMat);
+                earCup.rotation.z = Math.PI / 2;
+                earCup.position.set(-1.32 + dx, 0.19, 0.18);
+                pGroup.add(earCup);
+            });
+
+            // 5. מיקרופון קונדנסר אולפני על זרוע מפרקית (Boom Arm)
+            const boomBase = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.06, 12), darkMat);
+            boomBase.position.set(-0.95, 0.03, -0.35);
+            pGroup.add(boomBase);
+
+            const armLower = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.45, 8), darkMat);
+            armLower.position.set(-0.82, 0.22, -0.22);
+            armLower.rotation.set(0.5, 0, -0.55);
+            pGroup.add(armLower);
+
+            const armUpper = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.42, 8), darkMat);
+            armUpper.position.set(-0.62, 0.36, -0.02);
+            armUpper.rotation.set(0.8, 0, -0.7);
+            pGroup.add(armUpper);
+
+            const micBody = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.024, 0.13, 16), darkMat);
+            micBody.position.set(-0.48, 0.29, 0.12);
+            micBody.rotation.x = 0.3;
+            pGroup.add(micBody);
+
+            const micRing = new THREE.Mesh(new THREE.TorusGeometry(0.027, 0.004, 8, 16), rgbPrimary);
+            micRing.rotation.x = Math.PI / 2 + 0.3;
+            micRing.position.set(-0.48, 0.32, 0.13);
+            pGroup.add(micRing);
+        }
+
+        // בניית כיסא גיימרים ארגונומי מעוצב
+        function buildGamingChair() {
+            chairGroup = new THREE.Group();
+            chairGroup.position.set(-0.1, 0, -0.52);
+            chairGroup.rotation.y = 0.22; // מוטה קלות בזווית טבעית
+            scene.add(chairGroup);
+
+            const leatherBlack = new THREE.MeshStandardMaterial({ color: 0x141720, roughness: 0.45 });
+            const accentMat = new THREE.MeshStandardMaterial({
+                color: 0x00f3ff,
+                emissive: 0x00f3ff,
+                emissiveIntensity: 0.45,
+                roughness: 0.4
+            });
+            primaryEmissiveMats.push(accentMat);
+            const metalMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.3, metalness: 0.8 });
+
+            // בסיס 5 כוכבים עם גלגלים
+            for (let i = 0; i < 5; i++) {
+                const angle = (i / 5) * Math.PI * 2;
+                const leg = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.035, 0.34), metalMat);
+                leg.position.set(Math.sin(angle) * 0.16, 0.06, Math.cos(angle) * 0.16);
+                leg.rotation.y = angle;
+                chairGroup.add(leg);
+
+                const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.03, 12), leatherBlack);
+                wheel.rotation.z = Math.PI / 2;
+                wheel.position.set(Math.sin(angle) * 0.31, 0.025, Math.cos(angle) * 0.31);
+                chairGroup.add(wheel);
+            }
+
+            // בוכנה מרכזית
+            const piston = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.035, 0.38, 16), metalMat);
+            piston.position.y = 0.25;
+            chairGroup.add(piston);
+
+            // מושב הכיסא
+            const seat = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.09, 0.5), leatherBlack);
+            seat.position.set(0, 0.46, 0);
+            seat.castShadow = true;
+            chairGroup.add(seat);
+
+            // כנפיים צדדיות למושב בצבע ניאון
+            [-0.26, 0.26].forEach(wx => {
+                const bolster = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.11, 0.48), accentMat);
+                bolster.position.set(wx, 0.48, 0);
+                chairGroup.add(bolster);
+            });
+
+            // משענת גב גבוהה בסגנון מושב מרוצים
+            const backrestGroup = new THREE.Group();
+            backrestGroup.position.set(0, 0.5, 0.22);
+            backrestGroup.rotation.x = -0.14;
+            chairGroup.add(backrestGroup);
+
+            const backMain = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.82, 0.09), leatherBlack);
+            backMain.position.set(0, 0.41, 0);
+            backMain.castShadow = true;
+            backrestGroup.add(backMain);
+
+            [-0.24, 0.24].forEach(bx => {
+                const sideWing = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.8, 0.11), accentMat);
+                sideWing.position.set(bx, 0.41, -0.01);
+                backrestGroup.add(sideWing);
+            });
+
+            // כרית תמיכה לגב התחתון וכרית צוואר
+            const lumbarPillow = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.16, 0.07), accentMat);
+            lumbarPillow.position.set(0, 0.16, -0.06);
+            backrestGroup.add(lumbarPillow);
+
+            const neckPillow = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.12, 0.06), accentMat);
+            neckPillow.position.set(0, 0.72, -0.05);
+            backrestGroup.add(neckPillow);
+
+            // משענות יד 4D
+            [-0.31, 0.31].forEach(ax => {
+                const armPost = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.22, 0.04), metalMat);
+                armPost.position.set(ax, 0.56, 0.04);
+                chairGroup.add(armPost);
+
+                const armPad = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.025, 0.26), leatherBlack);
+                armPad.position.set(ax, 0.67, 0.01);
+                chairGroup.add(armPad);
+            });
+        }
+
+        // בניית עיצוב הקיר: פנלי תאורה משושים (Nanoleaf), פנלים אקוסטיים, שלט ניאון ומדפים
+        function buildWallDecorAndShelves() {
+            const decorGroup = new THREE.Group();
+            scene.add(decorGroup);
+
+            // 1. פנלי תאורה משושים מודולריים על הקיר האחורי
+            const hexPositions = [
+                [-1.35, 2.25], [-1.05, 2.42], [-1.05, 2.08],
+                [-0.75, 2.25], [-0.75, 2.59], [-0.45, 2.42],
+                [-1.35, 1.91], [-1.65, 2.08]
+            ];
+
+            hexPositions.forEach((pos, idx) => {
+                const hexMat = new THREE.MeshStandardMaterial({
+                    color: 0x00f3ff,
+                    emissive: 0x00f3ff,
+                    emissiveIntensity: 1.6,
+                    roughness: 0.2
+                });
+                hexPanelMats.push(hexMat);
+
+                const hexMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.025, 6), hexMat);
+                hexMesh.rotation.x = Math.PI / 2;
+                hexMesh.rotation.z = Math.PI / 6;
+                hexMesh.position.set(pos[0], pos[1], -2.41);
+                decorGroup.add(hexMesh);
+            });
+
+            // 2. שלט ניאון מעוצב "GAME ON" בצד הימני העליון של הקיר האחורי
+            const neonCanvas = document.createElement('canvas');
+            neonCanvas.width = 512;
+            neonCanvas.height = 160;
+            const nCtx = neonCanvas.getContext('2d');
+            nCtx.clearRect(0, 0, 512, 160);
+            nCtx.strokeStyle = '#ff00aa';
+            nCtx.lineWidth = 6;
+            nCtx.shadowColor = '#ff00aa';
+            nCtx.shadowBlur = 20;
+            nCtx.strokeRect(14, 14, 484, 132);
+
+            nCtx.font = 'bold 64px Rubik, sans-serif';
+            nCtx.fillStyle = '#ffffff';
+            nCtx.textAlign = 'center';
+            nCtx.textBaseline = 'middle';
+            nCtx.fillText('GAME ON', 256, 82);
+
+            const neonTex = new THREE.CanvasTexture(neonCanvas);
+            neonSignMat = new THREE.MeshBasicMaterial({
+                map: neonTex,
+                transparent: true,
+                blending: THREE.AdditiveBlending
+            });
+            const neonSign = new THREE.Mesh(new THREE.PlaneGeometry(1.15, 0.36), neonSignMat);
+            neonSign.position.set(1.15, 2.38, -2.41);
+            decorGroup.add(neonSign);
+
+            // 3. פנלים אקוסטיים מעוצבים מאחורי המסכים
+            const acousticMat = new THREE.MeshStandardMaterial({ color: 0x0b0d14, roughness: 0.95 });
+            for (let row = 0; row < 2; row++) {
+                for (let col = 0; col < 5; col++) {
+                    const tile = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.32, 0.03), acousticMat);
+                    tile.position.set(-0.7 + col * 0.35, 1.38 + row * 0.35, -2.41);
+                    decorGroup.add(tile);
+                }
+            }
+
+            // 4. מדפים צפים על הקיר הימני עם פריטי אספנות, שלטי קונסולה ועציצים
+            const shelfMat = new THREE.MeshStandardMaterial({ color: 0x161924, roughness: 0.4 });
+            const shelfLedMat = new THREE.MeshStandardMaterial({
+                color: 0xff00aa,
+                emissive: 0xff00aa,
+                emissiveIntensity: 1.4
+            });
+            secondaryEmissiveMats.push(shelfLedMat);
+
+            [1.65, 2.25].forEach((sy, sIdx) => {
+                const shelf = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.035, 1.45), shelfMat);
+                shelf.position.set(3.28, sy, -0.7);
+                shelf.castShadow = true;
+                decorGroup.add(shelf);
+
+                const shelfLed = new THREE.Mesh(new THREE.BoxGeometry(0.015, 0.015, 1.45), shelfLedMat);
+                shelfLed.position.set(3.14, sy, -0.7);
+                decorGroup.add(shelfLed);
+
+                // פריטי אספנות על המדפים
+                if (sIdx === 0) {
+                    // שלט קונסולה על מעמד
+                    const controller = new THREE.Mesh(
+                        new THREE.BoxGeometry(0.08, 0.05, 0.14),
+                        new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.3 })
+                    );
+                    controller.position.set(3.26, sy + 0.05, -1.05);
+                    controller.rotation.z = 0.3;
+                    decorGroup.add(controller);
+
+                    // פסלון גיאומטרי זוהר
+                    const trophy = new THREE.Mesh(new THREE.OctahedronGeometry(0.085, 0), shelfLedMat);
+                    trophy.position.set(3.26, sy + 0.11, -0.65);
+                    decorGroup.add(trophy);
+
+                    // קופסאות משחקים
+                    for (let b = 0; b < 4; b++) {
+                        const gameBox = new THREE.Mesh(
+                            new THREE.BoxGeometry(0.14, 0.19, 0.022),
+                            new THREE.MeshStandardMaterial({ color: b % 2 === 0 ? 0x0284c7 : 0x7c3aed })
+                        );
+                        gameBox.position.set(3.26, sy + 0.11, -0.25 + b * 0.032);
+                        decorGroup.add(gameBox);
+                    }
+                } else {
+                    // עציץ מעוצב על המדף העליון
+                    const pot = new THREE.Mesh(
+                        new THREE.CylinderGeometry(0.07, 0.055, 0.11, 12),
+                        new THREE.MeshStandardMaterial({ color: 0x334155 })
+                    );
+                    pot.position.set(3.26, sy + 0.07, -1.1);
+                    decorGroup.add(pot);
+
+                    const foliage = new THREE.Mesh(
+                        new THREE.IcosahedronGeometry(0.095, 1),
+                        new THREE.MeshStandardMaterial({ color: 0x10b981, roughness: 0.7 })
+                    );
+                    foliage.position.set(3.26, sy + 0.16, -1.1);
+                    decorGroup.add(foliage);
+
+                    // קסדת סייברפאנק דקורטיבית
+                    const helmet = new THREE.Mesh(
+                        new THREE.DodecahedronGeometry(0.11, 1),
+                        new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.8, roughness: 0.2 })
+                    );
+                    helmet.position.set(3.26, sy + 0.12, -0.45);
+                    decorGroup.add(helmet);
+                }
+            });
+        }
+
+        // בניית מיני-מקרר גיימינג זוהר לצד השולחן
+        function buildMiniFridgeAndExtras() {
+            const fridgeGroup = new THREE.Group();
+            fridgeGroup.position.set(2.25, 0, -1.85);
+            fridgeGroup.rotation.y = -0.18;
+            scene.add(fridgeGroup);
+
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0x0d0f16, roughness: 0.35, metalness: 0.6 });
+            const fridgeBody = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.84, 0.52), bodyMat);
+            fridgeBody.position.y = 0.42;
+            fridgeBody.castShadow = true;
+            fridgeGroup.add(fridgeBody);
+
+            // דלת זכוכית מוארת עם פחיות משקה אנרגיה
+            const innerGlowMat = new THREE.MeshStandardMaterial({
+                color: 0x00f3ff,
+                emissive: 0x00f3ff,
+                emissiveIntensity: 1.1
+            });
+            primaryEmissiveMats.push(innerGlowMat);
+
+            const glassFront = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.7), innerGlowMat);
+            glassFront.position.set(0, 0.42, 0.262);
+            fridgeGroup.add(glassFront);
+
+            // פחיות משקה נראות מבעד לזכוכית
+            const canMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.8, roughness: 0.2 });
+            for (let row = 0; row < 2; row++) {
+                for (let col = 0; col < 3; col++) {
+                    const can = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.11, 10), canMat);
+                    can.position.set(-0.11 + col * 0.11, 0.26 + row * 0.28, 0.268);
+                    fridgeGroup.add(can);
+                }
+            }
+        }
+
+        // ציור מונפש על כל המסכים ועל החלון בכל פריים
+        function updateDynamicCanvases(elapsed) {
+            const themeObj = themes[state.theme];
+            const priHex = '#' + themeObj.primary.toString(16).padStart(6, '0');
+            const secHex = '#' + themeObj.secondary.toString(16).padStart(6, '0');
+
+            // 1. עדכון חלון העיר הלילית והגשם
+            const wGrad = windowCtx.createLinearGradient(0, 0, 0, 512);
+            wGrad.addColorStop(0, '#020617');
+            wGrad.addColorStop(0.6, '#0f172a');
+            wGrad.addColorStop(1, '#1e1b4b');
+            windowCtx.fillStyle = wGrad;
+            windowCtx.fillRect(0, 0, 512, 512);
+
+            // ירח זוהר בשמי העיר
+            windowCtx.fillStyle = '#e0f2fe';
+            windowCtx.beginPath();
+            windowCtx.arc(390, 95, 28, 0, Math.PI * 2);
+            windowCtx.fill();
+
+            // בניינים וחלונות מוארים
+            cityBuildings.forEach(b => {
+                windowCtx.fillStyle = b.color;
+                windowCtx.fillRect(b.x, 512 - b.h, b.w, b.h);
+                b.winGrid.forEach(win => {
+                    if (win.lit) {
+                        windowCtx.fillStyle = win.color;
+                        windowCtx.fillRect(b.x + win.x, 512 - b.h + win.y, 5, 8);
+                    }
+                });
+            });
+
+            // טיפות גשם עדינות על זגוגית החלון
+            windowCtx.strokeStyle = 'rgba(148, 163, 184, 0.35)';
+            windowCtx.lineWidth = 1.5;
+            rainDrops.forEach(drop => {
+                drop.y += drop.speed;
+                if (drop.y > 512) drop.y = -20;
+                windowCtx.beginPath();
+                windowCtx.moveTo(drop.x, drop.y);
+                windowCtx.lineTo(drop.x - 2, drop.y + drop.len);
+                windowCtx.stroke();
+            });
+            windowTex.needsUpdate = true;
+
+            // 2. מסך מרכזי רחב (משתנה לפי מצב התצוגה)
+            mainScreenCtx.fillStyle = '#070913';
+            mainScreenCtx.fillRect(0, 0, 1024, 440);
+
+            if (state.screenMode === 'gaming') {
+                // רשת פרספקטיבה דינמית (Cyber Space Arena)
+                mainScreenCtx.strokeStyle = priHex;
+                mainScreenCtx.lineWidth = 1.5;
+                mainScreenCtx.globalAlpha = 0.35;
+                const gridOffset = (elapsed * 60) % 40;
+                for (let y = 240; y < 440; y += 25) {
+                    mainScreenCtx.beginPath();
+                    mainScreenCtx.moveTo(0, y + (gridOffset * 0.4));
+                    mainScreenCtx.lineTo(1024, y + (gridOffset * 0.4));
+                    mainScreenCtx.stroke();
+                }
+                for (let x = -200; x <= 1224; x += 80) {
+                    mainScreenCtx.beginPath();
+                    mainScreenCtx.moveTo(512, 220);
+                    mainScreenCtx.lineTo(x, 440);
+                    mainScreenCtx.stroke();
+                }
+                mainScreenCtx.globalAlpha = 1.0;
+
+                // כוונת HUD מרכזית וחלליות אויב
+                const aimX = 512 + Math.sin(elapsed * 2.1) * 160;
+                const aimY = 180 + Math.cos(elapsed * 1.5) * 45;
+
+                spaceEnemies.forEach((en, idx) => {
+                    const ex = en.x + Math.sin(elapsed * 1.6 + en.phase) * 45;
+                    const ey = en.y + Math.cos(elapsed * 2.2 + en.phase) * 20;
+                    mainScreenCtx.strokeStyle = secHex;
+                    mainScreenCtx.lineWidth = 3;
+                    mainScreenCtx.beginPath();
+                    mainScreenCtx.moveTo(ex, ey - 16);
+                    mainScreenCtx.lineTo(ex + 22, ey + 12);
+                    mainScreenCtx.lineTo(ex - 22, ey + 12);
+                    mainScreenCtx.closePath();
+                    mainScreenCtx.stroke();
+                });
+
+                // קרני לייזר מהשחקן לכוונת
+                if (Math.sin(elapsed * 14) > 0.2) {
+                    mainScreenCtx.strokeStyle = priHex;
+                    mainScreenCtx.lineWidth = 4;
+                    mainScreenCtx.beginPath();
+                    mainScreenCtx.moveTo(220, 440);
+                    mainScreenCtx.lineTo(aimX, aimY);
+                    mainScreenCtx.moveTo(804, 440);
+                    mainScreenCtx.lineTo(aimX, aimY);
+                    mainScreenCtx.stroke();
+                }
+
+                // כוונת עגולה
+                mainScreenCtx.strokeStyle = '#ffffff';
+                mainScreenCtx.lineWidth = 2.5;
+                mainScreenCtx.beginPath();
+                mainScreenCtx.arc(aimX, aimY, 24, 0, Math.PI * 2);
+                mainScreenCtx.stroke();
+
+                // מד חיים וניקוד בפינות
+                mainScreenCtx.fillStyle = priHex;
+                mainScreenCtx.fillRect(30, 28, 220, 14);
+                mainScreenCtx.fillStyle = '#ffffff';
+                mainScreenCtx.font = 'bold 20px monospace';
+                mainScreenCtx.fillText('HP 100%  |  SHIELD MAX', 30, 68);
+                mainScreenCtx.fillText('SCORE: ' + Math.floor(elapsed * 125 + 8400), 760, 45);
+            } else if (state.screenMode === 'stream') {
+                // מצב סטרימינג: תצוגת מצלמת סטרימר + לוח בקרת שידור
+                mainScreenCtx.fillStyle = '#0f172a';
+                mainScreenCtx.fillRect(24, 24, 660, 392);
+                mainScreenCtx.strokeStyle = secHex;
+                mainScreenCtx.lineWidth = 4;
+                mainScreenCtx.strokeRect(24, 24, 660, 392);
+
+                // תג LIVE מהבהב
+                if (Math.sin(elapsed * 5) > -0.3) {
+                    mainScreenCtx.fillStyle = '#ef4444';
+                    mainScreenCtx.fillRect(46, 44, 88, 32);
+                    mainScreenCtx.fillStyle = '#ffffff';
+                    mainScreenCtx.font = 'bold 18px sans-serif';
+                    mainScreenCtx.fillText('● LIVE', 58, 66);
+                }
+
+                // גרף צופים בזמן אמת בצד ימין
+                mainScreenCtx.fillStyle = '#111827';
+                mainScreenCtx.fillRect(708, 24, 292, 392);
+                mainScreenCtx.fillStyle = priHex;
+                mainScreenCtx.font = 'bold 22px sans-serif';
+                mainScreenCtx.fillText('STREAM DASHBOARD', 730, 62);
+                mainScreenCtx.fillStyle = '#e2e8f0';
+                mainScreenCtx.font = '18px monospace';
+                mainScreenCtx.fillText('VIEWERS: 4,820', 730, 110);
+                mainScreenCtx.fillText('BITRATE: 8000 kbps', 730, 145);
+                mainScreenCtx.fillText('FPS: 144.0', 730, 180);
+
+                // ספקטרום אודיו
+                for (let i = 0; i < 16; i++) {
+                    const barH = 30 + Math.abs(Math.sin(elapsed * 6 + i * 0.6)) * 120;
+                    mainScreenCtx.fillStyle = i % 2 === 0 ? priHex : secHex;
+                    mainScreenCtx.fillRect(730 + i * 16, 380 - barH, 11, barH);
+                }
+            } else {
+                // מצב מנוחה Lo-Fi: שקיעה רטרו וגלי מוזיקה רגועים
+                const bgGrad = mainScreenCtx.createLinearGradient(0, 0, 0, 440);
+                bgGrad.addColorStop(0, '#1e1b4b');
+                bgGrad.addColorStop(1, '#4c1d95');
+                mainScreenCtx.fillStyle = bgGrad;
+                mainScreenCtx.fillRect(0, 0, 1024, 440);
+
+                // שמש סינת'ווייב
+                const sunGrad = mainScreenCtx.createLinearGradient(0, 80, 0, 300);
+                sunGrad.addColorStop(0, '#fde047');
+                sunGrad.addColorStop(1, '#f43f5e');
+                mainScreenCtx.fillStyle = sunGrad;
+                mainScreenCtx.beginPath();
+                mainScreenCtx.arc(512, 220, 110, 0, Math.PI * 2);
+                mainScreenCtx.fill();
+
+                mainScreenCtx.fillStyle = '#ffffff';
+                mainScreenCtx.font = 'bold 28px Rubik, sans-serif';
+                mainScreenCtx.fillText('LO-FI CHILL BEATS TO RELAX & GAME TO', 235, 390);
+            }
+            mainScreenTex.needsUpdate = true;
+
+            // 3. מסך שמאלי אנכי: צ'אט חי / Discord
+            leftScreenCtx.fillStyle = '#0b0e17';
+            leftScreenCtx.fillRect(0, 0, 360, 640);
+            leftScreenCtx.fillStyle = '#151928';
+            leftScreenCtx.fillRect(0, 0, 360, 56);
+            leftScreenCtx.fillStyle = priHex;
+            leftScreenCtx.font = 'bold 22px sans-serif';
+            leftScreenCtx.fillText('# LIVE-CHAT & DISCORD', 20, 36);
+
+            const chatColors = ['#38bdf8', '#f472b6', '#34d399', '#fbbf24', '#a78bfa'];
+            const scrollY = (elapsed * 22) % 64;
+            for (let i = 0; i < 10; i++) {
+                const y = 80 + i * 62 - scrollY;
+                leftScreenCtx.fillStyle = chatColors[i % chatColors.length];
+                leftScreenCtx.beginPath();
+                leftScreenCtx.arc(34, y, 14, 0, Math.PI * 2);
+                leftScreenCtx.fill();
+
+                leftScreenCtx.fillStyle = 'rgba(255,255,255,0.85)';
+                leftScreenCtx.fillRect(62, y - 10, 110 + (i % 3) * 35, 10);
+                leftScreenCtx.fillStyle = 'rgba(148,163,184,0.45)';
+                leftScreenCtx.fillRect(62, y + 6, 190 + (i % 2) * 50, 8);
+            }
+            leftScreenTex.needsUpdate = true;
+
+            // 4. מסך ימני אנכי: אקולייזר מוזיקה + מדדי טמפרטורה וביצועים
+            rightScreenCtx.fillStyle = '#0b0e17';
+            rightScreenCtx.fillRect(0, 0, 360, 640);
+
+            // מדדי GPU / CPU עגולים
+            [
+                { label: 'GPU 48°C', val: 0.78, y: 120, col: priHex },
+                { label: 'CPU 42°C', val: 0.62, y: 270, col: secHex }
+            ].forEach(gauge => {
+                rightScreenCtx.strokeStyle = 'rgba(255,255,255,0.12)';
+                rightScreenCtx.lineWidth = 14;
+                rightScreenCtx.beginPath();
+                rightScreenCtx.arc(180, gauge.y, 52, 0, Math.PI * 2);
+                rightScreenCtx.stroke();
+
+                rightScreenCtx.strokeStyle = gauge.col;
+                rightScreenCtx.beginPath();
+                rightScreenCtx.arc(180, gauge.y, 52, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * gauge.val);
+                rightScreenCtx.stroke();
+
+                rightScreenCtx.fillStyle = '#ffffff';
+                rightScreenCtx.font = 'bold 18px monospace';
+                rightScreenCtx.textAlign = 'center';
+                rightScreenCtx.fillText(gauge.label, 180, gauge.y + 6);
+            });
+            rightScreenCtx.textAlign = 'left';
+
+            // אקולייזר מוזיקה בתחתית המסך הימני
+            for (let i = 0; i < 18; i++) {
+                const h = 25 + Math.abs(Math.sin(elapsed * 7 + i * 0.45)) * 180;
+                rightScreenCtx.fillStyle = i % 2 === 0 ? priHex : secHex;
+                rightScreenCtx.fillRect(22 + i * 18, 600 - h, 12, h);
+            }
+            rightScreenTex.needsUpdate = true;
+        }
+
+        // החלת ערכת צבעי התאורה על כל הרכיבים בחדר
+        function applyTheme(themeKey) {
+            state.theme = themeKey;
+            const t = themes[themeKey];
+            const badge = document.getElementById('theme-badge');
+            badge.textContent = t.name;
+
+            if (themeKey !== 'rainbow') {
+                updateColors(t.primary, t.secondary);
+            }
+        }
+
+        function updateColors(primaryHex, secondaryHex) {
+            const pCol = new THREE.Color(primaryHex);
+            const sCol = new THREE.Color(secondaryHex);
+            const intensity = state.rgbIntensity;
+
+            deskPointLight.color.copy(pCol);
+            deskPointLight.intensity = 1.6 * intensity;
+
+            wallPointLight.color.copy(sCol);
+            wallPointLight.intensity = 1.3 * intensity;
+
+            primaryEmissiveMats.forEach(mat => {
+                mat.color.copy(pCol);
+                mat.emissive.copy(pCol);
+                mat.emissiveIntensity = 1.5 * intensity;
+            });
+
+            secondaryEmissiveMats.forEach(mat => {
+                mat.color.copy(sCol);
+                mat.emissive.copy(sCol);
+                mat.emissiveIntensity = 1.5 * intensity;
+            });
+
+            hexPanelMats.forEach((mat, idx) => {
+                const mixCol = idx % 2 === 0 ? pCol : sCol;
+                mat.color.copy(mixCol);
+                mat.emissive.copy(mixCol);
+                mat.emissiveIntensity = 1.6 * intensity;
+            });
+        }
+
+        // הגדרת אירועי ממשק המשתמש
+        function setupUI() {
+            // ערכות תאורה
+            document.querySelectorAll('.theme-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('btn-active'));
+                    btn.classList.add('btn-active');
+                    applyTheme(btn.dataset.theme);
+                });
+            });
+
+            // מצבי מסכים
+            document.querySelectorAll('.screen-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.screen-btn').forEach(b => b.classList.remove('btn-active'));
+                    btn.classList.add('btn-active');
+                    state.screenMode = btn.dataset.screen;
+                });
+            });
+
+            // זוויות מצלמה
+            document.querySelectorAll('.cam-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const preset = cameraPresets[btn.dataset.cam];
+                    if (preset) {
+                        state.targetCamPos.copy(preset.pos);
+                        state.targetLookAt.copy(preset.target);
+                        state.isTransitioningCam = true;
+                        document.querySelectorAll('.cam-btn').forEach(b => b.classList.remove('btn-active'));
+                        btn.classList.add('btn-active');
+                    }
+                });
+            });
+
+            // סיור קולנועי אוטומטי
+            const autoOrbitBtn = document.getElementById('auto-orbit-btn');
+            const orbitDot = document.getElementById('orbit-dot');
+            autoOrbitBtn.addEventListener('click', () => {
+                state.autoOrbit = !state.autoOrbit;
+                controls.autoRotate = state.autoOrbit;
+                controls.autoRotateSpeed = 0.75;
+                orbitDot.classList.toggle('hidden', !state.autoOrbit);
+                autoOrbitBtn.classList.toggle('btn-active', state.autoOrbit);
+            });
+
+            // סליידר עוצמת RGB
+            const rgbSlider = document.getElementById('rgb-slider');
+            rgbSlider.addEventListener('input', (e) => {
+                state.rgbIntensity = parseFloat(e.target.value);
+                document.getElementById('rgb-intensity-val').textContent = Math.round(state.rgbIntensity * 100) + '%';
+                if (state.theme !== 'rainbow') {
+                    const t = themes[state.theme];
+                    updateColors(t.primary, t.secondary);
+                }
+            });
+
+            // מתג אור תקרה בחדר
+            const roomLightBtn = document.getElementById('room-light-btn');
+            roomLightBtn.addEventListener('click', () => {
+                state.roomLightOn = !state.roomLightOn;
+                roomCeilingLight.intensity = state.roomLightOn ? 1.35 : 0.15;
+                ambientLight.intensity = state.roomLightOn ? 0.85 : 0.45;
+                document.getElementById('room-light-text').textContent = state.roomLightOn ? 'אור חדר: דלוק' : 'אור חדר: כבוי';
+                roomLightBtn.classList.toggle('btn-active', state.roomLightOn);
+            });
+
+            // הסתרת/הצגת ממשק המשתמש
+            const toggleUiBtn = document.getElementById('toggle-ui-btn');
+            const uiOverlay = document.getElementById('ui-overlay');
+            let uiVisible = true;
+            toggleUiBtn.addEventListener('click', () => {
+                uiVisible = !uiVisible;
+                uiOverlay.style.opacity = uiVisible ? '1' : '0';
+                uiOverlay.querySelectorAll('.glass-panel').forEach(panel => {
+                    panel.style.pointerEvents = uiVisible ? 'auto' : 'none';
+                });
+                document.getElementById('eye-open-icon').classList.toggle('hidden', !uiVisible);
+                document.getElementById('eye-closed-icon').classList.toggle('hidden', uiVisible);
+            });
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // לולאת האנימציה המרכזית
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const elapsed = clock.getElapsedTime();
+
+            // 1. סיבוב מאווררי ה-RGB במארז המחשב
+            pcFans.forEach((fan, i) => {
+                fan.rotation.z = elapsed * (8 + i * 0.5);
+            });
+
+            // 2. עדכון מצב ריינבו דינמי אם נבחר
+            if (state.theme === 'rainbow') {
+                const hue1 = (elapsed * 0.12) % 1;
+                const hue2 = (hue1 + 0.35) % 1;
+                const c1 = new THREE.Color().setHSL(hue1, 1.0, 0.52);
+                const c2 = new THREE.Color().setHSL(hue2, 1.0, 0.52);
+                updateColors(c1.getHex(), c2.getHex());
+            }
+
+            // 3. עדכון התצוגות המונפשות על המסכים והחלון
+            updateDynamicCanvases(elapsed);
+
+            // 4. מעבר חלק בין נקודות תצפית של המצלמה
+            if (state.isTransitioningCam) {
+                camera.position.lerp(state.targetCamPos, 0.055);
+                controls.target.lerp(state.targetLookAt, 0.055);
+                if (camera.position.distanceTo(state.targetCamPos) < 0.05) {
+                    state.isTransitioningCam = false;
+                }
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+    </script>
+
+<script>/* start with the room light on */ setTimeout(function(){ var b=document.getElementById("room-light-btn"); if(b && b.textContent.indexOf("כבוי")>-1) b.click(); var v=[].slice.call(document.querySelectorAll("button")).filter(function(x){return x.textContent.indexOf("מבט כללי")>-1;})[0]; if(v) v.click(); }, 3000);</script>
+<a id="club-back" href="../index.html#products-shelf" style="position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#fff;color:#1d2433;border:2px solid #cfe0f0;border-radius:999px;padding:8px 18px;font:600 15px/1.2 Arial,sans-serif;text-decoration:none;direction:rtl;box-shadow:0 3px 0 #cfe0f0">→ חזרה לאתר החוג</a>
+<script>if (window.top !== window) document.getElementById("club-back").remove();</script>
+</body>
+</html>

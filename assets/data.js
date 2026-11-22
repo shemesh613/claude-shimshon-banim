@@ -162,6 +162,11 @@ window.SITE = {
       "title": "חדר גיימינג",
       "cover": "lessons/img/ex3d-gaming.jpg",
       "href": "worlds/gaming.html"
+    },
+    {
+      "title": "חדר גיימינג עם תאורת RGB",
+      "cover": "lessons/img/ex3d-gaming-rgb.jpg",
+      "href": "worlds/gaming-rgb.html"
     }
   ]
 };
