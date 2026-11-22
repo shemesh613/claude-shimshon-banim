@@ -1,0 +1,2014 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>אקסטרים אופניים 3D - מרוץ ופעלולים בהרים</title>
+    <!-- טעינת גופן עברי מודרני -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:ital,wght@0,400;0,600;0,800;1,900&display=swap" rel="stylesheet">
+    <!-- טעינת Three.js דרך CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+            font-family: 'Rubik', sans-serif;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #0f172a;
+            color: #ffffff;
+            touch-action: none;
+        }
+
+        #canvas-container {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* ממשק משתמש עליון (HUD) */
+        #hud {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 14px 18px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            pointer-events: none;
+            z-index: 15;
+            gap: 10px;
+        }
+
+        .hud-stats {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .hud-card {
+            background: rgba(15, 23, 42, 0.72);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1.5px solid rgba(255, 255, 255, 0.18);
+            border-radius: 16px;
+            padding: 8px 14px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 78px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+        }
+
+        .hud-lbl {
+            font-size: 0.7rem;
+            color: #94a3b8;
+            font-weight: 600;
+        }
+
+        .hud-val {
+            font-size: 1.3rem;
+            font-weight: 800;
+            color: #f8fafc;
+        }
+
+        .hud-val.gold { color: #fbbf24; }
+        .hud-val.cyan { color: #38bdf8; }
+        .hud-val.lime { color: #a3e635; }
+
+        .hud-controls {
+            display: flex;
+            gap: 8px;
+            pointer-events: auto;
+        }
+
+        .icon-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 14px;
+            background: rgba(15, 23, 42, 0.78);
+            backdrop-filter: blur(10px);
+            border: 1.5px solid rgba(255, 255, 255, 0.22);
+            color: #fff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            font-size: 1.1rem;
+            font-weight: 800;
+            transition: all 0.18s ease;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .icon-btn:hover {
+            transform: translateY(-2px);
+            border-color: #38bdf8;
+            background: rgba(30, 41, 59, 0.95);
+        }
+
+        .icon-btn:active {
+            transform: scale(0.94);
+        }
+
+        /* מד אנרגיה / דחיפת מהירות */
+        #energy-wrapper {
+            position: fixed;
+            top: 84px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 88%;
+            max-width: 280px;
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(8px);
+            border: 1.5px solid rgba(255, 255, 255, 0.18);
+            border-radius: 999px;
+            padding: 4px 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            pointer-events: none;
+            z-index: 14;
+        }
+
+        .energy-tag {
+            font-size: 0.72rem;
+            font-weight: 800;
+            color: #a3e635;
+            white-space: nowrap;
+        }
+
+        .energy-track {
+            flex: 1;
+            height: 9px;
+            background: rgba(255, 255, 255, 0.12);
+            border-radius: 999px;
+            overflow: hidden;
+        }
+
+        #energy-bar {
+            width: 50%;
+            height: 100%;
+            background: linear-gradient(90deg, #65a30d, #a3e635, #fef08a);
+            border-radius: 999px;
+            transition: width 0.1s linear;
+        }
+
+        /* תצוגת פעלולים וזמן אוויר בזמן אמת */
+        #trick-hud {
+            position: fixed;
+            top: 126px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            pointer-events: none;
+            z-index: 16;
+            text-align: center;
+        }
+
+        #air-status {
+            background: linear-gradient(90deg, rgba(245, 158, 11, 0.9), rgba(234, 88, 12, 0.9));
+            border: 2px solid #fef08a;
+            color: #fff;
+            padding: 6px 18px;
+            border-radius: 999px;
+            font-weight: 900;
+            font-size: 1.05rem;
+            box-shadow: 0 6px 20px rgba(234, 88, 12, 0.55);
+            display: none;
+            animation: popIn 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        #floating-banner {
+            margin-top: 8px;
+            font-size: 1.85rem;
+            font-weight: 900;
+            font-style: italic;
+            text-shadow: 0 4px 16px rgba(0, 0, 0, 0.85), 0 0 2px #000;
+            opacity: 0;
+            transform: scale(0.85);
+            transition: all 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        #floating-banner.show {
+            opacity: 1;
+            transform: scale(1.08);
+        }
+
+        @keyframes popIn {
+            from { transform: scale(0.7); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        /* כפתורי מגע למובייל */
+        #touch-controls {
+            position: fixed;
+            bottom: 20px;
+            left: 0;
+            width: 100%;
+            padding: 0 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            pointer-events: none;
+            z-index: 20;
+        }
+
+        .touch-cluster {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+            pointer-events: auto;
+        }
+
+        .touch-btn {
+            width: 64px;
+            height: 64px;
+            border-radius: 20px;
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(8px);
+            border: 2px solid rgba(255, 255, 255, 0.25);
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-size: 0.78rem;
+            font-weight: 800;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+            transition: transform 0.08s, background 0.08s;
+        }
+
+        .touch-btn:active, .touch-btn.active {
+            background: rgba(56, 189, 248, 0.45);
+            border-color: #38bdf8;
+            transform: scale(0.92);
+        }
+
+        .touch-btn.pedal-btn {
+            width: 72px;
+            height: 76px;
+            background: rgba(22, 163, 74, 0.45);
+            border-color: #4ade80;
+        }
+
+        .touch-btn.pedal-btn:active, .touch-btn.pedal-btn.active {
+            background: rgba(34, 197, 94, 0.75);
+        }
+
+        .touch-btn.brake-btn {
+            width: 60px;
+            height: 60px;
+            background: rgba(220, 38, 38, 0.45);
+            border-color: #f87171;
+        }
+
+        .touch-btn.jump-btn {
+            width: 76px;
+            height: 76px;
+            border-radius: 50%;
+            background: rgba(245, 158, 11, 0.5);
+            border-color: #fbbf24;
+        }
+
+        .touch-btn.jump-btn:active, .touch-btn.jump-btn.active {
+            background: rgba(245, 158, 11, 0.85);
+        }
+
+        @media (min-width: 920px) {
+            #touch-controls {
+                opacity: 0.35;
+                transition: opacity 0.2s;
+            }
+            #touch-controls:hover {
+                opacity: 0.95;
+            }
+        }
+
+        /* מסכי פתיחה, השהיה וסיום */
+        .overlay {
+            position: fixed;
+            inset: 0;
+            background: radial-gradient(circle at center, rgba(15, 23, 42, 0.55) 0%, rgba(9, 13, 22, 0.9) 100%);
+            backdrop-filter: blur(9px);
+            -webkit-backdrop-filter: blur(9px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 18px;
+            z-index: 40;
+            overflow-y: auto;
+        }
+
+        .overlay.hidden {
+            display: none;
+        }
+
+        .modal-card {
+            background: rgba(15, 23, 42, 0.88);
+            border: 2px solid rgba(255, 255, 255, 0.16);
+            border-radius: 28px;
+            padding: 26px 24px;
+            width: 100%;
+            max-width: 480px;
+            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.65);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+
+        .game-title {
+            font-size: 2.55rem;
+            font-weight: 900;
+            font-style: italic;
+            background: linear-gradient(135deg, #4ade80 0%, #38bdf8 50%, #fbbf24 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 6px;
+            line-height: 1.1;
+        }
+
+        .game-sub {
+            font-size: 0.92rem;
+            color: #cbd5e1;
+            margin-bottom: 18px;
+            line-height: 1.45;
+        }
+
+        .custom-block {
+            width: 100%;
+            margin-bottom: 16px;
+            text-align: right;
+        }
+
+        .custom-lbl {
+            display: block;
+            font-size: 0.82rem;
+            font-weight: 700;
+            color: #94a3b8;
+            margin-bottom: 7px;
+        }
+
+        .swatch-row {
+            display: flex;
+            gap: 10px;
+            justify-content: space-between;
+        }
+
+        .swatch {
+            flex: 1;
+            height: 36px;
+            border-radius: 11px;
+            border: 3px solid transparent;
+            cursor: pointer;
+            transition: transform 0.18s, border-color 0.18s;
+        }
+
+        .swatch:hover { transform: scale(1.06); }
+        .swatch.selected {
+            border-color: #ffffff;
+            transform: scale(1.08);
+            box-shadow: 0 0 14px rgba(255, 255, 255, 0.5);
+        }
+
+        .env-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .env-btn {
+            background: rgba(30, 41, 59, 0.85);
+            border: 2px solid rgba(255, 255, 255, 0.12);
+            color: #cbd5e1;
+            padding: 9px;
+            border-radius: 13px;
+            font-weight: 700;
+            font-size: 0.92rem;
+            cursor: pointer;
+            transition: all 0.18s;
+        }
+
+        .env-btn.selected {
+            background: rgba(56, 189, 248, 0.22);
+            border-color: #38bdf8;
+            color: #fff;
+        }
+
+        .primary-btn {
+            width: 100%;
+            background: linear-gradient(135deg, #22c55e 0%, #0ea5e9 100%);
+            color: #ffffff;
+            border: none;
+            border-radius: 18px;
+            padding: 15px 28px;
+            font-size: 1.35rem;
+            font-weight: 900;
+            cursor: pointer;
+            box-shadow: 0 10px 25px rgba(14, 165, 233, 0.45);
+            transition: transform 0.18s, box-shadow 0.18s;
+            margin-top: 6px;
+        }
+
+        .primary-btn:hover {
+            transform: translateY(-2px) scale(1.02);
+            box-shadow: 0 14px 30px rgba(14, 165, 233, 0.65);
+        }
+
+        .primary-btn:active {
+            transform: scale(0.98);
+        }
+
+        .keys-guide {
+            margin-top: 16px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 6px;
+            font-size: 0.76rem;
+            color: #94a3b8;
+        }
+
+        .key-tag {
+            background: rgba(255, 255, 255, 0.07);
+            padding: 4px 9px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .summary-grid {
+            width: 100%;
+            background: rgba(30, 41, 59, 0.65);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 18px;
+            padding: 16px;
+            margin: 16px 0 20px 0;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .sum-box {
+            background: rgba(15, 23, 42, 0.6);
+            padding: 10px;
+            border-radius: 12px;
+        }
+
+        .record-pill {
+            background: linear-gradient(90deg, #f59e0b, #ef4444);
+            color: #fff;
+            font-size: 0.85rem;
+            font-weight: 900;
+            padding: 5px 14px;
+            border-radius: 999px;
+            margin-bottom: 8px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<!-- מיכל הסצנה התלת-ממדית -->
+<div id="canvas-container"></div>
+
+<!-- HUD עליון -->
+<div id="hud">
+    <div class="hud-stats">
+        <div class="hud-card">
+            <span class="hud-lbl">ניקוד</span>
+            <span class="hud-val" id="hud-score">0</span>
+        </div>
+        <div class="hud-card">
+            <span class="hud-lbl">מהירות</span>
+            <span class="hud-val cyan"><span id="hud-speed">0</span> <small style="font-size:0.65rem;">קמ"ש</small></span>
+        </div>
+        <div class="hud-card">
+            <span class="hud-lbl">קומבו</span>
+            <span class="hud-val lime" id="hud-combo">x1</span>
+        </div>
+        <div class="hud-card">
+            <span class="hud-lbl">מטבעות</span>
+            <span class="hud-val gold" id="hud-coins">0</span>
+        </div>
+        <div class="hud-card">
+            <span class="hud-lbl">שיא</span>
+            <span class="hud-val" id="hud-best">0</span>
+        </div>
+    </div>
+
+    <div class="hud-controls">
+        <button class="icon-btn" id="btn-cam" title="החלף מצלמה (C)">🎥</button>
+        <button class="icon-btn" id="btn-theme-hud" title="יום / שקיעה">☀️</button>
+        <button class="icon-btn" id="btn-pause" title="השהיה (P)">⏸️</button>
+        <button class="icon-btn" id="btn-mute" title="השתק / הפעל שמע">🔊</button>
+    </div>
+</div>
+
+<!-- מד אנרגיה לפידול מואץ -->
+<div id="energy-wrapper">
+    <span class="energy-tag">⚡ אנרגיה</span>
+    <div class="energy-track">
+        <div id="energy-bar"></div>
+    </div>
+</div>
+
+<!-- חיווי זמן אוויר ופעלולים -->
+<div id="trick-hud">
+    <div id="air-status">🦅 זמן אוויר: 0.0 שנ׳ • 0°</div>
+    <div id="floating-banner">סלטה מושלמת!</div>
+</div>
+
+<!-- כפתורי שליטה למגע (מובייל / טאבלט) -->
+<div id="touch-controls">
+    <!-- צד ימין: היגוי ימינה ושמאלה -->
+    <div class="touch-cluster">
+        <button class="touch-btn" id="t-right" aria-label="ימינה">
+            <span style="font-size:1.4rem;">▶</span>
+            <span>ימינה</span>
+        </button>
+        <button class="touch-btn" id="t-left" aria-label="שמאלה">
+            <span style="font-size:1.4rem;">◀</span>
+            <span>שמאלה</span>
+        </button>
+    </div>
+
+    <!-- צד שמאל: קפיצה/סלטה, פידול ובלם -->
+    <div class="touch-cluster">
+        <button class="touch-btn jump-btn" id="t-jump" aria-label="קפיצה וסלטה">
+            <span style="font-size:1.4rem;">🚀</span>
+            <span>קפוץ/סלטה</span>
+        </button>
+        <button class="touch-btn pedal-btn" id="t-pedal" aria-label="פדל">
+            <span style="font-size:1.4rem;">🚴</span>
+            <span>פדל</span>
+        </button>
+        <button class="touch-btn brake-btn" id="t-brake" aria-label="בלם">
+            <span style="font-size:1.2rem;">🛑</span>
+            <span>בלם</span>
+        </button>
+    </div>
+</div>
+
+<!-- מסך פתיחה -->
+<div id="start-screen" class="overlay">
+    <div class="modal-card">
+        <h1 class="game-title">אקסטרים אופניים 3D</h1>
+        <p class="game-sub">דהרו במורד מסלול ההרים, קפצו מרמפות, בצעו סלטות באוויר והתחמקו מסלעים ובולי עץ!</p>
+
+        <!-- בחירת צבע שלדת האופניים -->
+        <div class="custom-block">
+            <span class="custom-lbl">צבע שלדת האופניים:</span>
+            <div class="swatch-row" id="bike-colors">
+                <button class="swatch selected" data-color="#ef4444" style="background: linear-gradient(135deg, #f87171, #dc2626);"></button>
+                <button class="swatch" data-color="#3b82f6" style="background: linear-gradient(135deg, #60a5fa, #2563eb);"></button>
+                <button class="swatch" data-color="#22c55e" style="background: linear-gradient(135deg, #4ade80, #16a34a);"></button>
+                <button class="swatch" data-color="#f59e0b" style="background: linear-gradient(135deg, #fbbf24, #d97706);"></button>
+                <button class="swatch" data-color="#a855f7" style="background: linear-gradient(135deg, #c084fc, #7e22ce);"></button>
+            </div>
+        </div>
+
+        <!-- בחירת צבע חולצת הרוכב -->
+        <div class="custom-block">
+            <span class="custom-lbl">צבע חולצת הרוכב:</span>
+            <div class="swatch-row" id="jersey-colors">
+                <button class="swatch selected" data-color="#38bdf8" style="background: linear-gradient(135deg, #7dd3fc, #0284c7);"></button>
+                <button class="swatch" data-color="#f43f5e" style="background: linear-gradient(135deg, #fb7185, #e11d48);"></button>
+                <button class="swatch" data-color="#a3e635" style="background: linear-gradient(135deg, #bef264, #65a30d);"></button>
+                <button class="swatch" data-color="#fbbf24" style="background: linear-gradient(135deg, #fde047, #d97706);"></button>
+                <button class="swatch" data-color="#f8fafc" style="background: linear-gradient(135deg, #ffffff, #cbd5e1);"></button>
+            </div>
+        </div>
+
+        <!-- בחירת תאורת מסלול -->
+        <div class="custom-block">
+            <span class="custom-lbl">אווירת המסלול:</span>
+            <div class="env-row">
+                <button class="env-btn selected" id="env-day">☀️ יום בהיר בהרים</button>
+                <button class="env-btn" id="env-sunset">🌅 שקיעה זהובה</button>
+            </div>
+        </div>
+
+        <button class="primary-btn" id="btn-start">התחל רכיבה 🚵‍♂️</button>
+
+        <div class="keys-guide">
+            <span class="key-tag">▲ / W : פדל</span>
+            <span class="key-tag">▼ / S : בלם</span>
+            <span class="key-tag">◀ ▶ / A D : היגוי</span>
+            <span class="key-tag">רווח : קפיצה (החזק באוויר לסלטה!)</span>
+            <span class="key-tag">C : מצלמה</span>
+        </div>
+    </div>
+</div>
+
+<!-- מסך השהיה -->
+<div id="pause-screen" class="overlay hidden">
+    <div class="modal-card" style="max-width: 360px;">
+        <h2 class="game-title" style="font-size: 2.1rem;">המשחק מושהה</h2>
+        <p class="game-sub">קחו נשימה עמוקה לפני הירידה הבאה!</p>
+        <button class="primary-btn" id="btn-resume">המשך רכיבה ▶</button>
+        <button class="env-btn" id="btn-restart-pause" style="width: 100%; margin-top: 10px; padding: 12px;">התחל מסלול מחדש 🔄</button>
+    </div>
+</div>
+
+<!-- מסך סיום משחק -->
+<div id="gameover-screen" class="overlay hidden">
+    <div class="modal-card">
+        <div class="record-pill" id="new-record-pill">🏆 שיא חדש נשבר! 🏆</div>
+        <h2 class="game-title" style="font-size: 2.3rem; background: linear-gradient(135deg, #f87171, #ef4444); -webkit-background-clip: text;">התרסקות! 💥</h2>
+        <p class="game-sub" id="crash-reason">פגעת במכשול על השביל!</p>
+
+        <div class="summary-grid">
+            <div class="sum-box">
+                <div class="hud-lbl">ניקוד סופי</div>
+                <div class="hud-val cyan" id="end-score">0</div>
+            </div>
+            <div class="sum-box">
+                <div class="hud-lbl">מרחק רכיבה</div>
+                <div class="hud-val" id="end-dist">0 מ׳</div>
+            </div>
+            <div class="sum-box">
+                <div class="hud-lbl">מטבעות שנאספו</div>
+                <div class="hud-val gold" id="end-coins">0</div>
+            </div>
+            <div class="sum-box">
+                <div class="hud-lbl">פעלולים שנחתו</div>
+                <div class="hud-val lime" id="end-tricks">0</div>
+            </div>
+        </div>
+
+        <div style="margin-bottom: 14px; font-weight: 800; color: #cbd5e1;">
+            שיא אישי: <span id="end-best" style="color: #fbbf24; font-size: 1.2rem;">0</span>
+        </div>
+
+        <button class="primary-btn" id="btn-restart">רכב שוב 🚴‍♂️</button>
+    </div>
+</div>
+
+<script>
+/**
+ * ============================================================================
+ * מנוע סאונד מסונתז (Web Audio API) - תקתוקי גלגל חופשי, חצץ, קפיצות ופעלולים
+ * ============================================================================
+ */
+class BikeSoundEngine {
+    constructor() {
+        this.ctx = null;
+        this.muted = false;
+        this.clickTimer = 0;
+        this.gravelNode = null;
+        this.gravelGain = null;
+    }
+
+    init() {
+        if (!this.ctx) {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            this.ctx = new AudioCtx();
+        }
+        if (this.ctx.state === 'suspended') this.ctx.resume();
+    }
+
+    toggleMute() {
+        this.muted = !this.muted;
+        if (this.muted) this.stopContinuous();
+        return this.muted;
+    }
+
+    startContinuous() {
+        if (this.muted || !this.ctx || this.gravelNode) return;
+        try {
+            const bufSize = this.ctx.sampleRate * 2;
+            const buf = this.ctx.createBuffer(1, bufSize, this.ctx.sampleRate);
+            const data = buf.getChannelData(0);
+            for (let i = 0; i < bufSize; i++) data[i] = Math.random() * 2 - 1;
+
+            this.gravelNode = this.ctx.createBufferSource();
+            this.gravelNode.buffer = buf;
+            this.gravelNode.loop = true;
+
+            const filter = this.ctx.createBiquadFilter();
+            filter.type = 'bandpass';
+            filter.frequency.value = 650;
+            filter.Q.value = 1.2;
+
+            this.gravelGain = this.ctx.createGain();
+            this.gravelGain.gain.value = 0.0;
+
+            this.gravelNode.connect(filter);
+            filter.connect(this.gravelGain);
+            this.gravelGain.connect(this.ctx.destination);
+            this.gravelNode.start();
+        } catch (e) {}
+    }
+
+    stopContinuous() {
+        if (this.gravelNode) {
+            try {
+                this.gravelNode.stop();
+                this.gravelNode.disconnect();
+            } catch (e) {}
+            this.gravelNode = null;
+            this.gravelGain = null;
+        }
+    }
+
+    updateRollingSound(speedRatio, isGrounded, isPedaling, dt) {
+        if (this.muted || !this.ctx) return;
+
+        // רעש צמיגים על עפר וחצץ כשהאופניים על הקרקע
+        if (this.gravelGain) {
+            const targetGain = isGrounded ? Math.min(0.065, speedRatio * 0.06) : 0.0;
+            this.gravelGain.gain.setTargetAtTime(targetGain, this.ctx.currentTime, 0.06);
+        }
+
+        // תקתוקי גלגל חופשי (Freewheel Hub Clicking) כשלא מפדלים
+        if (!isPedaling && speedRatio > 0.15) {
+            this.clickTimer += dt * (8 + speedRatio * 24);
+            if (this.clickTimer >= 1) {
+                this.clickTimer = 0;
+                this.playHubClick();
+            }
+        }
+    }
+
+    playHubClick() {
+        if (this.muted || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(1400, now);
+        osc.frequency.exponentialRampToValueAtTime(400, now + 0.018);
+        gain.gain.setValueAtTime(0.03, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.018);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.018);
+    }
+
+    playJump() {
+        if (this.muted || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(160, now);
+        osc.frequency.exponentialRampToValueAtTime(440, now + 0.22);
+        gain.gain.setValueAtTime(0.14, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.24);
+    }
+
+    playCoin() {
+        if (this.muted || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(987.77, now);
+        osc.frequency.setValueAtTime(1318.51, now + 0.06);
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.26);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.26);
+    }
+
+    playBoost() {
+        if (this.muted || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(220, now);
+        osc.frequency.exponentialRampToValueAtTime(780, now + 0.35);
+        gain.gain.setValueAtTime(0.14, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.38);
+    }
+
+    playTrickLanded() {
+        if (this.muted || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const notes = [523.25, 659.25, 783.99, 1046.5];
+        notes.forEach((freq, idx) => {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(freq, now + idx * 0.055);
+            gain.gain.setValueAtTime(0.13, now + idx * 0.055);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.055 + 0.25);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now + idx * 0.055);
+            osc.stop(now + idx * 0.055 + 0.25);
+        });
+    }
+
+    playCrash() {
+        if (this.muted || !this.ctx) return;
+        this.stopContinuous();
+        const now = this.ctx.currentTime;
+        const bufSize = this.ctx.sampleRate * 0.55;
+        const buf = this.ctx.createBuffer(1, bufSize, this.ctx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < bufSize; i++) data[i] = Math.random() * 2 - 1;
+
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buf;
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(600, now);
+        filter.frequency.exponentialRampToValueAtTime(55, now + 0.55);
+
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0.35, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.ctx.destination);
+        noise.start(now);
+    }
+}
+
+/**
+ * ============================================================================
+ * משתנים גלובליים והגדרות הסצנה התלת-ממדית (Three.js)
+ * ============================================================================
+ */
+const sound = new BikeSoundEngine();
+
+// מצבי משחק: 'START', 'PLAYING', 'PAUSED', 'GAMEOVER'
+let gameState = 'START';
+let currentEnv = 'DAY'; // 'DAY' | 'SUNSET'
+let cameraMode = 0; // 0 = Chase Cam (גוף שלישי), 1 = Handlebar First-Person (מבט כידון)
+
+let selectedBikeColor = '#ef4444';
+let selectedJerseyColor = '#38bdf8';
+
+// מדדי משחק
+let score = 0;
+let distanceMeters = 0;
+let coins = 0;
+let tricksLanded = 0;
+let comboMultiplier = 1;
+let highScore = parseInt(localStorage.getItem('extremebike3d_best')) || 0;
+
+// פיזיקת אופניים ורוכב
+const TRACK_WIDTH = 13.5;
+const TRACK_LENGTH = 260;
+
+let bikeX = 0;
+let bikeY = 0;
+let bikeVy = 0;
+let bikePitch = 0; // זווית סלטה באוויר (רדיאנים)
+let totalAirRotation = 0;
+let airTime = 0;
+let isGrounded = true;
+
+let forwardSpeed = 0.65;
+const MIN_SPEED = 0.35;
+const BASE_CRUISE_SPEED = 0.72;
+const MAX_PEDAL_SPEED = 1.38;
+let boostTimer = 0;
+let energyLevel = 65; // 0 עד 100
+let cameraShake = 0;
+
+// קלטים
+const keys = {};
+const touchState = { left: false, right: false, pedal: false, brake: false, jump: false };
+
+// אובייקטי Three.js
+let scene, camera, renderer;
+let dirLight, hemiLight, ambientLight;
+let bikeRoot, bikeTiltGroup, bikePitchGroup;
+let frontWheel, rearWheel, crankGroup, leftPedal, rightPedal;
+let bikeFrameMat, jerseyMat;
+
+// מערכי סביבה דינמית
+let trailStrips = [];
+let roadsideScenery = [];
+let trackEntities = []; // רמפות, סלעים, בולי עץ, גשרים, מטבעות, משקאות, פדי האצה
+let particles3D = [];
+let speedLines = [];
+
+let spawnEntityTimer = 0;
+let spawnBridgeTimer = 0;
+let bannerTimeout = null;
+let lastTime = performance.now();
+
+/**
+ * יצירת טקסטורת שביל עפר ואבנים קטנות עם סימוני צמיגים
+ */
+function createTrailTexture() {
+    const c = document.createElement('canvas');
+    c.width = 512;
+    c.height = 512;
+    const ctx = c.getContext('2d');
+
+    ctx.fillStyle = '#78553a';
+    ctx.fillRect(0, 0, 512, 512);
+
+    // פסי רכיבה כבושים במרכז השביל
+    ctx.fillStyle = '#65462f';
+    ctx.fillRect(110, 0, 90, 512);
+    ctx.fillRect(312, 0, 90, 512);
+
+    // חצץ ומרקם אדמה
+    for (let i = 0; i < 6000; i++) {
+        const x = Math.random() * 512;
+        const y = Math.random() * 512;
+        ctx.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.12)';
+        ctx.fillRect(x, y, 3, 3);
+    }
+
+    const tex = new THREE.CanvasTexture(c);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(1, 24);
+    return tex;
+}
+
+/**
+ * אתחול סצנת Three.js
+ */
+function initThree() {
+    const container = document.getElementById('canvas-container');
+
+    scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x7dd3fc, 0.0065);
+
+    camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.15, 280);
+    camera.position.set(0, 4.2, 9.5);
+
+    renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container.appendChild(renderer.domElement);
+
+    // תאורה
+    ambientLight = new THREE.AmbientLight(0xffffff, 0.55);
+    scene.add(ambientLight);
+
+    hemiLight = new THREE.HemisphereLight(0xe0f2fe, 0x14532d, 0.65);
+    scene.add(hemiLight);
+
+    dirLight = new THREE.DirectionalLight(0xfffbeb, 1.25);
+    dirLight.position.set(28, 48, 22);
+    dirLight.castShadow = true;
+    dirLight.shadow.mapSize.width = 1024;
+    dirLight.shadow.mapSize.height = 1024;
+    const d = 35;
+    dirLight.shadow.camera.left = -d;
+    dirLight.shadow.camera.right = d;
+    dirLight.shadow.camera.top = d;
+    dirLight.shadow.camera.bottom = -d;
+    scene.add(dirLight);
+
+    buildMountainEnvironment();
+    buildDetailedBicycleAndRider();
+    createSpeedLines3D();
+    applyEnvironmentTheme(currentEnv);
+
+    window.addEventListener('resize', onResize);
+}
+
+/**
+ * בניית שביל ההרים, מדרונות הדשא, סלעי הצד, העצים והגדרות
+ */
+function buildMountainEnvironment() {
+    // מדרון הרים ירוק נרחב
+    const terrainGeo = new THREE.PlaneGeometry(360, TRACK_LENGTH + 100);
+    const terrainMat = new THREE.MeshStandardMaterial({ color: 0x166534, roughness: 0.9 });
+    const terrain = new THREE.Mesh(terrainGeo, terrainMat);
+    terrain.rotation.x = -Math.PI / 2;
+    terrain.position.set(0, -0.05, -TRACK_LENGTH / 2 + 30);
+    terrain.receiveShadow = true;
+    terrain.name = 'terrainMesh';
+    scene.add(terrain);
+
+    // שביל הרכיבה המרכזי
+    const trailGeo = new THREE.PlaneGeometry(TRACK_WIDTH, TRACK_LENGTH + 100);
+    const trailMat = new THREE.MeshStandardMaterial({
+        map: createTrailTexture(),
+        roughness: 0.85
+    });
+    const trail = new THREE.Mesh(trailGeo, trailMat);
+    trail.rotation.x = -Math.PI / 2;
+    trail.position.set(0, 0, -TRACK_LENGTH / 2 + 30);
+    trail.receiveShadow = true;
+    trail.name = 'trailMesh';
+    scene.add(trail);
+
+    // שולי השביל (אבני שפה / עפר מוגבה)
+    const bermGeo = new THREE.BoxGeometry(0.9, 0.35, TRACK_LENGTH + 100);
+    const bermMat = new THREE.MeshStandardMaterial({ color: 0x573d28, roughness: 0.9 });
+    [-1, 1].forEach(side => {
+        const berm = new THREE.Mesh(bermGeo, bermMat);
+        berm.position.set(side * (TRACK_WIDTH / 2 + 0.3), 0.15, -TRACK_LENGTH / 2 + 30);
+        berm.receiveShadow = true;
+        scene.add(berm);
+    });
+
+    // יצירת עצי אורן, סלעי הרים ועמודי עץ לאורך המסלול
+    for (let z = 25; z > -TRACK_LENGTH; z -= 12) {
+        spawnSceneryPair(z);
+    }
+}
+
+function spawnSceneryPair(zPos) {
+    [-1, 1].forEach(side => {
+        const group = new THREE.Group();
+        const edgeX = side * (TRACK_WIDTH / 2 + 1.2);
+
+        // עמוד סימון מסלול מעץ
+        const post = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.12, 0.14, 1.3, 8),
+            new THREE.MeshStandardMaterial({ color: 0x78350f })
+        );
+        post.position.set(edgeX, 0.65, 0);
+        post.castShadow = true;
+        group.add(post);
+
+        const reflector = new THREE.Mesh(
+            new THREE.BoxGeometry(0.18, 0.25, 0.18),
+            new THREE.MeshBasicMaterial({ color: side === -1 ? 0xfbbf24 : 0x38bdf8 })
+        );
+        reflector.position.set(edgeX, 1.15, 0);
+        group.add(reflector);
+
+        // עצי אורן הרריים בגבהים שונים
+        for (let t = 0; t < 2; t++) {
+            const tx = edgeX + side * (2.5 + t * 5.5 + Math.random() * 4);
+            const tz = (Math.random() - 0.5) * 8;
+            const scale = 0.85 + Math.random() * 0.7;
+
+            const trunk = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.25 * scale, 0.4 * scale, 2.4 * scale, 7),
+                new THREE.MeshStandardMaterial({ color: 0x451a03 })
+            );
+            trunk.position.set(tx, 1.2 * scale, tz);
+            group.add(trunk);
+
+            const foliageMat = new THREE.MeshStandardMaterial({ color: 0x14532d, roughness: 0.85 });
+            for (let layer = 0; layer < 3; layer++) {
+                const cone = new THREE.Mesh(
+                    new THREE.ConeGeometry((2.1 - layer * 0.45) * scale, 2.8 * scale, 7),
+                    foliageMat
+                );
+                cone.position.set(tx, (3.0 + layer * 1.45) * scale, tz);
+                cone.castShadow = true;
+                group.add(cone);
+            }
+        }
+
+        group.position.z = zPos;
+        scene.add(group);
+        roadsideScenery.push(group);
+    });
+}
+
+/**
+ * בניית מודל תלת-ממדי מפורט של אופני הרים ורוכב מדווש עם קסדה
+ */
+function buildDetailedBicycleAndRider() {
+    bikeRoot = new THREE.Group();
+    bikeTiltGroup = new THREE.Group(); // להטיה הצידה בפניות (Leaning)
+    bikePitchGroup = new THREE.Group(); // להרמת גלגל (Wheelie) וסלטות (Flips)
+
+    bikeRoot.add(bikeTiltGroup);
+    bikeTiltGroup.add(bikePitchGroup);
+
+    bikeFrameMat = new THREE.MeshStandardMaterial({
+        color: selectedBikeColor,
+        metalness: 0.65,
+        roughness: 0.25
+    });
+    const darkMetalMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.8, roughness: 0.3 });
+    const tireMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.9 });
+    const spokeMat = new THREE.MeshBasicMaterial({ color: 0xcbd5e1 });
+
+    // פונקציית עזר ליצירת גלגל אופניים עם חישורים (Spokes)
+    const createSpokedWheel = () => {
+        const wGroup = new THREE.Group();
+        const tire = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.11, 12, 24), tireMat);
+        tire.rotation.y = Math.PI / 2;
+        tire.castShadow = true;
+        wGroup.add(tire);
+
+        const rim = new THREE.Mesh(new THREE.TorusGeometry(0.51, 0.03, 8, 24), darkMetalMat);
+        rim.rotation.y = Math.PI / 2;
+        wGroup.add(rim);
+
+        // 6 חישורים מצטלבים כדי שנראה בבירור את סיבוב הגלגל
+        const spokeGeo = new THREE.CylinderGeometry(0.015, 0.015, 1.02, 6);
+        for (let i = 0; i < 6; i++) {
+            const spoke = new THREE.Mesh(spokeGeo, spokeMat);
+            spoke.rotation.x = (i * Math.PI) / 6;
+            wGroup.add(spoke);
+        }
+        return wGroup;
+    };
+
+    // גלגל קדמי ואחורי
+    frontWheel = createSpokedWheel();
+    frontWheel.position.set(0, 0.62, -1.15);
+    bikePitchGroup.add(frontWheel);
+
+    rearWheel = createSpokedWheel();
+    rearWheel.position.set(0, 0.62, 1.15);
+    bikePitchGroup.add(rearWheel);
+
+    // שלדת האופניים (משולש קדמי ואחורי + מזלג קדמי)
+    const addTube = (p1, p2, radius, mat) => {
+        const v1 = new THREE.Vector3(...p1);
+        const v2 = new THREE.Vector3(...p2);
+        const dist = v1.distanceTo(v2);
+        const cyl = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, dist, 8), mat);
+        cyl.position.copy(v1).add(v2).multiplyScalar(0.5);
+        cyl.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), v2.clone().sub(v1).normalize());
+        cyl.castShadow = true;
+        bikePitchGroup.add(cyl);
+    };
+
+    // צינורות שלדה
+    addTube([0, 0.62, 1.15], [0, 1.38, 0.35], 0.05, bikeFrameMat);  // תומכת מושב אחורית
+    addTube([0, 0.62, 1.15], [0, 0.68, 0.05], 0.045, bikeFrameMat); // תומכת שרשרת
+    addTube([0, 0.68, 0.05], [0, 1.48, 0.38], 0.055, bikeFrameMat); // צינור מושב
+    addTube([0, 0.68, 0.05], [0, 1.42, -0.78], 0.06, bikeFrameMat); // צינור תחתון
+    addTube([0, 1.38, 0.35], [0, 1.52, -0.75], 0.055, bikeFrameMat);// צינור עליון
+    addTube([0, 0.62, -1.15], [0, 1.62, -0.72], 0.055, darkMetalMat);// מזלג קדמי
+
+    // כידון ומושב
+    const handlebar = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 1.05, 8), darkMetalMat);
+    handlebar.rotation.z = Math.PI / 2;
+    handlebar.position.set(0, 1.65, -0.72);
+    bikePitchGroup.add(handlebar);
+
+    const saddle = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.1, 0.48), darkMetalMat);
+    saddle.position.set(0, 1.54, 0.42);
+    bikePitchGroup.add(saddle);
+
+    // מערכת פדלים מסתובבת (Crankset)
+    crankGroup = new THREE.Group();
+    crankGroup.position.set(0, 0.68, 0.05);
+    bikePitchGroup.add(crankGroup);
+
+    const crankArmGeo = new THREE.BoxGeometry(0.05, 0.32, 0.06);
+    const leftArm = new THREE.Mesh(crankArmGeo, darkMetalMat);
+    leftArm.position.set(-0.18, 0.14, 0);
+    crankGroup.add(leftArm);
+
+    const rightArm = new THREE.Mesh(crankArmGeo, darkMetalMat);
+    rightArm.position.set(0.18, -0.14, 0);
+    crankGroup.add(rightArm);
+
+    // מודל הרוכב
+    jerseyMat = new THREE.MeshStandardMaterial({ color: selectedJerseyColor, roughness: 0.45 });
+    const shortsMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.7 });
+    const skinMat = new THREE.MeshStandardMaterial({ color: 0xfed7aa, roughness: 0.5 });
+
+    // פלג גוף עליון רוכן קדימה לעבר הכידון
+    const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.21, 0.78, 12), jerseyMat);
+    torso.position.set(0, 1.92, 0.12);
+    torso.rotation.x = -0.52;
+    torso.castShadow = true;
+    bikePitchGroup.add(torso);
+
+    // ראש וקסדת אקסטרים
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.23, 14, 14), skinMat);
+    head.position.set(0, 2.38, -0.16);
+    bikePitchGroup.add(head);
+
+    const helmet = new THREE.Mesh(
+        new THREE.SphereGeometry(0.26, 14, 12, 0, Math.PI * 2, 0, Math.PI * 0.6),
+        bikeFrameMat
+    );
+    helmet.position.set(0, 2.41, -0.16);
+    helmet.rotation.x = -0.25;
+    bikePitchGroup.add(helmet);
+
+    // משקפי אבק (Goggles)
+    const goggles = new THREE.Mesh(
+        new THREE.BoxGeometry(0.32, 0.1, 0.16),
+        new THREE.MeshBasicMaterial({ color: 0xfbbf24 })
+    );
+    goggles.position.set(0, 2.38, -0.35);
+    bikePitchGroup.add(goggles);
+
+    // ידיים אוחזות בכידון
+    [-0.36, 0.36].forEach(ax => {
+        const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.055, 0.68, 8), skinMat);
+        arm.position.set(ax * 0.95, 1.92, -0.35);
+        arm.rotation.x = -0.95;
+        bikePitchGroup.add(arm);
+    });
+
+    // רגליים מחוברות לפדלים
+    leftPedal = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.07, 0.75, 8), shortsMat);
+    leftPedal.position.set(-0.22, 1.25, 0.25);
+    bikePitchGroup.add(leftPedal);
+
+    rightPedal = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.07, 0.75, 8), shortsMat);
+    rightPedal.position.set(0.22, 1.25, 0.25);
+    bikePitchGroup.add(rightPedal);
+
+    bikeRoot.position.set(0, 0, 2);
+    scene.add(bikeRoot);
+}
+
+/**
+ * יצירת פסי מהירות (Speed Lines) תלת-ממדיים באוויר לתחושת תאוצה
+ */
+function createSpeedLines3D() {
+    const geo = new THREE.BoxGeometry(0.04, 0.04, 3.5);
+    const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35 });
+    for (let i = 0; i < 28; i++) {
+        const line = new THREE.Mesh(geo, mat);
+        line.position.set(
+            (Math.random() - 0.5) * 26,
+            1.5 + Math.random() * 8,
+            -Math.random() * 140
+        );
+        scene.add(line);
+        speedLines.push(line);
+    }
+}
+
+/**
+ * יצירת אלמנטים על השביל (רמפות קפיצה, סלעים, בולי עץ, מטבעות, משקאות אנרגיה, פדי בוסט)
+ */
+function spawnTrackObject() {
+    const laneX = (Math.random() - 0.5) * (TRACK_WIDTH - 2.6);
+    const zSpawn = -175;
+
+    // מניעת חפיפה עם עצמים סמוכים
+    for (let e of trackEntities) {
+        if (Math.abs(e.mesh.position.z - zSpawn) < 12 && Math.abs(e.mesh.position.x - laneX) < 3.2) {
+            return;
+        }
+    }
+
+    const r = Math.random();
+
+    if (r < 0.24) {
+        // רמפת קפיצה מעץ (Ramp) + שורת מטבעות בקשת באוויר!
+        const rampGroup = new THREE.Group();
+        const rampMat = new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.65 });
+        const stripeMat = new THREE.MeshBasicMaterial({ color: 0xfef08a });
+
+        // גוף הרמפה המשופע
+        const rampGeo = new THREE.BoxGeometry(3.4, 1.35, 4.6);
+        const rampMesh = new THREE.Mesh(rampGeo, rampMat);
+        rampMesh.rotation.x = 0.28;
+        rampMesh.position.y = 0.45;
+        rampMesh.castShadow = true;
+        rampMesh.receiveShadow = true;
+        rampGroup.add(rampMesh);
+
+        // חץ צהוב זוהר על הרמפה
+        const arrow = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.08, 3.8), stripeMat);
+        arrow.rotation.x = 0.28;
+        arrow.position.y = 1.15;
+        rampGroup.add(arrow);
+
+        rampGroup.position.set(laneX, 0, zSpawn);
+        scene.add(rampGroup);
+        trackEntities.push({ mesh: rampGroup, type: 'RAMP', width: 3.4, length: 4.6, triggered: false });
+
+        // הוספת 3 מטבעות זהב מעל הרמפה לעידוד קפיצה ופעלולים
+        for (let c = 1; c <= 3; c++) {
+            spawnCoinAt(laneX, 1.8 + c * 1.1, zSpawn - c * 3.8);
+        }
+    } else if (r < 0.46) {
+        // סלע הרים חד (מכשול)
+        const rockGeo = new THREE.DodecahedronGeometry(1.15, 0);
+        const rockMat = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.9 });
+        const rock = new THREE.Mesh(rockGeo, rockMat);
+        rock.scale.set(1.2, 0.85, 1.0);
+        rock.position.set(laneX, 0.75, zSpawn);
+        rock.rotation.set(Math.random(), Math.random(), Math.random());
+        rock.castShadow = true;
+        scene.add(rock);
+        trackEntities.push({ mesh: rock, type: 'OBSTACLE', radius: 1.15 });
+    } else if (r < 0.64) {
+        // בול עץ שנפל לרוחב השביל (ניתן לדלג מעליו בקפיצה!)
+        const logGeo = new THREE.CylinderGeometry(0.48, 0.48, 3.6, 12);
+        const logMat = new THREE.MeshStandardMaterial({ color: 0x451a03, roughness: 0.85 });
+        const log = new THREE.Mesh(logGeo, logMat);
+        log.rotation.z = Math.PI / 2;
+        log.position.set(laneX, 0.48, zSpawn);
+        log.castShadow = true;
+        scene.add(log);
+        trackEntities.push({ mesh: log, type: 'LOG', width: 3.6, height: 0.95 });
+    } else if (r < 0.84) {
+        // שורת מטבעות זהב
+        for (let i = 0; i < 3; i++) {
+            spawnCoinAt(laneX, 1.0, zSpawn - i * 3.2);
+        }
+    } else if (r < 0.93) {
+        // פד האצה ירוק-ניאון על הקרקע (Speed Boost Pad)
+        const padGeo = new THREE.PlaneGeometry(2.6, 4.2);
+        const padMat = new THREE.MeshBasicMaterial({ color: 0x22c55e, side: THREE.DoubleSide });
+        const pad = new THREE.Mesh(padGeo, padMat);
+        pad.rotation.x = -Math.PI / 2;
+        pad.position.set(laneX, 0.04, zSpawn);
+        scene.add(pad);
+        trackEntities.push({ mesh: pad, type: 'BOOST', width: 2.6, length: 4.2, triggered: false });
+    } else {
+        // פחית משקה אנרגיה מרחפת
+        const canGeo = new THREE.CylinderGeometry(0.32, 0.32, 0.95, 14);
+        const canMat = new THREE.MeshStandardMaterial({
+            color: 0x84cc16,
+            emissive: 0x4d7c0f,
+            emissiveIntensity: 0.5,
+            metalness: 0.6
+        });
+        const can = new THREE.Mesh(canGeo, canMat);
+        can.rotation.z = 0.25;
+        can.position.set(laneX, 1.15, zSpawn);
+        scene.add(can);
+        trackEntities.push({ mesh: can, type: 'ENERGY', phase: Math.random() * 6 });
+    }
+}
+
+function spawnCoinAt(x, y, z) {
+    const coinGeo = new THREE.CylinderGeometry(0.62, 0.62, 0.16, 18);
+    const coinMat = new THREE.MeshStandardMaterial({
+        color: 0xfbbf24,
+        emissive: 0xb45309,
+        emissiveIntensity: 0.35,
+        metalness: 0.85,
+        roughness: 0.15
+    });
+    const coin = new THREE.Mesh(coinGeo, coinMat);
+    coin.rotation.x = Math.PI / 2;
+    coin.position.set(x, y, z);
+    coin.castShadow = true;
+    scene.add(coin);
+    trackEntities.push({ mesh: coin, type: 'COIN', phase: Math.random() * 6 });
+}
+
+/**
+ * יצירת גשר עץ הררי שמרחיב את חוויית המסלול
+ */
+function spawnWoodenBridge() {
+    const zSpawn = -195;
+    const bridgeGroup = new THREE.Group();
+    const plankMat = new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.75 });
+    const railMat = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.8 });
+
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(TRACK_WIDTH + 0.4, 0.3, 18), plankMat);
+    deck.position.y = 0.15;
+    deck.receiveShadow = true;
+    bridgeGroup.add(deck);
+
+    [-1, 1].forEach(side => {
+        const rail = new THREE.Mesh(new THREE.BoxGeometry(0.35, 1.2, 18), railMat);
+        rail.position.set(side * (TRACK_WIDTH / 2), 0.75, 0);
+        rail.castShadow = true;
+        bridgeGroup.add(rail);
+    });
+
+    bridgeGroup.position.set(0, 0, zSpawn);
+    scene.add(bridgeGroup);
+    trackEntities.push({ mesh: bridgeGroup, type: 'BRIDGE' });
+}
+
+/**
+ * יצירת חלקיקי אבק/ניצוצות תלת-ממדיים
+ */
+function spawnParticles(pos, colorHex, count = 12) {
+    const geo = new THREE.BoxGeometry(0.22, 0.22, 0.22);
+    const mat = new THREE.MeshBasicMaterial({ color: colorHex });
+    for (let i = 0; i < count; i++) {
+        const m = new THREE.Mesh(geo, mat);
+        m.position.copy(pos);
+        scene.add(m);
+        particles3D.push({
+            mesh: m,
+            vx: (Math.random() - 0.5) * 0.45,
+            vy: Math.random() * 0.35 + 0.1,
+            vz: (Math.random() - 0.5) * 0.45,
+            life: 25 + Math.random() * 15
+        });
+    }
+}
+
+/**
+ * החלת אווירת יום או שקיעה זהובה
+ */
+function applyEnvironmentTheme(env) {
+    currentEnv = env;
+    const isDay = env === 'DAY';
+
+    document.getElementById('btn-theme-hud').textContent = isDay ? '☀️' : '🌅';
+    document.getElementById('env-day').classList.toggle('selected', isDay);
+    document.getElementById('env-sunset').classList.toggle('selected', !isDay);
+
+    if (!scene) return;
+
+    scene.background = new THREE.Color(isDay ? 0x38bdf8 : 0xf97316);
+    scene.fog.color.setHex(isDay ? 0x7dd3fc : 0xfb923c);
+    ambientLight.intensity = isDay ? 0.55 : 0.45;
+    hemiLight.color.setHex(isDay ? 0xe0f2fe : 0xfed7aa);
+    hemiLight.groundColor.setHex(isDay ? 0x14532d : 0x451a03);
+    dirLight.color.setHex(isDay ? 0xfffbeb : 0xfdba74);
+    dirLight.intensity = isDay ? 1.25 : 1.35;
+
+    const terrain = scene.getObjectByName('terrainMesh');
+    if (terrain) terrain.material.color.setHex(isDay ? 0x166534 : 0x3f2e18);
+}
+
+/**
+ * הצגת באנר הודעה צפה במרכז המסך
+ */
+function showFloatingBanner(text, color = '#fbbf24') {
+    const el = document.getElementById('floating-banner');
+    el.textContent = text;
+    el.style.color = color;
+    el.classList.add('show');
+    clearTimeout(bannerTimeout);
+    bannerTimeout = setTimeout(() => el.classList.remove('show'), 1000);
+}
+
+/**
+ * התחלת רכיבה חדשה
+ */
+function startRide() {
+    sound.init();
+    sound.startContinuous();
+
+    gameState = 'PLAYING';
+    score = 0;
+    distanceMeters = 0;
+    coins = 0;
+    tricksLanded = 0;
+    comboMultiplier = 1;
+
+    bikeX = 0;
+    bikeY = 0;
+    bikeVy = 0;
+    bikePitch = 0;
+    totalAirRotation = 0;
+    airTime = 0;
+    isGrounded = true;
+
+    forwardSpeed = BASE_CRUISE_SPEED;
+    boostTimer = 0;
+    energyLevel = 70;
+    cameraShake = 0;
+
+    // ניקוי ישויות קודמות
+    trackEntities.forEach(e => scene.remove(e.mesh));
+    trackEntities = [];
+    particles3D.forEach(p => scene.remove(p.mesh));
+    particles3D = [];
+
+    bikeRoot.visible = true;
+    bikeRoot.position.set(0, 0, 2);
+    bikeTiltGroup.rotation.set(0, 0, 0);
+    bikePitchGroup.rotation.set(0, 0, 0);
+
+    document.getElementById('start-screen').classList.add('hidden');
+    document.getElementById('pause-screen').classList.add('hidden');
+    document.getElementById('gameover-screen').classList.add('hidden');
+    document.getElementById('air-status').style.display = 'none';
+
+    updateHUD();
+}
+
+/**
+ * ביצוע קפיצה (Bunny-Hop) מהקרקע
+ */
+function triggerJump(launchPower = 0.36) {
+    if (gameState !== 'PLAYING' || !isGrounded) return;
+    isGrounded = false;
+    bikeVy = launchPower;
+    airTime = 0;
+    totalAirRotation = 0;
+    sound.playJump();
+    spawnParticles(bikeRoot.position, 0xd6d3d1, 8);
+}
+
+/**
+ * טיפול בהתרסקות וסיום משחק
+ */
+function handleCrash(reasonText) {
+    gameState = 'GAMEOVER';
+    sound.playCrash();
+    cameraShake = 1.1;
+
+    spawnParticles(bikeRoot.position, 0xef4444, 24);
+    spawnParticles(bikeRoot.position, 0xfbbf24, 20);
+    bikeRoot.visible = false;
+    document.getElementById('air-status').style.display = 'none';
+
+    const finalScore = Math.floor(score);
+    let isNewRecord = false;
+    if (finalScore > highScore) {
+        highScore = finalScore;
+        localStorage.setItem('extremebike3d_best', highScore);
+        isNewRecord = true;
+    }
+
+    setTimeout(() => {
+        document.getElementById('crash-reason').textContent = reasonText;
+        document.getElementById('end-score').textContent = finalScore;
+        document.getElementById('end-dist').textContent = `${Math.floor(distanceMeters)} מ׳`;
+        document.getElementById('end-coins').textContent = coins;
+        document.getElementById('end-tricks').textContent = tricksLanded;
+        document.getElementById('end-best').textContent = highScore;
+        document.getElementById('new-record-pill').style.display = isNewRecord ? 'inline-block' : 'none';
+        document.getElementById('gameover-screen').classList.remove('hidden');
+    }, 700);
+}
+
+/**
+ * עדכון לוגיקת המשחק והפיזיקה בכל פריים
+ */
+function update(dt) {
+    // עדכון חלקיקים גם לאחר התרסקות
+    for (let i = particles3D.length - 1; i >= 0; i--) {
+        const p = particles3D[i];
+        p.mesh.position.x += p.vx;
+        p.mesh.position.y += p.vy;
+        p.mesh.position.z += p.vz;
+        p.vy -= 0.02;
+        p.life--;
+        p.mesh.scale.setScalar(Math.max(0.01, p.life / 35));
+        if (p.life <= 0) {
+            scene.remove(p.mesh);
+            particles3D.splice(i, 1);
+        }
+    }
+
+    if (cameraShake > 0) {
+        cameraShake *= 0.88;
+        if (cameraShake < 0.01) cameraShake = 0;
+    }
+
+    // אנימציית תצוגה חיה ברקע מסך הפתיחה
+    if (gameState === 'START') {
+        const demoSpeed = 0.55;
+        scrollWorld(demoSpeed);
+        frontWheel.rotation.x -= demoSpeed * 0.8;
+        rearWheel.rotation.x -= demoSpeed * 0.8;
+        crankGroup.rotation.x -= demoSpeed * 0.5;
+        bikeRoot.position.x = Math.sin(performance.now() * 0.0012) * 2.5;
+        bikeTiltGroup.rotation.z = -Math.cos(performance.now() * 0.0012) * 0.14;
+        camera.position.set(bikeRoot.position.x * 0.6, 3.8, 8.8);
+        camera.lookAt(bikeRoot.position.x * 0.4, 1.4, -10);
+        return;
+    }
+
+    if (gameState !== 'PLAYING') return;
+
+    // קריאת קלטים (מקלדת + כפתורי מגע)
+    const steerLeft = keys['ArrowLeft'] || keys['KeyA'] || touchState.left;
+    const steerRight = keys['ArrowRight'] || keys['KeyD'] || touchState.right;
+    const isPedaling = keys['ArrowUp'] || keys['KeyW'] || touchState.pedal;
+    const isBraking = keys['ArrowDown'] || keys['KeyS'] || touchState.brake;
+    const holdingJump = keys['Space'] || touchState.jump;
+
+    // 1. ניהול מהירות ופידול
+    if (boostTimer > 0) {
+        boostTimer -= dt;
+        forwardSpeed += (MAX_PEDAL_SPEED * 1.25 - forwardSpeed) * 0.12;
+        cameraShake = Math.max(cameraShake, 0.06);
+    } else if (isPedaling && energyLevel > 2) {
+        energyLevel = Math.max(0, energyLevel - dt * 18);
+        forwardSpeed += (MAX_PEDAL_SPEED - forwardSpeed) * 0.06;
+    } else if (isBraking) {
+        forwardSpeed += (MIN_SPEED - forwardSpeed) * 0.12;
+        energyLevel = Math.min(100, energyLevel + dt * 10);
+    } else {
+        // גלישה טבעית במורד ההר והתאוששות אנרגיה
+        const naturalCruise = BASE_CRUISE_SPEED + Math.min(0.35, distanceMeters * 0.00015);
+        forwardSpeed += (naturalCruise - forwardSpeed) * 0.04;
+        energyLevel = Math.min(100, energyLevel + dt * 12);
+    }
+
+    // 2. היגוי ימינה ושמאלה + הטיית אופניים (Leaning)
+    let steerDir = 0;
+    if (steerLeft) steerDir -= 1;
+    if (steerRight) steerDir += 1;
+
+    const lateralSpeed = 0.22 * (0.7 + forwardSpeed * 0.4);
+    bikeX += steerDir * lateralSpeed;
+    bikeX = Math.max(-TRACK_WIDTH / 2 + 0.85, Math.min(TRACK_WIDTH / 2 - 0.85, bikeX));
+    bikeRoot.position.x = bikeX;
+
+    // הטיית גוף האופניים לתוך הפנייה
+    const targetLean = -steerDir * 0.34;
+    bikeTiltGroup.rotation.z += (targetLean - bikeTiltGroup.rotation.z) * 0.18;
+    bikeTiltGroup.rotation.y += (-steerDir * 0.14 - bikeTiltGroup.rotation.y) * 0.18;
+
+    // 3. קפיצה, כבידה וביצוע סלטות באוויר (Backflips!)
+    const airStatusEl = document.getElementById('air-status');
+    if (!isGrounded) {
+        airTime += dt;
+        bikeY += bikeVy;
+        bikeVy -= 0.0145; // כוח כבידה
+
+        // החזקת רווח / כפתור קפיצה באוויר מסובבת את הרוכב לסלטה אחורית!
+        if (holdingJump) {
+            const flipSpeed = 6.2; // רדיאנים לשנייה
+            bikePitch += flipSpeed * dt;
+            totalAirRotation += flipSpeed * dt;
+        } else {
+            // ייצוב הדרגתי לקראת נחיתה
+            const nearestTurn = Math.round(bikePitch / (Math.PI * 2)) * (Math.PI * 2);
+            bikePitch += (nearestTurn - bikePitch) * 0.08;
+        }
+
+        bikePitchGroup.rotation.x = bikePitch;
+
+        const deg = Math.floor((totalAirRotation * 180) / Math.PI);
+        airStatusEl.style.display = 'block';
+        airStatusEl.textContent = `🦅 זמן אוויר: ${airTime.toFixed(1)} שנ׳ • סיבוב: ${deg}°`;
+
+        // בדיקת נחיתה על הקרקע
+        if (bikeY <= 0) {
+            bikeY = 0;
+            bikeVy = 0;
+            isGrounded = true;
+            airStatusEl.style.display = 'none';
+
+            // בדיקה האם הזווית בנחיתה תקינה או שהרוכב נחת על הראש!
+            let normAngle = ((bikePitch % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+            if (normAngle > Math.PI) normAngle -= Math.PI * 2;
+
+            if (Math.abs(normAngle) > 1.15) {
+                handleCrash('נחתת בזווית מסוכנת מסלטה! שחרר את כפתור הקפיצה בזמן לנחיתה חלקה.');
+                return;
+            }
+
+            // חישוב מספר הסלטות שהושלמו בהצלחה!
+            const completedFlips = Math.floor((totalAirRotation + 0.65) / (Math.PI * 2));
+            if (completedFlips >= 1) {
+                tricksLanded += completedFlips;
+                comboMultiplier = Math.min(8, comboMultiplier + completedFlips);
+                const trickPoints = completedFlips * 250 * comboMultiplier;
+                score += trickPoints;
+                energyLevel = Math.min(100, energyLevel + 35);
+                sound.playTrickLanded();
+                spawnParticles(bikeRoot.position, 0xfbbf24, 18);
+                const flipName = completedFlips === 1 ? 'סלטה אחורית!' : `${completedFlips}x סלטות מטורפות!`;
+                showFloatingBanner(`🔥 ${flipName} +${trickPoints}`, '#a3e635');
+            } else if (airTime > 0.65) {
+                const airPts = Math.floor(airTime * 100) * comboMultiplier;
+                score += airPts;
+                showFloatingBanner(`🦅 קפיצה נקייה +${airPts}`, '#38bdf8');
+            }
+
+            bikePitch = 0;
+            bikePitchGroup.rotation.x = 0;
+            spawnParticles(bikeRoot.position, 0xa8a29e, 10);
+        }
+    } else {
+        // הרמת גלגל קלה (Wheelie) בזמן פידול מהיר על הקרקע
+        const targetWheelie = isPedaling ? 0.11 : 0;
+        bikePitchGroup.rotation.x += (targetWheelie - bikePitchGroup.rotation.x) * 0.15;
+    }
+
+    bikeRoot.position.y = bikeY;
+
+    // 4. אנימציית סיבוב גלגלים ופידול רגליים
+    frontWheel.rotation.x -= forwardSpeed * 0.9;
+    rearWheel.rotation.x -= forwardSpeed * 0.9;
+    if (isPedaling && isGrounded) {
+        crankGroup.rotation.x -= forwardSpeed * 0.65;
+        leftPedal.position.y = 1.25 + Math.sin(crankGroup.rotation.x) * 0.16;
+        rightPedal.position.y = 1.25 - Math.sin(crankGroup.rotation.x) * 0.16;
+    }
+
+    // 5. הזזת השביל, הסביבה ופסי המהירות
+    scrollWorld(forwardSpeed);
+    distanceMeters += forwardSpeed * 0.55;
+    score += forwardSpeed * 0.4 * comboMultiplier;
+
+    sound.updateRollingSound((forwardSpeed - MIN_SPEED) / (MAX_PEDAL_SPEED - MIN_SPEED), isGrounded, isPedaling, dt);
+
+    // 6. יצירת מכשולים, רמפות ופריטים
+    spawnEntityTimer++;
+    const spawnRate = Math.max(22, Math.floor(46 - forwardSpeed * 14));
+    if (spawnEntityTimer >= spawnRate) {
+        spawnTrackObject();
+        spawnEntityTimer = 0;
+    }
+
+    spawnBridgeTimer++;
+    if (spawnBridgeTimer >= 420) {
+        spawnWoodenBridge();
+        spawnBridgeTimer = 0;
+    }
+
+    // 7. עדכון כל האובייקטים על השביל ובדיקת התנגשויות
+    for (let i = trackEntities.length - 1; i >= 0; i--) {
+        const ent = trackEntities[i];
+        ent.mesh.position.z += forwardSpeed;
+
+        const dz = Math.abs(ent.mesh.position.z - bikeRoot.position.z);
+        const dx = Math.abs(ent.mesh.position.x - bikeRoot.position.x);
+
+        if (ent.type === 'COIN') {
+            ent.phase += dt * 5;
+            ent.mesh.rotation.y += dt * 3.5;
+            if (dz < 1.5 && dx < 1.3 && Math.abs(ent.mesh.position.y - (bikeY + 1.0)) < 1.6) {
+                coins++;
+                comboMultiplier = Math.min(8, comboMultiplier + 0.25);
+                score += Math.round(50 * comboMultiplier);
+                sound.playCoin();
+                spawnParticles(ent.mesh.position, 0xfbbf24, 8);
+                scene.remove(ent.mesh);
+                trackEntities.splice(i, 1);
+                continue;
+            }
+        } else if (ent.type === 'ENERGY') {
+            ent.phase += dt * 4;
+            ent.mesh.rotation.y += dt * 2.5;
+            ent.mesh.position.y = 1.15 + Math.sin(ent.phase) * 0.2;
+            if (dz < 1.5 && dx < 1.3 && bikeY < 2.2) {
+                energyLevel = 100;
+                boostTimer = 2.0;
+                score += 120;
+                sound.playBoost();
+                spawnParticles(ent.mesh.position, 0xa3e635, 14);
+                showFloatingBanner('⚡ משקה אנרגיה! טורבו!', '#a3e635');
+                scene.remove(ent.mesh);
+                trackEntities.splice(i, 1);
+                continue;
+            }
+        } else if (ent.type === 'BOOST' && !ent.triggered) {
+            if (dz < 2.1 && dx < 1.4 && isGrounded) {
+                ent.triggered = true;
+                boostTimer = 2.4;
+                energyLevel = Math.min(100, energyLevel + 30);
+                sound.playBoost();
+                showFloatingBanner('🚀 האצת מהירות!', '#4ade80');
+            }
+        } else if (ent.type === 'RAMP' && !ent.triggered) {
+            if (dz < 1.8 && dx < 1.75 && bikeY < 1.0) {
+                ent.triggered = true;
+                isGrounded = false;
+                bikeVy = 0.48 + forwardSpeed * 0.14; // שיגור גבוה לאוויר!
+                airTime = 0;
+                totalAirRotation = 0;
+                sound.playJump();
+                showFloatingBanner('🛫 קפיצת רמפה! החזק רווח לסלטה!', '#fbbf24');
+            }
+        } else if (ent.type === 'OBSTACLE') {
+            if (dz < 1.05 && dx < 1.05 && bikeY < 1.15) {
+                handleCrash('התנגשת בסלע חד על השביל!');
+                return;
+            }
+        } else if (ent.type === 'LOG') {
+            if (dz < 0.75 && dx < 1.8 && bikeY < 0.85) {
+                handleCrash('נתקעת בבול עץ! לחץ רווח כדי לקפוץ מעליו.');
+                return;
+            }
+        }
+
+        if (ent.mesh.position.z > 24) {
+            scene.remove(ent.mesh);
+            trackEntities.splice(i, 1);
+        }
+    }
+
+    // 8. עדכון מצלמה (מצלמת מרדף או מבט כידון גוף ראשון)
+    updateCamera();
+    updateHUD();
+}
+
+function scrollWorld(speed) {
+    const trail = scene.getObjectByName('trailMesh');
+    if (trail && trail.material.map) {
+        trail.material.map.offset.y -= speed * 0.095;
+    }
+
+    for (let item of roadsideScenery) {
+        item.position.z += speed;
+        if (item.position.z > 25) {
+            item.position.z -= (TRACK_LENGTH + 15);
+        }
+    }
+
+    for (let line of speedLines) {
+        line.position.z += speed * 2.2;
+        line.visible = (speed > 0.9 || !isGrounded);
+        if (line.position.z > 15) {
+            line.position.z = -140;
+            line.position.x = (Math.random() - 0.5) * 26;
+        }
+    }
+}
+
+function updateCamera() {
+    const sx = (Math.random() - 0.5) * cameraShake;
+    const sy = (Math.random() - 0.5) * cameraShake;
+
+    if (cameraMode === 0) {
+        // מצלמת מרדף דינמית מאחורי הרוכב
+        const targetX = bikeX * 0.72 + sx;
+        const targetY = 3.9 + bikeY * 0.65 + sy;
+        const targetZ = boostTimer > 0 ? 10.2 : 9.0;
+
+        camera.position.x += (targetX - camera.position.x) * 0.14;
+        camera.position.y += (targetY - camera.position.y) * 0.14;
+        camera.position.z += (targetZ - camera.position.z) * 0.12;
+
+        const targetFov = boostTimer > 0 ? 74 : 62;
+        camera.fov += (targetFov - camera.fov) * 0.1;
+        camera.updateProjectionMatrix();
+
+        camera.lookAt(bikeX * 0.5, 1.4 + bikeY * 0.5, -14);
+    } else {
+        // מצלמת כידון (גוף ראשון) חווייתית
+        camera.position.set(bikeX + sx, 2.25 + bikeY + sy, 1.35);
+        camera.fov = boostTimer > 0 ? 78 : 68;
+        camera.updateProjectionMatrix();
+        camera.lookAt(bikeX * 0.9, 1.5 + bikeY - Math.sin(bikePitch) * 6, -16);
+    }
+}
+
+function updateHUD() {
+    document.getElementById('hud-score').textContent = Math.floor(score);
+    document.getElementById('hud-speed').textContent = Math.floor(forwardSpeed * 52);
+    document.getElementById('hud-combo').textContent = `x${comboMultiplier.toFixed(1).replace('.0', '')}`;
+    document.getElementById('hud-coins').textContent = coins;
+    document.getElementById('hud-best').textContent = highScore;
+    document.getElementById('energy-bar').style.width = `${energyLevel}%`;
+}
+
+function onResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function animate(now) {
+    requestAnimationFrame(animate);
+    const dt = Math.min(0.05, (now - lastTime) / 1000);
+    lastTime = now;
+
+    if (gameState !== 'PAUSED') {
+        update(dt);
+    }
+    renderer.render(scene, camera);
+}
+
+/**
+ * ============================================================================
+ * מאזיני קלטים (מקלדת, מגע, התאמה אישית ותפריטים)
+ * ============================================================================
+ */
+window.addEventListener('keydown', (e) => {
+    keys[e.code] = true;
+
+    if (e.code === 'Space') {
+        e.preventDefault();
+        if (gameState === 'PLAYING') {
+            triggerJump(0.36);
+        } else if (gameState === 'START' || gameState === 'GAMEOVER') {
+            startRide();
+        }
+    } else if (e.code === 'KeyC') {
+        cameraMode = (cameraMode + 1) % 2;
+        showFloatingBanner(cameraMode === 0 ? '🎥 מצלמת מרדף' : '🚴 מבט כידון (גוף ראשון)', '#f8fafc');
+    } else if (e.code === 'KeyP' || e.code === 'Escape') {
+        togglePause();
+    }
+});
+
+window.addEventListener('keyup', (e) => {
+    keys[e.code] = false;
+});
+
+// קישור כפתורי מגע למובייל
+function bindTouchButton(id, keyName, onPressAction = null) {
+    const btn = document.getElementById(id);
+    const press = (e) => {
+        e.preventDefault();
+        touchState[keyName] = true;
+        btn.classList.add('active');
+        if (onPressAction) onPressAction();
+    };
+    const release = (e) => {
+        if (e) e.preventDefault();
+        touchState[keyName] = false;
+        btn.classList.remove('active');
+    };
+    btn.addEventListener('touchstart', press, { passive: false });
+    btn.addEventListener('touchend', release, { passive: false });
+    btn.addEventListener('mousedown', press);
+    btn.addEventListener('mouseup', release);
+    btn.addEventListener('mouseleave', release);
+}
+
+bindTouchButton('t-left', 'left');
+bindTouchButton('t-right', 'right');
+bindTouchButton('t-pedal', 'pedal');
+bindTouchButton('t-brake', 'brake');
+bindTouchButton('t-jump', 'jump', () => triggerJump(0.36));
+
+// התאמה אישית של צבע אופניים וחולצת רוכב
+document.querySelectorAll('#bike-colors .swatch').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('#bike-colors .swatch').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        selectedBikeColor = btn.dataset.color;
+        if (bikeFrameMat) bikeFrameMat.color.set(selectedBikeColor);
+    });
+});
+
+document.querySelectorAll('#jersey-colors .swatch').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('#jersey-colors .swatch').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        selectedJerseyColor = btn.dataset.color;
+        if (jerseyMat) jerseyMat.color.set(selectedJerseyColor);
+    });
+});
+
+// החלפת תאורה (יום / שקיעה)
+document.getElementById('env-day').addEventListener('click', () => applyEnvironmentTheme('DAY'));
+document.getElementById('env-sunset').addEventListener('click', () => applyEnvironmentTheme('SUNSET'));
+document.getElementById('btn-theme-hud').addEventListener('click', () => {
+    applyEnvironmentTheme(currentEnv === 'DAY' ? 'SUNSET' : 'DAY');
+});
+
+// מצלמה, השהיה והשתקה
+document.getElementById('btn-cam').addEventListener('click', () => {
+    cameraMode = (cameraMode + 1) % 2;
+    showFloatingBanner(cameraMode === 0 ? '🎥 מצלמת מרדף' : '🚴 מבט כידון (גוף ראשון)', '#f8fafc');
+});
+
+function togglePause() {
+    if (gameState === 'PLAYING') {
+        gameState = 'PAUSED';
+        sound.stopContinuous();
+        document.getElementById('pause-screen').classList.remove('hidden');
+    } else if (gameState === 'PAUSED') {
+        gameState = 'PLAYING';
+        sound.startContinuous();
+        document.getElementById('pause-screen').classList.add('hidden');
+    }
+}
+
+document.getElementById('btn-pause').addEventListener('click', togglePause);
+document.getElementById('btn-resume').addEventListener('click', togglePause);
+document.getElementById('btn-restart-pause').addEventListener('click', startRide);
+
+document.getElementById('btn-mute').addEventListener('click', () => {
+    sound.init();
+    const muted = sound.toggleMute();
+    document.getElementById('btn-mute').textContent = muted ? '🔇' : '🔊';
+    if (!muted && gameState === 'PLAYING') sound.startContinuous();
+});
+
+document.getElementById('btn-start').addEventListener('click', startRide);
+document.getElementById('btn-restart').addEventListener('click', startRide);
+
+// הפעלה בטעינת העמוד
+window.onload = function() {
+    document.getElementById('hud-best').textContent = highScore;
+    initThree();
+    animate(performance.now());
+};
+</script>
+
+<a id="club-back" href="../index.html#products-shelf" style="position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#fff;color:#1d2433;border:2px solid #cfe0f0;border-radius:999px;padding:8px 18px;font:600 15px/1.2 Arial,sans-serif;text-decoration:none;direction:rtl;box-shadow:0 3px 0 #cfe0f0">→ חזרה לאתר החוג</a>
+<script>if (window.top !== window) document.getElementById("club-back").remove();</script>
+</body>
+</html>

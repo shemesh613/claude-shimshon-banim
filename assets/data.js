@@ -134,6 +134,11 @@ window.SITE = {
       "href": "worlds/giza.html"
     },
     {
+      "title": "החצר והבתים התימניים",
+      "cover": "lessons/img/ex3d-yemen.jpg",
+      "href": "worlds/yemen.html"
+    },
+    {
       "title": "שיעבוד מצרים: עיר הבנייה והנילוס",
       "cover": "lessons/img/ex3d-egypt-nile.jpg",
       "href": "worlds/egypt-nile.html"
@@ -167,6 +172,11 @@ window.SITE = {
       "title": "חדר גיימינג עם תאורת RGB",
       "cover": "lessons/img/ex3d-gaming-rgb.jpg",
       "href": "worlds/gaming-rgb.html"
+    },
+    {
+      "title": "אקסטרים אופניים 3D (משחק)",
+      "cover": "lessons/img/ex3d-bikes.jpg",
+      "href": "worlds/bikes.html"
     }
   ]
 };

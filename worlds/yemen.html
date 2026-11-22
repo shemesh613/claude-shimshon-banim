@@ -1,0 +1,1955 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>השוק והחצר התימנית - עולם תלת-ממדי</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js & OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Rubik', sans-serif;
+            background-color: #1a1510;
+            user-select: none;
+        }
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            display: block;
+        }
+        /* עיצוב זכוכית כהה לפאנל השליטה */
+        .glass-panel {
+            background: rgba(28, 22, 17, 0.82);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(217, 169, 98, 0.35);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+        .btn-time {
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .btn-time:hover {
+            transform: translateY(-2px);
+        }
+        .btn-time.active {
+            background: linear-gradient(135deg, #d97706, #b45309);
+            color: #fff;
+            border-color: #fbbf24;
+            box-shadow: 0 0 15px rgba(245, 158, 11, 0.5);
+        }
+        /* מתג הפעלה למחזור יום-לילה */
+        .toggle-checkbox:checked {
+            right: 0;
+            border-color: #f59e0b;
+        }
+        .toggle-checkbox:checked + .toggle-label {
+            background-color: #d97706;
+        }
+        /* כרטיס מידע לפריטים והדמיות */
+        .info-card {
+            background: rgba(24, 18, 13, 0.92);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border: 1px solid rgba(251, 191, 36, 0.45);
+            box-shadow: 0 14px 36px rgba(0, 0, 0, 0.65);
+        }
+        .preset-btn.active-loc {
+            background: linear-gradient(135deg, #b45309, #78350f);
+            border-color: #fbbf24;
+            color: #fffbeb;
+            box-shadow: 0 0 12px rgba(245, 158, 11, 0.4);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- מיכל הקנבס התלת-ממדי -->
+    <div id="canvas-container"></div>
+
+    <!-- כותרת עליונה מעוצבת והסבר ניווט -->
+    <div class="fixed top-4 right-4 z-10 glass-panel rounded-2xl p-4 max-w-xs sm:max-w-sm text-amber-50 pointer-events-auto">
+        <div class="flex items-center gap-3 mb-1">
+            <span class="text-2xl">🕌</span>
+            <h1 class="text-lg sm:text-xl font-bold text-amber-300 tracking-wide">החצר והבתים התימניים</h1>
+        </div>
+        <p class="text-xs sm:text-sm text-amber-100/80 leading-relaxed">
+            גררו עכבר/אצבע לסיבוב, השתמשו ב-<strong class="text-amber-300">WASD / חצים</strong> להליכה פנימה אל תוך הבתים, או לחצו על כפתורי המיקום המהירים ולחצו על פריטים לבדיקה.
+        </p>
+        <div class="mt-2 flex flex-wrap gap-1.5">
+            <button onclick="goToLocation('courtyard')" id="loc-courtyard" class="preset-btn active-loc px-2.5 py-1 rounded-lg text-xs border border-amber-500/30 bg-stone-900/70 transition">
+                🏛️ חצר ושוק
+            </button>
+            <button onclick="goToLocation('guestHouse')" id="loc-guestHouse" class="preset-btn px-2.5 py-1 rounded-lg text-xs border border-amber-500/30 bg-stone-900/70 transition">
+                🛋️ בית האירוח
+            </button>
+            <button onclick="goToLocation('craftRoom')" id="loc-craftRoom" class="preset-btn px-2.5 py-1 rounded-lg text-xs border border-amber-500/30 bg-stone-900/70 transition">
+                ✨ חדר המלאכה והקפה
+            </button>
+            <button onclick="goToLocation('diningRoom')" id="loc-diningRoom" class="preset-btn px-2.5 py-1 rounded-lg text-xs border border-amber-500/30 bg-stone-900/70 transition">
+                🍽️ חדר האוכל
+            </button>
+        </div>
+        <div id="time-indicator" class="mt-2.5 pt-2 border-t border-amber-500/20 flex items-center justify-between text-xs text-amber-200">
+            <span id="zone-label" class="text-amber-300 font-medium">מיקום: חצר השוק</span>
+            <span id="current-time-label" class="font-bold text-amber-400">שקיעה מוזהבת</span>
+        </div>
+    </div>
+
+    <!-- כרטיס מידע אינטראקטיבי בעת לחיצה על חפץ או דמות -->
+    <div id="inspect-card" class="fixed top-4 left-4 z-20 info-card rounded-2xl p-4 max-w-xs sm:max-w-sm text-amber-50 hidden">
+        <div class="flex items-start justify-between gap-2">
+            <div>
+                <span class="inline-block text-[11px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-400/30 mb-1" id="inspect-category">פריט מסורתי</span>
+                <h2 id="inspect-title" class="text-base sm:text-lg font-bold text-amber-300">כותרת</h2>
+            </div>
+            <button onclick="closeInspectCard()" aria-label="סגור כרטיס מידע" class="text-amber-200/70 hover:text-amber-200 bg-stone-800/80 hover:bg-stone-700 rounded-lg px-2 py-1 text-xs">
+                ✕
+            </button>
+        </div>
+        <p id="inspect-desc" class="mt-2 text-xs sm:text-sm text-amber-100/90 leading-relaxed"></p>
+    </div>
+
+    <!-- פאנל שליטה בתאורה ובזמן ביום -->
+    <div class="fixed bottom-4 left-1/2 -translate-x-1/2 z-10 glass-panel rounded-2xl p-3 sm:p-4 w-[94%] max-w-2xl text-amber-50">
+        <div class="flex flex-col sm:flex-row items-center justify-between gap-3">
+            
+            <!-- כפתורי בחירת שעה ביום -->
+            <div class="grid grid-cols-4 gap-2 w-full sm:w-auto flex-1">
+                <button onclick="setTimePreset('sunrise')" id="btn-sunrise" class="btn-time flex flex-col items-center justify-center py-2 px-2 rounded-xl border border-amber-500/30 bg-stone-900/60 text-xs sm:text-sm font-medium">
+                    <span class="text-base sm:text-lg mb-0.5">🌅</span>
+                    <span>זריחה</span>
+                </button>
+                <button onclick="setTimePreset('noon')" id="btn-noon" class="btn-time flex flex-col items-center justify-center py-2 px-2 rounded-xl border border-amber-500/30 bg-stone-900/60 text-xs sm:text-sm font-medium">
+                    <span class="text-base sm:text-lg mb-0.5">☀️</span>
+                    <span>צהריים</span>
+                </button>
+                <button onclick="setTimePreset('sunset')" id="btn-sunset" class="btn-time active flex flex-col items-center justify-center py-2 px-2 rounded-xl border border-amber-500/30 bg-stone-900/60 text-xs sm:text-sm font-medium">
+                    <span class="text-base sm:text-lg mb-0.5">🌇</span>
+                    <span>שקיעה</span>
+                </button>
+                <button onclick="setTimePreset('night')" id="btn-night" class="btn-time flex flex-col items-center justify-center py-2 px-2 rounded-xl border border-amber-500/30 bg-stone-900/60 text-xs sm:text-sm font-medium">
+                    <span class="text-base sm:text-lg mb-0.5">🌙</span>
+                    <span>לילה</span>
+                </button>
+            </div>
+
+            <!-- מתג מחזור יום-לילה אוטומטי -->
+            <div class="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 sm:border-r border-amber-500/20 sm:pr-4">
+                <span class="text-xs sm:text-sm font-medium text-amber-200 whitespace-nowrap">מחזור יום-לילה חי:</span>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="auto-cycle-toggle" class="sr-only peer" onchange="toggleAutoCycle()">
+                    <div class="w-11 h-6 bg-stone-700 peer-focus:outline-none rounded-full peer peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-amber-200 after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-600"></div>
+                </label>
+            </div>
+        </div>
+
+        <!-- סליידר שליטה ידנית בשעה -->
+        <div class="mt-3 flex items-center gap-3">
+            <span class="text-xs text-amber-300/80">שעה:</span>
+            <input type="range" id="time-slider" min="0" max="24" step="0.05" value="17.8" oninput="onSliderChange(this.value)" class="w-full h-1.5 bg-stone-700 rounded-lg appearance-none cursor-pointer accent-amber-500">
+            <span id="clock-display" class="text-xs font-mono text-amber-300 w-12 text-left">17:48</span>
+        </div>
+    </div>
+
+    <!-- תגית מידע צפה בעת ריחוף מעל פריטים -->
+    <div id="tooltip" class="fixed pointer-events-none hidden z-20 glass-panel px-3 py-1.5 rounded-lg text-xs sm:text-sm text-amber-200 font-medium shadow-lg"></div>
+
+    <script>
+        /**
+         * משתנים גלובליים לסצנה, מצלמה, תאורה ואנימציה
+         */
+        let scene, camera, renderer, controls;
+        let sunLight, hemiLight, ambientLight;
+        let sunMesh, moonMesh, starField;
+        let lanternLights = [];
+        let lanternBulbs = [];
+        let interiorLights = [];
+        let interiorBulbs = [];
+        let roomColliders = [];
+        let silversmithArm, womanBasket, smokeParticles = [];
+        let ovenFireLight = null, ovenEmbersMesh = null;
+        let animatedPeople = [];
+        let interactiveObjects = [];
+        let raycaster, mouse, pointerDownPos = { x: 0, y: 0 };
+        const keysPressed = {};
+
+        // ניהול זמן ותאורה (0 עד 24 שעות)
+        let currentTime = 17.8; // מתחיל בשקיעה מוזהבת מרשימה
+        let targetTime = 17.8;
+        let isAutoCycle = false;
+        let isTransitioning = false;
+        const clock = new THREE.Clock();
+
+        /**
+         * אתחול ראשי בעת טעינת החלון
+         */
+        window.onload = function () {
+            initScene();
+            createProceduralTexturesAndMaterials();
+            buildGroundAndCobblestones();
+            buildSanaaArchitecture();
+            buildSilversmithWorkshop();
+            buildPotteryAndCopperStall();
+            buildTaboonOven();
+            buildCharacters();
+            buildLanternsAndLights();
+            buildCelestialBodies();
+            setupInteraction();
+            
+            // עדכון ראשוני של התאורה
+            updateLightingSystem(currentTime);
+            
+            // התחלת לולאת האנימציה
+            animate();
+        };
+
+        /**
+         * הגדרת הסצנה, המצלמה, הרנדרר ובקרת המצלמה
+         */
+        function initScene() {
+            const container = document.getElementById('canvas-container');
+            
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0xd99b66, 0.014);
+
+            camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 250);
+            camera.position.set(0, 6.5, 16.5);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.1;
+            container.appendChild(renderer.domElement);
+
+            // בקרת תנועה חופשית בעכבר ובמגע
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.06;
+            controls.maxPolarAngle = Math.PI / 2 - 0.03; // מניעת ירידה מתחת לרצפה
+            controls.minDistance = 3.5;
+            controls.maxDistance = 32;
+            controls.target.set(0, 2.2, -1);
+
+            // תאורה בסיסית
+            ambientLight = new THREE.AmbientLight(0xffeedd, 0.35);
+            scene.add(ambientLight);
+
+            hemiLight = new THREE.HemisphereLight(0xffeeb1, 0x4a3525, 0.6);
+            scene.add(hemiLight);
+
+            // אור שמש/ירח ראשי המטיל צללים
+            sunLight = new THREE.DirectionalLight(0xffb36b, 1.8);
+            sunLight.position.set(18, 12, 10);
+            sunLight.castShadow = true;
+            sunLight.shadow.mapSize.width = 2048;
+            sunLight.shadow.mapSize.height = 2048;
+            sunLight.shadow.camera.near = 1;
+            sunLight.shadow.camera.far = 65;
+            const d = 22;
+            sunLight.shadow.camera.left = -d;
+            sunLight.shadow.camera.right = d;
+            sunLight.shadow.camera.top = d;
+            sunLight.shadow.camera.bottom = -d;
+            sunLight.shadow.bias = -0.0005;
+            scene.add(sunLight);
+
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        /**
+         * התאמת המצלמה והקנבס בעת שינוי גודל החלון
+         */
+        function onWindowResize() {
+            if (!camera || !renderer) return;
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        }
+
+        // חומרים מרכזיים לשימוש חוזר
+        const mats = {};
+        function createProceduralTexturesAndMaterials() {
+            // יצירת טקסטורת אבן צנעא ואבני מדרך פרוצדורלית באמצעות Canvas
+            const stoneCanvas = document.createElement('canvas');
+            stoneCanvas.width = 512;
+            stoneCanvas.height = 512;
+            const ctx = stoneCanvas.getContext('2d');
+            ctx.fillStyle = '#8c7a6b';
+            ctx.fillRect(0, 0, 512, 512);
+            
+            // ציור לבנים ומרקם אבן טבעית
+            for (let y = 0; y < 512; y += 32) {
+                const offset = (y / 32) % 2 === 0 ? 0 : 32;
+                for (let x = -32; x < 512; x += 64) {
+                    const shade = 115 + Math.floor(Math.random() * 35);
+                    ctx.fillStyle = `rgb(${shade + 12}, ${shade}, ${shade - 15})`;
+                    ctx.fillRect(x + offset + 2, y + 2, 60, 28);
+                }
+            }
+            const stoneTex = new THREE.CanvasTexture(stoneCanvas);
+            stoneTex.wrapS = THREE.RepeatWrapping;
+            stoneTex.wrapT = THREE.RepeatWrapping;
+            stoneTex.repeat.set(3, 4);
+
+            // טקסטורת אבני ריצוף (Cobblestone) לרחוב השוק
+            const cobbleCanvas = document.createElement('canvas');
+            cobbleCanvas.width = 512;
+            cobbleCanvas.height = 512;
+            const cCtx = cobbleCanvas.getContext('2d');
+            cCtx.fillStyle = '#4a4036';
+            cCtx.fillRect(0, 0, 512, 512);
+            for (let row = 0; row < 16; row++) {
+                const shift = (row % 2) * 16;
+                for (let col = -1; col < 17; col++) {
+                    const v = 90 + Math.floor(Math.random() * 45);
+                    cCtx.fillStyle = `rgb(${v + 15}, ${v + 5}, ${v - 8})`;
+                    cCtx.beginPath();
+                    cCtx.roundRect(col * 32 + shift + 2, row * 32 + 2, 28, 28, 6);
+                    cCtx.fill();
+                }
+            }
+            const cobbleTex = new THREE.CanvasTexture(cobbleCanvas);
+            cobbleTex.wrapS = THREE.RepeatWrapping;
+            cobbleTex.wrapT = THREE.RepeatWrapping;
+            cobbleTex.repeat.set(14, 14);
+
+            // טקסטורת קש קלוע לסלים (קופה תימנית)
+            const strawCanvas = document.createElement('canvas');
+            strawCanvas.width = 256;
+            strawCanvas.height = 256;
+            const sCtx = strawCanvas.getContext('2d');
+            sCtx.fillStyle = '#d4b475';
+            sCtx.fillRect(0, 0, 256, 256);
+            for (let y = 0; y < 256; y += 8) {
+                sCtx.fillStyle = y % 16 === 0 ? '#c29e59' : '#e0c389';
+                sCtx.fillRect(0, y, 256, 4);
+                for (let x = 0; x < 256; x += 16) {
+                    sCtx.fillStyle = 'rgba(110, 80, 30, 0.25)';
+                    sCtx.fillRect(x + ((y / 8) % 2) * 8, y, 2, 8);
+                }
+            }
+            const strawTex = new THREE.CanvasTexture(strawCanvas);
+            strawTex.wrapS = THREE.RepeatWrapping;
+            strawTex.wrapT = THREE.RepeatWrapping;
+
+            // טקסטורת בד פסים תימני מסורתי (מעווז / גלבייה)
+            const stripeCanvas = document.createElement('canvas');
+            stripeCanvas.width = 256;
+            stripeCanvas.height = 256;
+            const stCtx = stripeCanvas.getContext('2d');
+            stCtx.fillStyle = '#f2ece1';
+            stCtx.fillRect(0, 0, 256, 256);
+            for (let x = 0; x < 256; x += 16) {
+                stCtx.fillStyle = x % 32 === 0 ? '#2b2623' : '#7c5c3e';
+                stCtx.fillRect(x, 0, 4, 256);
+            }
+            const stripeTex = new THREE.CanvasTexture(stripeCanvas);
+            stripeTex.wrapS = THREE.RepeatWrapping;
+            stripeTex.wrapT = THREE.RepeatWrapping;
+
+            // הגדרת חומרים
+            mats.cobble = new THREE.MeshStandardMaterial({ map: cobbleTex, roughness: 0.85, metalness: 0.05 });
+            mats.stoneWall = new THREE.MeshStandardMaterial({ map: stoneTex, roughness: 0.9 });
+            mats.brickUpper = new THREE.MeshStandardMaterial({ color: 0x9e6240, roughness: 0.85 });
+            mats.whiteGypsum = new THREE.MeshStandardMaterial({ color: 0xfaf6ee, roughness: 0.4 });
+            mats.woodDark = new THREE.MeshStandardMaterial({ color: 0x4a321f, roughness: 0.8 });
+            mats.woodWarm = new THREE.MeshStandardMaterial({ color: 0x734d2c, roughness: 0.75 });
+            mats.silver = new THREE.MeshStandardMaterial({ color: 0xe8edf2, roughness: 0.2, metalness: 0.92 });
+            mats.goldBrass = new THREE.MeshStandardMaterial({ color: 0xd4af37, roughness: 0.28, metalness: 0.85 });
+            mats.copper = new THREE.MeshStandardMaterial({ color: 0xc86d3b, roughness: 0.25, metalness: 0.88 });
+            mats.terracotta = new THREE.MeshStandardMaterial({ color: 0xb85d3b, roughness: 0.75 });
+            mats.straw = new THREE.MeshStandardMaterial({ map: strawTex, roughness: 0.85 });
+            mats.stripedCloth = new THREE.MeshStandardMaterial({ map: stripeTex, roughness: 0.8 });
+            mats.whiteRobe = new THREE.MeshStandardMaterial({ color: 0xf4efe6, roughness: 0.75 });
+            mats.blackCloth = new THREE.MeshStandardMaterial({ color: 0x1e1e22, roughness: 0.85 });
+            mats.skin = new THREE.MeshStandardMaterial({ color: 0xc68e65, roughness: 0.65 });
+            mats.horn = new THREE.MeshStandardMaterial({ color: 0x5c4430, roughness: 0.45, metalness: 0.1 });
+            mats.cushionRed = new THREE.MeshStandardMaterial({ color: 0x7a1f1d, roughness: 0.85 });
+            mats.cushionGold = new THREE.MeshStandardMaterial({ color: 0xc98a2c, roughness: 0.8 });
+            mats.parchment = new THREE.MeshStandardMaterial({ color: 0xe8d5a7, roughness: 0.8 });
+            mats.stainedGlass = new THREE.MeshStandardMaterial({
+                color: 0xf59e0b,
+                emissive: 0xd97706,
+                emissiveIntensity: 0.35,
+                transparent: true,
+                opacity: 0.72,
+                roughness: 0.2
+            });
+        }
+
+        /**
+         * בניית הקרקע ורחבת השוק המרוצפת
+         */
+        function buildGroundAndCobblestones() {
+            const groundGeo = new THREE.PlaneGeometry(80, 80);
+            const ground = new THREE.Mesh(groundGeo, mats.cobble);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            // שטיח תימני ארוג מתחת לפינת הישיבה והאירוח
+            const rugGeo = new THREE.BoxGeometry(4.2, 0.04, 3.2);
+            const rugMat = new THREE.MeshStandardMaterial({ color: 0x8b261d, roughness: 0.9 });
+            const rug = new THREE.Mesh(rugGeo, rugMat);
+            rug.position.set(5.5, 0.02, 2.5);
+            rug.receiveShadow = true;
+            scene.add(rug);
+
+            // מסגרת מעוטרת לשטיח
+            const borderGeo = new THREE.BoxGeometry(4.4, 0.03, 3.4);
+            const borderMat = new THREE.MeshStandardMaterial({ color: 0xd99b26, roughness: 0.85 });
+            const border = new THREE.Mesh(borderGeo, borderMat);
+            border.position.set(5.5, 0.015, 2.5);
+            border.receiveShadow = true;
+            scene.add(border);
+        }
+
+        /**
+         * בניית אדריכלות צנעא: בתי אבן רב-קומתיים עם חלונות גבס לבנים מקושתים (קמריה) וסככות שוק
+         */
+        function buildSanaaArchitecture() {
+            const archGroup = new THREE.Group();
+
+            // פונקציית עזר ליצירת בניין תימני אופייני (תומך גם בבתים פתוחים לכניסה עם חדר פנימי מואר)
+            function createSanaaBuilding(x, z, width, depth, floors, rotY = 0, options = {}) {
+                const {
+                    enterable = false,
+                    doorWidth = 1.75,
+                    doorHeight = 2.55,
+                    roomTitle = "חדר מסורתי",
+                    interiorType = "guest"
+                } = options;
+
+                const bGroup = new THREE.Group();
+                bGroup.position.set(x, 0, z);
+                bGroup.rotation.y = rotY;
+
+                const baseH = 3.6;
+                const wallT = 0.36;
+
+                if (!enterable) {
+                    // בניין רגיל סגור בקומת הקרקע
+                    const baseGeo = new THREE.BoxGeometry(width, baseH, depth);
+                    const baseMesh = new THREE.Mesh(baseGeo, mats.stoneWall);
+                    baseMesh.position.y = baseH / 2;
+                    baseMesh.castShadow = true;
+                    baseMesh.receiveShadow = true;
+                    bGroup.add(baseMesh);
+                } else {
+                    // בניין שניתן להיכנס אליו: רצפת עץ/אבן פנימית, קירות היקפיים עם פתח כניסה מקושת, ותקרה
+                    const innerFloor = new THREE.Mesh(
+                        new THREE.BoxGeometry(width - wallT * 1.4, 0.08, depth - wallT * 1.4),
+                        mats.woodDark
+                    );
+                    innerFloor.position.y = 0.04;
+                    innerFloor.receiveShadow = true;
+                    bGroup.add(innerFloor);
+
+                    // קיר אחורי וקירות צד של קומת הקרקע
+                    const backWall = new THREE.Mesh(new THREE.BoxGeometry(width, baseH, wallT), mats.stoneWall);
+                    backWall.position.set(0, baseH / 2, -depth / 2 + wallT / 2);
+                    backWall.castShadow = true;
+                    backWall.receiveShadow = true;
+
+                    const leftWall = new THREE.Mesh(new THREE.BoxGeometry(wallT, baseH, depth), mats.stoneWall);
+                    leftWall.position.set(-width / 2 + wallT / 2, baseH / 2, 0);
+                    leftWall.castShadow = true;
+                    leftWall.receiveShadow = true;
+
+                    const rightWall = new THREE.Mesh(new THREE.BoxGeometry(wallT, baseH, depth), mats.stoneWall);
+                    rightWall.position.set(width / 2 - wallT / 2, baseH / 2, 0);
+                    rightWall.castShadow = true;
+                    rightWall.receiveShadow = true;
+
+                    // קיר חזית מפוצל משני צידי הדלת + משקוף עליון כדי ליצור פתח כניסה ברור
+                    const sideSegW = (width - doorWidth) / 2;
+                    const frontLeft = new THREE.Mesh(new THREE.BoxGeometry(sideSegW, baseH, wallT), mats.stoneWall);
+                    frontLeft.position.set(-doorWidth / 2 - sideSegW / 2, baseH / 2, depth / 2 - wallT / 2);
+                    frontLeft.castShadow = true;
+                    frontLeft.receiveShadow = true;
+
+                    const frontRight = new THREE.Mesh(new THREE.BoxGeometry(sideSegW, baseH, wallT), mats.stoneWall);
+                    frontRight.position.set(doorWidth / 2 + sideSegW / 2, baseH / 2, depth / 2 - wallT / 2);
+                    frontRight.castShadow = true;
+                    frontRight.receiveShadow = true;
+
+                    const topHeaderH = Math.max(0.5, baseH - doorHeight);
+                    const frontTop = new THREE.Mesh(new THREE.BoxGeometry(doorWidth, topHeaderH, wallT), mats.stoneWall);
+                    frontTop.position.set(0, doorHeight + topHeaderH / 2, depth / 2 - wallT / 2);
+                    frontTop.castShadow = true;
+
+                    // משקוף גבס לבן וקשת מעל פתח הדלת לזיהוי קל של הכניסה
+                    const doorTrim = new THREE.Mesh(new THREE.BoxGeometry(doorWidth + 0.24, 0.16, wallT + 0.08), mats.whiteGypsum);
+                    doorTrim.position.set(0, doorHeight + 0.05, depth / 2 - wallT / 2);
+
+                    const doorArch = new THREE.Mesh(
+                        new THREE.CylinderGeometry(doorWidth * 0.48, doorWidth * 0.48, wallT + 0.08, 18, 1, false, 0, Math.PI),
+                        mats.whiteGypsum
+                    );
+                    doorArch.rotation.z = Math.PI / 2;
+                    doorArch.rotation.y = Math.PI / 2;
+                    doorArch.position.set(0, doorHeight + 0.05, depth / 2 - wallT / 2);
+
+                    bGroup.add(backWall, leftWall, rightWall, frontLeft, frontRight, frontTop, doorTrim, doorArch);
+
+                    // בניית ריהוט ופריטים מסורתיים בתוך החדר
+                    populateInteriorRoom(bGroup, width, depth, baseH, interiorType, roomTitle);
+
+                    // הוספת חסמי התנגשות פשוטים לקירות כך שהמצלמה תיכנס דרך הפתח ולא תחדור קירות צד
+                    bGroup.updateMatrixWorld(true);
+                    const wallBox = new THREE.Box3();
+                    [backWall, leftWall, rightWall, frontLeft, frontRight].forEach(wMesh => {
+                        wallBox.setFromObject(wMesh);
+                        roomColliders.push(wallBox.clone());
+                    });
+                }
+
+                // קומות עליונות מלבני בוץ/חימר אדמדם עם פסי גבס לבנים
+                const upperH = floors * 2.8;
+                const upperGeo = new THREE.BoxGeometry(width - 0.1, upperH, depth - 0.1);
+                const upperMesh = new THREE.Mesh(upperGeo, mats.brickUpper);
+                upperMesh.position.y = baseH + upperH / 2;
+                upperMesh.castShadow = true;
+                upperMesh.receiveShadow = true;
+                bGroup.add(upperMesh);
+
+                // עיטורי גבס לבנים וחלונות קמריה בכל קומה
+                for (let f = 0; f < floors; f++) {
+                    const floorY = baseH + f * 2.8;
+                    
+                    // פס גבס לבן מפריד בין קומות
+                    const beltGeo = new THREE.BoxGeometry(width + 0.12, 0.25, depth + 0.12);
+                    const beltMesh = new THREE.Mesh(beltGeo, mats.whiteGypsum);
+                    beltMesh.position.y = floorY;
+                    bGroup.add(beltMesh);
+
+                    // חלונות מקושתים בחזית
+                    const numWin = Math.max(2, Math.floor(width / 2.2));
+                    const spacing = width / (numWin + 1);
+                    for (let w = 1; w <= numWin; w++) {
+                        const winX = -width / 2 + w * spacing;
+                        const winGroup = new THREE.Group();
+                        winGroup.position.set(winX, floorY + 1.35, depth / 2 + 0.02);
+
+                        // מסגרת גבס לבנה
+                        const frameGeo = new THREE.BoxGeometry(1.1, 1.5, 0.12);
+                        const frame = new THREE.Mesh(frameGeo, mats.whiteGypsum);
+                        winGroup.add(frame);
+
+                        // קשת חצי-עגולה עליונה (קמריה)
+                        const archGeo = new THREE.CylinderGeometry(0.55, 0.55, 0.12, 16, 1, false, 0, Math.PI);
+                        const arch = new THREE.Mesh(archGeo, mats.whiteGypsum);
+                        arch.rotation.z = Math.PI / 2;
+                        arch.rotation.y = Math.PI / 2;
+                        arch.position.y = 0.75;
+                        winGroup.add(arch);
+
+                        // זכוכית כהה/מוארת מבפנים
+                        const glassGeo = new THREE.BoxGeometry(0.8, 1.2, 0.14);
+                        const glassMat = new THREE.MeshStandardMaterial({ 
+                            color: 0x261d15, 
+                            emissive: 0xff9922, 
+                            emissiveIntensity: 0.0,
+                            roughness: 0.2 
+                        });
+                        const glass = new THREE.Mesh(glassGeo, glassMat);
+                        glass.userData.isWindowGlass = true;
+                        winGroup.add(glass);
+
+                        bGroup.add(winGroup);
+                    }
+                }
+
+                // מעקה גג מסורתי ושכבת תקרה עליונה
+                const roofTop = new THREE.Mesh(
+                    new THREE.BoxGeometry(width + 0.14, 0.22, depth + 0.14),
+                    mats.stoneWall
+                );
+                roofTop.position.y = baseH + upperH + 0.11;
+                roofTop.castShadow = true;
+                roofTop.receiveShadow = true;
+                bGroup.add(roofTop);
+
+                const parapetH = 0.45;
+                const parapetFront = new THREE.Mesh(
+                    new THREE.BoxGeometry(width + 0.16, parapetH, 0.22),
+                    mats.whiteGypsum
+                );
+                parapetFront.position.set(0, baseH + upperH + 0.22 + parapetH / 2, depth / 2);
+                bGroup.add(parapetFront);
+
+                bGroup.updateMatrixWorld(true);
+                const bBox = new THREE.Box3().setFromObject(bGroup);
+                if (!enterable) {
+                    roomColliders.push(bBox.clone());
+                }
+
+                archGroup.add(bGroup);
+            }
+
+            // בניינים התוחמים את השוק מימין, משמאל וברקע - כולל בתים וחדר אוכל פתוחים לכניסה!
+            createSanaaBuilding(-9.5, -2, 6.4, 16, 3, Math.PI / 2, {
+                enterable: true,
+                roomTitle: "בית האירוח הצנעאני",
+                interiorType: "guest",
+                worldX: -9.5,
+                worldZ: -2
+            });
+            createSanaaBuilding(9.5, -2, 6.4, 16, 3, -Math.PI / 2, {
+                enterable: true,
+                roomTitle: "חדר המלאכה והקפה",
+                interiorType: "craft",
+                worldX: 9.5,
+                worldZ: -2
+            });
+            createSanaaBuilding(0, -14.5, 9.2, 6.2, 3, 0, {
+                enterable: true,
+                roomTitle: "חדר האוכל המסורתי",
+                interiorType: "dining",
+                worldX: 0,
+                worldZ: -14.5
+            });
+            createSanaaBuilding(-7.2, -13.5, 6.8, 5.6, 4, 0);
+            createSanaaBuilding(7.2, -13.5, 6.8, 5.6, 3, 0);
+
+            // קשת אבן מסורתית בכניסה האחורית של השוק
+            const gateGroup = new THREE.Group();
+            gateGroup.position.set(-0.5, 0, -11.5);
+            const pillarL = new THREE.Mesh(new THREE.BoxGeometry(1.4, 5.5, 1.6), mats.stoneWall);
+            pillarL.position.set(-2.2, 2.75, 0);
+            pillarL.castShadow = true;
+            const pillarR = new THREE.Mesh(new THREE.BoxGeometry(1.4, 5.5, 1.6), mats.stoneWall);
+            pillarR.position.set(2.2, 2.75, 0);
+            pillarR.castShadow = true;
+            const lintel = new THREE.Mesh(new THREE.BoxGeometry(6.2, 1.4, 1.8), mats.stoneWall);
+            lintel.position.set(0, 6.0, 0);
+            lintel.castShadow = true;
+            gateGroup.add(pillarL, pillarR, lintel);
+            archGroup.add(gateGroup);
+
+            // סככות עץ ובד מעל דוכני השוק
+            function createAwning(x, y, z, w, d, rotZ, colorHex) {
+                const awning = new THREE.Mesh(
+                    new THREE.BoxGeometry(w, 0.12, d),
+                    new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.9 })
+                );
+                awning.position.set(x, y, z);
+                awning.rotation.z = rotZ;
+                awning.castShadow = true;
+                awning.receiveShadow = true;
+                archGroup.add(awning);
+            }
+            createAwning(-5.2, 3.3, -1, 3.2, 11, -0.22, 0x5c4028);
+            createAwning(5.2, 3.3, -1, 3.2, 11, 0.22, 0x6e4726);
+
+            scene.add(archGroup);
+        }
+
+        /**
+         * אכלוס פנים הבתים בריהוט תימני מסורתי, כוות בקיר, פינת קפה, שטיחים ותאורה פנימית
+         */
+        function populateInteriorRoom(roomGroup, width, depth, baseH, interiorType, roomTitle) {
+            const innerW = width - 0.9;
+            const innerD = depth - 0.9;
+
+            // שטיח מרכזי פרוש על רצפת החדר
+            const roomRug = new THREE.Mesh(
+                new THREE.BoxGeometry(innerW * 0.72, 0.03, innerD * 0.65),
+                new THREE.MeshStandardMaterial({ color: interiorType === "guest" ? 0x7c1d18 : 0x2c4257, roughness: 0.9 })
+            );
+            roomRug.position.set(0, 0.095, 0);
+            roomRug.receiveShadow = true;
+            roomGroup.add(roomRug);
+
+            // מנורת תקרה / עששית פנימית חמה לחדר
+            const lampGroup = new THREE.Group();
+            lampGroup.position.set(0, baseH - 0.45, 0);
+            const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.4, 6), mats.blackCloth);
+            cord.position.y = 0.2;
+            const shade = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.22, 14), mats.goldBrass);
+            const bulbMat = new THREE.MeshStandardMaterial({
+                color: 0xffe08a,
+                emissive: 0xff9911,
+                emissiveIntensity: 1.5
+            });
+            const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 12), bulbMat);
+            bulb.position.y = -0.1;
+            lampGroup.add(cord, shade, bulb);
+            roomGroup.add(lampGroup);
+            interiorBulbs.push(bulb);
+
+            const roomLight = new THREE.PointLight(0xffa438, 1.8, 10.5);
+            roomLight.position.set(0, baseH - 0.75, 0);
+            roomGroup.add(roomLight);
+            interiorLights.push(roomLight);
+
+            // כוות מסורתיות (נישות מקושתות בקיר) עם פריטי נוי ותצוגה
+            function createWallNiche(nx, ny, nz, rotY, itemType) {
+                const nGroup = new THREE.Group();
+                nGroup.position.set(nx, ny, nz);
+                nGroup.rotation.y = rotY;
+
+                const frame = new THREE.Mesh(new THREE.BoxGeometry(0.95, 1.15, 0.14), mats.whiteGypsum);
+                const recess = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.95, 0.16), mats.woodDark);
+                recess.position.z = 0.01;
+                nGroup.add(frame, recess);
+
+                if (itemType === "tray") {
+                    // מגש נחושת עגול וכד
+                    const tray = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.03, 20), mats.copper);
+                    tray.rotation.x = Math.PI / 2;
+                    tray.position.set(0, -0.05, 0.09);
+                    registerInteractive(tray, "מגש נחושת רקוע בקיר", "כלי הגשה מסורתי מעוטר בעבודת יד המוצב בכוות הקיר המזרחי.", "כלי בית ומסורת");
+                    nGroup.add(tray);
+                } else if (itemType === "scroll") {
+                    // מגילה / ספר עתיק בכריכת עור וזהב
+                    const book = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.44, 0.09), mats.cushionRed);
+                    book.position.set(0, -0.05, 0.09);
+                    const clasp = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.44, 0.1), mats.goldBrass);
+                    clasp.position.set(0.15, -0.05, 0.09);
+                    registerInteractive(book, "כתב יד ומגילה עתיקה", "ספר לימוד ומסורת בכריכה מהודרת המונח בגומחת הקיר הפנימית.", "מורשת וכתבים");
+                    registerInteractive(clasp, "כתב יד ומגילה עתיקה", "ספר לימוד ומסורת בכריכה מהודרת המונח בגומחת הקיר הפנימית.", "מורשת וכתבים");
+                    nGroup.add(book, clasp);
+                }
+
+                roomGroup.add(nGroup);
+            }
+
+            // הצבת כוות בקיר האחורי הפנימי של החדר
+            const backWallZ = -depth / 2 + 0.36;
+            createWallNiche(-1.2, 1.65, backWallZ, 0, "tray");
+            createWallNiche(1.2, 1.65, backWallZ, 0, "scroll");
+
+            // חלון צבעוני/גיאומטרי מסורתי בקיר האחורי
+            const stainedWin = new THREE.Mesh(new THREE.BoxGeometry(0.85, 1.05, 0.18), mats.stainedGlass);
+            stainedWin.position.set(0, 1.85, backWallZ);
+            roomGroup.add(stainedWin);
+
+            // מזרנים נמוכים וכריות רקומות לאורך הקירות (פינת אירוח מסורתית)
+            const cushionPositions = [
+                [-innerW * 0.38, 0.22, -1.8, 0.45, 1.5],
+                [-innerW * 0.38, 0.22, 0.4, 0.45, 1.5],
+                [innerW * 0.38, 0.22, -1.8, 0.45, 1.5],
+                [innerW * 0.38, 0.22, 0.4, 0.45, 1.5]
+            ];
+            cushionPositions.forEach(([cx, cy, cz, cw, cd], idx) => {
+                const mattress = new THREE.Mesh(new THREE.BoxGeometry(cw, 0.24, cd), idx % 2 === 0 ? mats.cushionRed : mats.cushionGold);
+                mattress.position.set(cx, cy, cz);
+                mattress.castShadow = true;
+                mattress.receiveShadow = true;
+                registerInteractive(mattress, "מזרן וכריות אירוח רקומות", "מזרנים נמוכים וכריות מעוטרות ברקמה תימנית מסורתית לישיבה משותפת ואירוח.", "אירוח וטקסטיל");
+                roomGroup.add(mattress);
+
+                // כרית משענת
+                const bolster = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.26, cd * 0.85), mats.stripedCloth);
+                bolster.position.set(cx + (cx < 0 ? -0.14 : 0.14), cy + 0.2, cz);
+                bolster.castShadow = true;
+                registerInteractive(bolster, "כרית משענת רקומה", "כרית נוחה בעיטורי פסים ורקמה מסורתית להישענות בזמן השיחה והקפה.", "אירוח וטקסטיל");
+                roomGroup.add(bolster);
+            });
+
+            if (interiorType === "guest") {
+                // שולחן נמוך במרכז חדר האירוח עם פינת קפה וספלונים
+                const lowTable = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.34, 0.85), mats.woodDark);
+                lowTable.position.set(0, 0.25, -0.5);
+                lowTable.castShadow = true;
+                lowTable.receiveShadow = true;
+                registerInteractive(lowTable, `שולחן אירוח נמוך (${roomTitle})`, "שולחן עץ נמוך במרכז החדר עליו מוגש קפה תימני מתובל בהל וזנגביל.", "פינת קפה");
+                roomGroup.add(lowTable);
+
+                // קנקן קפה מנחושת (דאלה) וספלונים קטנים
+                const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.13, 0.34, 14), mats.copper);
+                pot.position.set(-0.2, 0.59, -0.5);
+                pot.castShadow = true;
+                registerInteractive(pot, "קנקן קפה תימני (דאלה)", "כלי נחושת מסורתי להכנת והגשת קפה תימני חם ('קהווה') לאורחים.", "פינת קפה");
+                roomGroup.add(pot);
+
+                for (let c = 0; c < 3; c++) {
+                    const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.03, 0.065, 10), mats.whiteRobe);
+                    cup.position.set(0.18 + c * 0.11, 0.45, -0.45 + (c % 2) * 0.12);
+                    registerInteractive(cup, "ספלון קפה מסורתי", "ספל קטן ללא ידית ממנו לוגמים את הקפה התימני החם.", "פינת קפה");
+                    roomGroup.add(cup);
+                }
+            } else if (interiorType === "dining") {
+                // שולחן סעודה ארוך ומגש נחושת גדול עם לחוח, סלוף וקערות תבשיל בחדר האוכל
+                const diningTable = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.46, 1.25), mats.woodDark);
+                diningTable.position.set(0, 0.31, -0.4);
+                diningTable.castShadow = true;
+                diningTable.receiveShadow = true;
+                registerInteractive(diningTable, `שולחן הסעודה (${roomTitle})`, "שולחן אוכל נמוך ומסורתי בו מתאספים לסעודה תימנית חמה ומשותפת.", "חדר האוכל");
+                roomGroup.add(diningTable);
+
+                const feastTray = new THREE.Mesh(new THREE.CylinderGeometry(0.56, 0.52, 0.05, 24), mats.copper);
+                feastTray.position.set(0, 0.565, -0.4);
+                feastTray.castShadow = true;
+                feastTray.receiveShadow = true;
+                registerInteractive(feastTray, "מגש נחושת לסעודה", "מגש רחב שעליו מוגשים מאפי הטאבון, לחוח וסלטים טריים לכל היושבים.", "חדר האוכל");
+                roomGroup.add(feastTray);
+
+                const breadStack = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.34, 0.09, 18), mats.whiteRobe);
+                breadStack.position.set(-0.15, 0.63, -0.45);
+                breadStack.castShadow = true;
+                registerInteractive(breadStack, "לחוח וסלוף חם מהטאבון", "מאפים מסורתיים טריים המוגשים חמים במרכז שולחן האוכל.", "חדר האוכל");
+                roomGroup.add(breadStack);
+
+                const stewPot = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.21, 0.22, 16), mats.terracotta);
+                stewPot.position.set(0.24, 0.69, -0.32);
+                stewPot.castShadow = true;
+                registerInteractive(stewPot, "קדרת תבשיל וקפה לסעודה", "תבשיל חם וקנקן קפה תימני המלווים את הסעודה המשפחתית.", "חדר האוכל");
+                roomGroup.add(stewPot);
+            } else {
+                // חדר מלאכה, פינת קפה ייעודית, תכשיטים, סלי קש ושופר תימני פנימי
+                const workBench = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.78, 0.75), mats.woodWarm);
+                workBench.position.set(0, 0.47, -1.2);
+                workBench.castShadow = true;
+                workBench.receiveShadow = true;
+                registerInteractive(workBench, "שולחן מלאכה פנימי", "שולחן עבודה מוגן בתוך הבית לעיבוד כסף, חריטה והכנת תכשיטים.", "צורפות ומלאכה");
+                roomGroup.add(workBench);
+
+                // פינת קפה מפורטת עם דאלה, ספלונים וקופסת תבלינים
+                const coffeeStand = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.68, 0.65), mats.woodDark);
+                coffeeStand.position.set(1.45, 0.42, -0.4);
+                coffeeStand.castShadow = true;
+                coffeeStand.receiveShadow = true;
+                registerInteractive(coffeeStand, "פינת הקפה התימנית", "עמדת הכנת והגשת קפה תימני ('קהווה') עם דאלה מנחושת, הל, זנגביל וספלונים.", "פינת קפה");
+                roomGroup.add(coffeeStand);
+
+                const craftDalla = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.14, 0.36, 14), mats.copper);
+                craftDalla.position.set(1.38, 0.94, -0.4);
+                craftDalla.castShadow = true;
+                registerInteractive(craftDalla, "דאלה לקפה תימני", "קנקן קפה מסורתי המשמש למזיגת קפה חם לאורחים ולאומנים.", "פינת קפה");
+                roomGroup.add(craftDalla);
+
+                const spiceBox = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.12, 0.18), mats.goldBrass);
+                spiceBox.position.set(1.62, 0.82, -0.28);
+                registerInteractive(spiceBox, "קופסת תבליני קפה", "מכילה הל, זנגביל וציפורן המעניקים לקפה התימני את ארומתו הייחודית.", "פינת קפה");
+                roomGroup.add(spiceBox);
+
+                // תכשיט כסף נוצץ על השולחן
+                const silverPiece = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.028, 10, 24), mats.silver);
+                silverPiece.rotation.x = Math.PI / 2;
+                silverPiece.position.set(-0.25, 0.89, -1.2);
+                registerInteractive(silverPiece, "עדי כסף תימני מעוצב", "תכשיט כסף טהור בעבודת יד מסורתית המזוהה עם הצורפות התימנית.", "צורפות ומלאכה");
+                roomGroup.add(silverPiece);
+
+                // סל קש גדול בפינת החדר
+                const basket = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.26, 0.44, 18), mats.straw);
+                basket.position.set(1.25, 0.3, 1.3);
+                basket.castShadow = true;
+                registerInteractive(basket, "סל קש קלוע (קופה)", "סל קש חזק וקלוע ביד המשמש לאחסון תבלינים, קטניות וחפצים יומיומיים.", "כלי בית ומסורת");
+                roomGroup.add(basket);
+            }
+
+            // הוספת דמויות פנימיות לכל חדר (בנוסף לקואורדינטות העולם של החדר)
+            const worldRoomX = interiorType === "guest" ? -9.5 : (interiorType === "dining" ? 0 : 9.5);
+            const worldRoomZ = interiorType === "dining" ? -14.5 : -2;
+            const worldRotY = interiorType === "guest" ? Math.PI / 2 : (interiorType === "dining" ? 0 : -Math.PI / 2);
+
+            function addPersonToWorld(localX, localZ, localRotY, personBuilder) {
+                const pGroup = personBuilder();
+                const cosR = Math.cos(worldRotY);
+                const sinR = Math.sin(worldRotY);
+                const wx = worldRoomX + (localX * cosR + localZ * sinR);
+                const wz = worldRoomZ + (-localX * sinR + localZ * cosR);
+                pGroup.position.set(wx, 0, wz);
+                pGroup.rotation.y = worldRotY + localRotY;
+                scene.add(pGroup);
+            }
+
+            if (interiorType === "guest") {
+                // אורח יושב על המזרן בבית האירוח ומאזין לסיפורי הקפה
+                addPersonToWorld(-1.85, -1.65, Math.PI / 2, () => {
+                    const g = new THREE.Group();
+                    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.34, 0.92, 14), mats.whiteRobe);
+                    body.position.y = 0.52;
+                    body.castShadow = true;
+                    const head = createYemeniteHead(false, false);
+                    head.position.y = 1.18;
+                    g.add(body, head);
+                    registerInteractive(g, "אורח בבית האירוח", "יושב על המזרן הרקום בבית האירוח הצנעאני ומתכבד בקפה תימני חם.", "דמות בבית האירוח");
+                    animatedPeople.push({ group: g, baseY: 0, phase: 0.7, type: "sway" });
+                    return g;
+                });
+
+                // מארח המגיש ספלון קפה בתוך בית האירוח
+                addPersonToWorld(0.65, 1.35, -2.3, () => {
+                    const g = new THREE.Group();
+                    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.34, 1.46, 14), mats.stripedCloth);
+                    body.position.y = 0.73;
+                    body.castShadow = true;
+                    const head = createYemeniteHead(true, true);
+                    head.position.y = 1.63;
+                    const tray = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.16, 0.03, 16), mats.copper);
+                    tray.position.set(0.32, 1.05, 0.22);
+                    const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.025, 0.06, 10), mats.whiteRobe);
+                    cup.position.set(0.32, 1.1, 0.22);
+                    g.add(body, head, tray, cup);
+                    registerInteractive(g, "מארח בית האירוח", "מגיש קפה מתובל לאורחים ומקבל את פניהם בחצר ובבית הצנעאני.", "דמות בבית האירוח");
+                    animatedPeople.push({ group: g, baseY: 0, phase: 1.9, type: "breathe" });
+                    return g;
+                });
+            } else if (interiorType === "dining") {
+                // סועד ראשון מסביב לשולחן האוכל
+                addPersonToWorld(-1.15, -1.15, 0.55, () => {
+                    const g = new THREE.Group();
+                    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.34, 0.94, 14), mats.whiteRobe);
+                    body.position.y = 0.53;
+                    body.castShadow = true;
+                    const head = createYemeniteHead(true, true);
+                    head.position.y = 1.2;
+                    g.add(body, head);
+                    registerInteractive(g, "סועד בחדר האוכל", "יושב לשולחן הסעודה המסורתי ונהנה ממאפי הטאבון והקפה.", "דמות בחדר האוכל");
+                    animatedPeople.push({ group: g, baseY: 0, phase: 1.2, type: "sway" });
+                    return g;
+                });
+
+                // סועד שני מסביב לשולחן האוכל
+                addPersonToWorld(1.15, -1.15, -0.55, () => {
+                    const g = new THREE.Group();
+                    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.34, 0.94, 14), mats.stripedCloth);
+                    body.position.y = 0.53;
+                    body.castShadow = true;
+                    const head = createYemeniteHead(false, true);
+                    head.position.y = 1.2;
+                    g.add(body, head);
+                    registerInteractive(g, "סועד בשולחן האוכל", "חולק את ארוחת הערב התימנית ליד מגש הנחושת המרכזי.", "דמות בחדר האוכל");
+                    animatedPeople.push({ group: g, baseY: 0, phase: 2.4, type: "breathe" });
+                    return g;
+                });
+
+                // מארחת המגישה את הסעודה והקפה בחדר האוכל
+                addPersonToWorld(0.0, 0.85, Math.PI, () => {
+                    const g = new THREE.Group();
+                    const dress = new THREE.Mesh(new THREE.ConeGeometry(0.41, 1.46, 16), mats.blackCloth);
+                    dress.position.y = 0.73;
+                    dress.castShadow = true;
+                    const trim = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.5, 0.05), mats.cushionGold);
+                    trim.position.set(0, 1.05, 0.2);
+                    const head = new THREE.Mesh(new THREE.SphereGeometry(0.185, 14, 14), mats.skin);
+                    head.position.y = 1.6;
+                    const scarf = new THREE.Mesh(
+                        new THREE.SphereGeometry(0.205, 14, 14, 0, Math.PI * 2, 0, Math.PI * 0.72),
+                        mats.cushionRed
+                    );
+                    scarf.position.set(0, 1.61, -0.02);
+                    g.add(dress, trim, head, scarf);
+                    registerInteractive(g, "מארחת חדר האוכל", "דואגת להגשת המנות החמות והקפה לסועדים בחדר האוכל.", "דמות בחדר האוכל");
+                    animatedPeople.push({ group: g, baseY: 0, phase: 3.6, type: "sway" });
+                    return g;
+                });
+            } else {
+                // אמן מלאכה וצורף בתוך חדר המלאכה והקפה
+                addPersonToWorld(0.0, -1.95, 0, () => {
+                    const g = new THREE.Group();
+                    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.35, 1.44, 14), mats.blackCloth);
+                    body.position.y = 0.72;
+                    body.castShadow = true;
+                    const apron = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.28, 0.75, 14), mats.stripedCloth);
+                    apron.position.y = 0.85;
+                    const head = createYemeniteHead(false, false);
+                    head.position.y = 1.62;
+                    g.add(body, apron, head);
+                    registerInteractive(g, "אומן בחדר המלאכה", "עובד ליד שולחן המלאכה הפנימי ושומר על כלי הכסף והספרים העתיקים.", "דמות בחדר המלאכה");
+                    animatedPeople.push({ group: g, baseY: 0, phase: 2.6, type: "sway" });
+                    return g;
+                });
+
+                // מבקרת הבוחנת תכשיטי כסף וכלים בחדר המלאכה
+                addPersonToWorld(-1.1, 1.25, 0.8, () => {
+                    const g = new THREE.Group();
+                    const dress = new THREE.Mesh(new THREE.ConeGeometry(0.4, 1.44, 16), mats.blackCloth);
+                    dress.position.y = 0.72;
+                    dress.castShadow = true;
+                    const trim = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.5, 0.05), mats.cushionGold);
+                    trim.position.set(0, 1.05, 0.2);
+                    const head = new THREE.Mesh(new THREE.SphereGeometry(0.18, 14, 14), mats.skin);
+                    head.position.y = 1.58;
+                    const scarf = new THREE.Mesh(
+                        new THREE.SphereGeometry(0.2, 14, 14, 0, Math.PI * 2, 0, Math.PI * 0.72),
+                        mats.cushionRed
+                    );
+                    scarf.position.set(0, 1.59, -0.02);
+                    g.add(dress, trim, head, scarf);
+                    registerInteractive(g, "אורחת בחדר המלאכה", "בוחנת את עבודות הכסף הרקומות ואת סלי הקש הקלועים בחדר המלאכה.", "דמות בחדר המלאכה");
+                    animatedPeople.push({ group: g, baseY: 0, phase: 3.4, type: "breathe" });
+                    return g;
+                });
+            }
+        }
+
+        function buildCharacters() {
+            merchant.add(mRobe, mVest, mHead, gatBundle);
+            scene.add(merchant);
+
+            // 5. אופה תימני ליד הטאבון עם מגש לחוח / סלוף
+            const baker = new THREE.Group();
+            baker.position.set(-3.1, 0, -3.5);
+            baker.rotation.y = Math.PI / 3;
+            registerInteractive(
+                baker,
+                "אופה הטאבון התימני",
+                "אופה לחוח, סלוף וקובנה טריים מעל הטאבון הלוהט בחצר.",
+                "דמות ליד הטאבון"
+            );
+            const bRobe = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.35, 1.48, 14), mats.stripedCloth);
+            bRobe.position.y = 0.74;
+            bRobe.castShadow = true;
+            const bHead = createYemeniteHead(true, true);
+            bHead.position.y = 1.64;
+            const breadTray = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.28, 0.05, 18), mats.straw);
+            breadTray.position.set(0.35, 1.05, 0.22);
+            const loaf = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.04, 16), mats.whiteRobe);
+            loaf.position.set(0.35, 1.09, 0.22);
+            baker.add(bRobe, bHead, breadTray, loaf);
+            scene.add(baker);
+            animatedPeople.push({ group: baker, baseY: 0, phase: 1.1, type: "sway" });
+
+            // 6. סוחר כלים ליד דוכן החרס, הדאלה והשופר
+            const potterMerchant = new THREE.Group();
+            potterMerchant.position.set(3.5, 0, -1.4);
+            potterMerchant.rotation.y = Math.PI / 2;
+            registerInteractive(
+                potterMerchant,
+                "מוכר כלי החרס, הדאלה והשופר",
+                "מציג למבקרים קומקומי דאלה מנחושת, כדי חרס ושופרות מסולסלים בדוכן.",
+                "דמות בדוכן השוק"
+            );
+            const pRobe = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.34, 1.5, 14), mats.whiteRobe);
+            pRobe.position.y = 0.75;
+            pRobe.castShadow = true;
+            const pVest = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.28, 0.62, 14), mats.woodDark);
+            pVest.position.y = 1.12;
+            const pHead = createYemeniteHead(false, true);
+            pHead.position.y = 1.7;
+            potterMerchant.add(pRobe, pVest, pHead);
+            scene.add(potterMerchant);
+            animatedPeople.push({ group: potterMerchant, baseY: 0, phase: 2.2, type: "breathe" });
+
+            // 7. קונה צעיר המתבונן בתצוגת השופר והכלים
+            const youngBuyer = new THREE.Group();
+            youngBuyer.position.set(2.6, 0, 0.4);
+            youngBuyer.rotation.y = -2.1;
+            registerInteractive(
+                youngBuyer,
+                "מבקר בשוק התימני",
+                "מתבונן בדוכן כלי הנחושת, סלי הקש והשופרות המסורתיים בחצר.",
+                "דמות בשוק"
+            );
+            const ybRobe = new THREE.Mesh(new THREE.CylinderGeometry(0.23, 0.32, 1.46, 14), mats.stripedCloth);
+            ybRobe.position.y = 0.73;
+            ybRobe.castShadow = true;
+            const ybHead = createYemeniteHead(false, false);
+            ybHead.position.y = 1.62;
+            youngBuyer.add(ybRobe, ybHead);
+            scene.add(youngBuyer);
+            animatedPeople.push({ group: youngBuyer, baseY: 0, phase: 4.1, type: "sway" });
+
+            // 8. אישה נוספת בחצר השוק עם כד חרס
+            const courtyardWoman = new THREE.Group();
+            courtyardWoman.position.set(-0.4, 0, -5.8);
+            courtyardWoman.rotation.y = 0.7;
+            registerInteractive(
+                courtyardWoman,
+                "תושבת החצר עם כד חרס",
+                "צועדת ברחבת השוק הפנימית בין הבתים והטאבון.",
+                "דמות בחצר"
+            );
+            const cwDress = new THREE.Mesh(new THREE.ConeGeometry(0.41, 1.46, 16), mats.blackCloth);
+            cwDress.position.y = 0.73;
+            cwDress.castShadow = true;
+            const cwEmb = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.52, 0.05), mats.cushionGold);
+            cwEmb.position.set(0, 1.06, 0.2);
+            const cwHead = new THREE.Mesh(new THREE.SphereGeometry(0.185, 14, 14), mats.skin);
+            cwHead.position.y = 1.6;
+            const cwScarf = new THREE.Mesh(
+                new THREE.SphereGeometry(0.205, 14, 14, 0, Math.PI * 2, 0, Math.PI * 0.72),
+                mats.blackCloth
+            );
+            cwScarf.position.set(0, 1.61, -0.02);
+            const smallJug = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.14, 0.28, 12), mats.terracotta);
+            smallJug.position.set(-0.34, 0.85, 0.12);
+            smallJug.castShadow = true;
+            courtyardWoman.add(cwDress, cwEmb, cwHead, cwScarf, smallJug);
+            scene.add(courtyardWoman);
+            animatedPeople.push({ group: courtyardWoman, baseY: 0, phase: 5.0, type: "breathe" });
+
+            // 9-12. דמויות מסביב לבניינים ולחדר האוכל
+            const aroundBuildingsPeople = [
+                {
+                    x: -6.4, z: 3.5, rotY: 0.9, robe: mats.whiteRobe, turban: true, beard: true,
+                    title: "תושב ליד בית האירוח",
+                    desc: "עומד סמוך לקיר בית האירוח הצנעאני ומקדם בברכה את העוברים ושבים.",
+                    cat: "דמות ליד הבניין", phase: 0.5, type: "breathe"
+                },
+                {
+                    x: 6.5, z: 3.2, rotY: -0.95, robe: mats.stripedCloth, turban: false, beard: true,
+                    title: "שכן ליד חדר המלאכה והקפה",
+                    desc: "עומד לצד הבניין המזרחי סמוך לכניסה לחדר המלאכה ופינת הקפה.",
+                    cat: "דמות ליד הבניין", phase: 1.7, type: "sway"
+                },
+                {
+                    x: -4.2, z: -11.6, rotY: 0.45, robe: mats.whiteRobe, turban: true, beard: false,
+                    title: "אורח ליד חדר האוכל",
+                    desc: "ממתין סמוך לבניינים האחוריים בדרך אל חדר האוכל והקפה.",
+                    cat: "דמות ליד הבניין", phase: 2.8, type: "breathe"
+                },
+                {
+                    x: 4.1, z: -11.4, rotY: -0.5, robe: mats.stripedCloth, turban: true, beard: true,
+                    title: "מארח ליד חדר האוכל",
+                    desc: "עומד ליד קיר הבניין הסמוך לחדר האוכל ומזמין את האורחים לקפה וסעודה.",
+                    cat: "דמות ליד הבניין", phase: 3.9, type: "sway"
+                }
+            ];
+
+            aroundBuildingsPeople.forEach(cfg => {
+                const person = new THREE.Group();
+                person.position.set(cfg.x, 0, cfg.z);
+                person.rotation.y = cfg.rotY;
+                registerInteractive(person, cfg.title, cfg.desc, cfg.cat);
+
+                const pBody = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.34, 1.48, 14), cfg.robe);
+                pBody.position.y = 0.74;
+                pBody.castShadow = true;
+                const pHead = createYemeniteHead(cfg.turban, cfg.beard);
+                pHead.position.y = 1.66;
+
+                person.add(pBody, pHead);
+                scene.add(person);
+                animatedPeople.push({ group: person, baseY: 0, phase: cfg.phase, type: cfg.type });
+            });
+
+            // הוספת הדמויות הקיימות לרשימת המונפשים העדינה
+            animatedPeople.push(
+                { group: elder, baseY: 0, phase: 0.3, type: "breathe" },
+                { group: woman, baseY: 0, phase: 1.5, type: "sway" },
+                { group: merchant, baseY: 0, phase: 2.9, type: "breathe" }
+            );
+        }
+
+        /**
+         * הגדרת מצב תאורה מהיר (זריחה, צהריים, שקיעה, לילה)
+         */
+        function setTimePreset(preset) {
+            isAutoCycle = false;
+            const autoToggle = document.getElementById('auto-cycle-toggle');
+            if (autoToggle) autoToggle.checked = false;
+
+            const presets = {
+                sunrise: 6.2,
+                noon: 12.5,
+                sunset: 17.8,
+                night: 23.0
+            };
+
+            if (presets[preset] !== undefined) {
+                targetTime = presets[preset];
+                isTransitioning = true;
+            }
+
+            document.querySelectorAll('.btn-time').forEach(btn => btn.classList.remove('active'));
+            const activeBtn = document.getElementById(`btn-${preset}`);
+            if (activeBtn) activeBtn.classList.add('active');
+        }
+
+        /**
+         * עדכון השעה מתוך סליידר הזמן הידני
+         */
+        function onSliderChange(val) {
+            const parsedHour = parseFloat(val);
+            if (Number.isNaN(parsedHour)) return;
+            isAutoCycle = false;
+            isTransitioning = false;
+            const autoToggle = document.getElementById('auto-cycle-toggle');
+            if (autoToggle) autoToggle.checked = false;
+
+            currentTime = ((parsedHour % 24) + 24) % 24;
+            targetTime = currentTime;
+            document.querySelectorAll('.btn-time').forEach(btn => btn.classList.remove('active'));
+            updateLightingSystem(currentTime);
+        }
+
+        /**
+         * הפעלה או עצירה של מחזור יום-לילה אוטומטי
+         */
+        function toggleAutoCycle() {
+            const autoToggle = document.getElementById('auto-cycle-toggle');
+            isAutoCycle = Boolean(autoToggle && autoToggle.checked);
+            if (isAutoCycle) {
+                isTransitioning = false;
+                document.querySelectorAll('.btn-time').forEach(btn => btn.classList.remove('active'));
+            }
+        }
+
+        /**
+         * בניית סדנת הצורף התימני: שולחן עבודה, פטיש וכסף, ג'מביות ותכשיטים בתצוגה
+         */
+        function buildSilversmithWorkshop() {
+            const workshopGroup = new THREE.Group();
+            workshopGroup.position.set(-2.4, 0, 2.2);
+            registerInteractive(
+                workshopGroup,
+                "סדנת הצורף והג'מביות התימנית",
+                "צורף כסף היושב אל שולחן העבודה ומעצב תכשיטים וג'מביות מסורתיות בעבודת יד.",
+                "צורפות ואומנות"
+            );
+
+            // שולחן עבודה של הצורף
+            const bench = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.82, 0.95), mats.woodWarm);
+            bench.position.y = 0.41;
+            bench.castShadow = true;
+            bench.receiveShadow = true;
+            workshopGroup.add(bench);
+
+            // שרפרף עבודה
+            const stool = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.32, 0.5, 14), mats.woodDark);
+            stool.position.set(0, 0.25, 0.72);
+            stool.castShadow = true;
+            workshopGroup.add(stool);
+
+            // סדן ותכשיטי כסף על השולחן
+            const anvil = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.14, 0.16), mats.silver);
+            anvil.position.set(-0.25, 0.89, 0.05);
+            anvil.castShadow = true;
+            workshopGroup.add(anvil);
+
+            for (let i = 0; i < 3; i++) {
+                const ring = new THREE.Mesh(new THREE.TorusGeometry(0.11 + i * 0.03, 0.018, 10, 24), mats.silver);
+                ring.rotation.x = Math.PI / 2;
+                ring.position.set(0.25 + (i - 1) * 0.2, 0.84, -0.05);
+                workshopGroup.add(ring);
+            }
+
+            // תיבת תצוגה לג'מביות ותכשיטים
+            const showcase = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.48, 0.55), mats.woodDark);
+            showcase.position.set(0, 0.24, 1.35);
+            showcase.castShadow = true;
+            showcase.receiveShadow = true;
+            workshopGroup.add(showcase);
+
+            for (let g = 0; g < 2; g++) {
+                const jambiya = new THREE.Group();
+                jambiya.position.set(-0.28 + g * 0.56, 0.52, 1.35);
+                jambiya.rotation.z = -0.35;
+
+                const sheath = new THREE.Mesh(new THREE.ConeGeometry(0.065, 0.34, 12), mats.silver);
+                sheath.rotation.x = Math.PI;
+                sheath.position.y = -0.14;
+
+                const belt = new THREE.Mesh(new THREE.CylinderGeometry(0.052, 0.055, 0.08, 12), mats.goldBrass);
+                belt.position.y = -0.02;
+
+                const hilt = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.07, 0.06), mats.horn);
+                hilt.position.y = 0.05;
+
+                jambiya.add(sheath, belt, hilt);
+                workshopGroup.add(jambiya);
+            }
+
+            scene.add(workshopGroup);
+        }
+
+        /**
+         * בניית דוכן כלי החרס, הנחושת, הדאלה וסל הקש עם שופר תימני
+         */
+        function buildPotteryAndCopperStall() {
+            const stallGroup = new THREE.Group();
+            stallGroup.position.set(2.8, 0, -2.5);
+            stallGroup.rotation.y = -0.35;
+            registerInteractive(
+                stallGroup,
+                "דוכן כלי חרס, דאלה ושופר תימני",
+                "תצוגת כדי חרס, קנקני דאלה מנחושת, סלי קש ושופר תימני מעוקל במרכז השוק.",
+                "כלי שוק ומסורת"
+            );
+
+            // שולחן/מדף תצוגה מעץ
+            const table = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.78, 0.9), mats.woodWarm);
+            table.position.y = 0.39;
+            table.castShadow = true;
+            table.receiveShadow = true;
+            stallGroup.add(table);
+
+            // קנקן קפה דאלה מנחושת
+            const dalla = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.18, 0.44, 16), mats.copper);
+            dalla.position.set(-0.55, 0.99, 0.05);
+            dalla.castShadow = true;
+            stallGroup.add(dalla);
+
+            // כד חרס (טרקוטה) על השולחן ועל הקרקע
+            const pot1 = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.22, 0.38, 16), mats.terracotta);
+            pot1.position.set(0.05, 0.97, -0.05);
+            pot1.castShadow = true;
+            stallGroup.add(pot1);
+
+            const bigJar = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.38, 0.68, 18), mats.terracotta);
+            bigJar.position.set(-1.15, 0.34, 0.45);
+            bigJar.castShadow = true;
+            bigJar.receiveShadow = true;
+            stallGroup.add(bigJar);
+
+            // סל קש גדול ובתוכו שופר תימני מסולסל
+            const basket = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.3, 0.46, 18), mats.straw);
+            basket.position.set(0.62, 0.99, 0.05);
+            basket.castShadow = true;
+            stallGroup.add(basket);
+
+            const shofarCurve = new THREE.CatmullRomCurve3([
+                new THREE.Vector3(0.55, 1.18, 0.05),
+                new THREE.Vector3(0.68, 1.38, 0.1),
+                new THREE.Vector3(0.88, 1.52, 0.02),
+                new THREE.Vector3(1.05, 1.62, -0.14)
+            ]);
+            const shofarGeo = new THREE.TubeGeometry(shofarCurve, 24, 0.055, 12, false);
+            const shofarMesh = new THREE.Mesh(shofarGeo, mats.horn);
+            shofarMesh.castShadow = true;
+            registerInteractive(
+                shofarMesh,
+                "שופר תימני מסורתי",
+                "שופר מאורך ומעוקל בעדינות בסל הקש, מלווה את מסורת התפילה והשמחה התימנית.",
+                "כלי נגינה ומסורת"
+            );
+            stallGroup.add(shofarMesh);
+
+            scene.add(stallGroup);
+        }
+
+        /**
+         * בניית טאבון תימני מסורתי עם אש מנצנצת ועשן עולה
+         */
+        function buildTaboonOven() {
+            const ovenGroup = new THREE.Group();
+            ovenGroup.position.set(-4.6, 0, -4.2);
+            registerInteractive(
+                ovenGroup,
+                "טאבון תימני וארובת עשן",
+                "תנור חרס ואבן מסורתי לאפיית לחוח, סלוף וקובנה עם להבות חיות ועשן עולה.",
+                "מטבח ומסורת"
+            );
+
+            // גוף הטאבון החרוטי וארובה
+            const ovenBody = new THREE.Mesh(new THREE.CylinderGeometry(0.68, 0.92, 1.25, 18), mats.terracotta);
+            ovenBody.position.y = 0.625;
+            ovenBody.castShadow = true;
+            ovenBody.receiveShadow = true;
+
+            const chimney = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.36, 1.1, 14), mats.stoneWall);
+            chimney.position.y = 1.65;
+            chimney.castShadow = true;
+
+            // גחלים ולהבה בתוך פתח הטאבון
+            const embersMat = new THREE.MeshStandardMaterial({
+                color: 0xff5500,
+                emissive: 0xff4500,
+                emissiveIntensity: 1.9,
+                roughness: 0.4
+            });
+            ovenEmbersMesh = new THREE.Mesh(new THREE.SphereGeometry(0.26, 12, 12), embersMat);
+            ovenEmbersMesh.position.set(0.42, 0.45, 0);
+
+            ovenFireLight = new THREE.PointLight(0xff6a1a, 1.9, 8.5);
+            ovenFireLight.position.set(0.65, 0.65, 0);
+
+            ovenGroup.add(ovenBody, chimney, ovenEmbersMesh, ovenFireLight);
+            scene.add(ovenGroup);
+
+            // חלקיקי עשן העולים מהארובה
+            for (let i = 0; i < 8; i++) {
+                const smokeMat = new THREE.MeshBasicMaterial({
+                    color: 0xe5dfd5,
+                    transparent: true,
+                    opacity: 0.3
+                });
+                const puff = new THREE.Mesh(new THREE.SphereGeometry(0.28, 10, 10), smokeMat);
+                puff.position.set(
+                    -4.6 + (Math.random() - 0.5) * 0.2,
+                    2.1 + i * 0.45,
+                    -4.2 + (Math.random() - 0.5) * 0.2
+                );
+                puff.userData.offset = i * 1.1;
+                scene.add(puff);
+                smokeParticles.push(puff);
+            }
+        }
+
+        function buildCharacters() {
+            // 1. הצורף התימני היושב ליד שולחן העבודה ומניף פטיש
+            const silversmith = new THREE.Group();
+            silversmith.position.set(-2.4, 0, 2.95);
+            registerInteractive(
+                silversmith,
+                "אומן הצורפות התימני",
+                "עוסק בריקוע כסף ובעיצוב תכשיטים וג'מביות מסורתיות בסדנת השוק.",
+                "דמות בשוק"
+            );
+            const sRobe = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.34, 1.05, 14), mats.stripedCloth);
+            sRobe.position.y = 0.56;
+            sRobe.castShadow = true;
+            const sHead = createYemeniteHead(true, true);
+            sHead.position.y = 1.26;
+
+            silversmithArm = new THREE.Group();
+            silversmithArm.position.set(-0.22, 1.02, -0.1);
+            const armMesh = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.36, 0.11), mats.skin);
+            armMesh.position.y = -0.15;
+            const hammer = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.09, 0.2), mats.silver);
+            hammer.position.set(0, -0.32, -0.06);
+            silversmithArm.add(armMesh, hammer);
+
+            silversmith.add(sRobe, sHead, silversmithArm);
+            scene.add(silversmith);
+
+            // 2. זקן השוק היושב ליד פינת האירוח
+            const elder = new THREE.Group();
+            elder.position.set(4.5, 0, 2.5);
+            elder.rotation.y = -Math.PI / 2;
+            registerInteractive(
+                elder,
+                "מכובד השוק ובית האירוח",
+                "מאזין לשיחות השוק ומתכבד בקפה תימני ליד שטיח האירוח.",
+                "דמות בחצר"
+            );
+            const eRobe = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.35, 1.48, 14), mats.whiteRobe);
+            eRobe.position.y = 0.74;
+            eRobe.castShadow = true;
+            const eHead = createYemeniteHead(true, true);
+            eHead.position.y = 1.65;
+            elder.add(eRobe, eHead);
+            scene.add(elder);
+
+            // 3. אישה תימניה צועדת בחצר עם סל קש
+            const woman = new THREE.Group();
+            woman.position.set(0.6, 0, 3.8);
+            woman.rotation.y = -0.5;
+            registerInteractive(
+                woman,
+                "אישה תימניה עם סל קש",
+                "עוברת בין דוכני השוק והבתים כשבידה סל קש קלוע.",
+                "דמות בחצר"
+            );
+            const wDress = new THREE.Mesh(new THREE.ConeGeometry(0.42, 1.48, 16), mats.blackCloth);
+            wDress.position.y = 0.74;
+            wDress.castShadow = true;
+            const wHead = new THREE.Mesh(new THREE.SphereGeometry(0.185, 14, 14), mats.skin);
+            wHead.position.y = 1.62;
+            const wScarf = new THREE.Mesh(
+                new THREE.SphereGeometry(0.205, 14, 14, 0, Math.PI * 2, 0, Math.PI * 0.72),
+                mats.blackCloth
+            );
+            wScarf.position.set(0, 1.63, -0.02);
+            womanBasket = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.19, 0.28, 14), mats.straw);
+            womanBasket.position.set(0.36, 0.92, 0.15);
+            womanBasket.castShadow = true;
+            woman.add(wDress, wHead, wScarf, womanBasket);
+            scene.add(woman);
+
+            // 4. סוחר תבלינים ומוצרי שוק ליד הדוכנים
+            const merchant = new THREE.Group();
+            merchant.position.set(1.2, 0, -0.6);
+            merchant.rotation.y = 0.4;
+            registerInteractive(
+                merchant,
+                "סוחר בשוק התימני",
+                "מציג צרור עלים ומוצרים מסורתיים בלב רחבת השוק.",
+                "דמות בשוק"
+            );
+            const mRobe = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.33, 1.48, 14), mats.whiteRobe);
+            mRobe.position.y = 0.74;
+            mRobe.castShadow = true;
+            const mVest = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.27, 0.6, 14), mats.blackCloth);
+            mVest.position.y = 1.12;
+            const mHead = createYemeniteHead(false, true);
+            mHead.position.y = 1.68;
+            const gatBundle = new THREE.Mesh(
+                new THREE.ConeGeometry(0.14, 0.36, 10),
+                new THREE.MeshStandardMaterial({ color: 0x3b6e34, roughness: 0.85 })
+            );
+            gatBundle.position.set(-0.32, 1.05, 0.18);
+
+            merchant.add(mRobe, mVest, mHead, gatBundle);
+            scene.add(merchant);
+
+            // 5. אופה תימני ליד הטאבון עם מגש לחוח / סלוף
+        }
+
+        /**
+         * לולאת האנימציה המרכזית
+         */
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const delta = clock.getDelta();
+            const elapsed = clock.getElapsedTime();
+
+            updateKeyboardWalk(delta);
+
+            // 1. עדכון מחזור תאורה אוטומטי או מעבר חלק בין שעות
+            if (isAutoCycle) {
+                currentTime = (currentTime + delta * 0.65) % 24;
+                updateLightingSystem(currentTime);
+            } else if (isTransitioning) {
+                let diff = targetTime - currentTime;
+                if (Math.abs(diff) > 12) {
+                    diff = diff > 0 ? diff - 24 : diff + 24;
+                }
+                if (Math.abs(diff) < 0.03) {
+                    currentTime = targetTime;
+                    isTransitioning = false;
+                } else {
+                    currentTime = (currentTime + diff * Math.min(1, delta * 4.5) + 24) % 24;
+                }
+                updateLightingSystem(currentTime);
+            }
+
+            // 2. הנפשת פטיש הצורף התימני והדמויות
+            if (silversmithArm) {
+                silversmithArm.rotation.x = Math.sin(elapsed * 5.5) * 0.28;
+            }
+            animatedPeople.forEach(person => {
+                if (!person || !person.group) return;
+                if (person.type === "sway") {
+                    person.group.rotation.z = Math.sin(elapsed * 1.4 + person.phase) * 0.025;
+                } else {
+                    person.group.position.y = person.baseY + Math.sin(elapsed * 2.1 + person.phase) * 0.015;
+                }
+            });
+
+            // 3. הנפשת ריצוד האש בטאבון ובעששיות
+            if (ovenFireLight && ovenEmbersMesh) {
+                const flicker = 1.9 + Math.sin(elapsed * 14) * 0.35 + Math.cos(elapsed * 23) * 0.2;
+                ovenFireLight.intensity = flicker;
+                ovenEmbersMesh.material.emissiveIntensity = flicker;
+            }
+
+            lanternLights.forEach((light, i) => {
+                if (light.intensity > 0.1) {
+                    light.intensity += Math.sin(elapsed * 8 + i * 2) * 0.08;
+                }
+            });
+
+            // 4. הנפשת עשן העולה מארובת הטאבון
+            smokeParticles.forEach(p => {
+                p.position.y += delta * 0.65;
+                p.position.x += Math.sin(elapsed * 1.5 + p.userData.offset) * 0.004;
+                const progress = (p.position.y - 2.1) / 3.8;
+                p.scale.setScalar(1 + progress * 1.8);
+                p.material.opacity = Math.max(0, 0.35 * (1 - progress));
+
+                if (p.position.y > 5.9) {
+                    p.position.y = 2.1;
+                    p.position.x = -4.6 + (Math.random() - 0.5) * 0.2;
+                }
+            });
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        /**
+         * יצירת ראש דמות תימנית מסורתית (כובע/סודרה או מצנפת וזקן)
+         */
+        function createYemeniteHead(hasTurban = false, hasBeard = false) {
+            const headGroup = new THREE.Group();
+            const headMesh = new THREE.Mesh(new THREE.SphereGeometry(0.185, 14, 14), mats.skin);
+            headMesh.castShadow = true;
+            headGroup.add(headMesh);
+
+            if (hasTurban) {
+                const turban = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.21, 0.23, 0.16, 16),
+                    mats.stripedCloth
+                );
+                turban.position.y = 0.14;
+                turban.rotation.z = 0.06;
+                turban.castShadow = true;
+                headGroup.add(turban);
+            } else {
+                const cap = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.195, 14, 12, 0, Math.PI * 2, 0, Math.PI * 0.55),
+                    mats.blackCloth
+                );
+                cap.position.y = 0.02;
+                headGroup.add(cap);
+            }
+
+            if (hasBeard) {
+                const beard = new THREE.Mesh(
+                    new THREE.ConeGeometry(0.14, 0.22, 12),
+                    mats.blackCloth
+                );
+                beard.rotation.x = Math.PI;
+                beard.position.set(0, -0.14, 0.07);
+                headGroup.add(beard);
+            }
+
+            return headGroup;
+        }
+
+        /**
+         * בניית עששיות שוק ותאורה חיצונית/פנימית
+         */
+        function buildLanternsAndLights() {
+            const lanternCoords = [
+                [-4.2, 2.9, 2.5],
+                [-4.2, 2.9, -4.5],
+                [4.2, 2.9, 2.5],
+                [4.2, 2.9, -4.5],
+                [0, 4.6, -10.8]
+            ];
+
+            lanternCoords.forEach(([lx, ly, lz], idx) => {
+                const lGroup = new THREE.Group();
+                lGroup.position.set(lx, ly, lz);
+
+                const cap = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.16, 10), mats.copper);
+                cap.position.y = 0.14;
+                const bulbMat = new THREE.MeshStandardMaterial({
+                    color: 0xffdf85,
+                    emissive: 0xff8c1a,
+                    emissiveIntensity: 1.4
+                });
+                const glass = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.13, 0.22, 10), bulbMat);
+                const base = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.1, 0.08, 10), mats.copper);
+                base.position.y = -0.14;
+
+                lGroup.add(cap, glass, base);
+                scene.add(lGroup);
+                lanternBulbs.push(glass);
+
+                const pLight = new THREE.PointLight(0xff992b, 1.5, 9.5);
+                pLight.position.set(lx, ly - 0.1, lz);
+                scene.add(pLight);
+                lanternLights.push({ light: pLight, baseIntensity: 1.5 + (idx % 2) * 0.25 });
+            });
+        }
+
+        /**
+         * בניית שמש, ירח ושדה כוכבים לשינוי התאורה לאורך היממה
+         */
+        function buildCelestialBodies() {
+            sunMesh = new THREE.Mesh(
+                new THREE.SphereGeometry(2.4, 16, 16),
+                new THREE.MeshBasicMaterial({ color: 0xffb84d })
+            );
+            scene.add(sunMesh);
+
+            moonMesh = new THREE.Mesh(
+                new THREE.SphereGeometry(1.7, 16, 16),
+                new THREE.MeshBasicMaterial({ color: 0xe2e8f0 })
+            );
+            scene.add(moonMesh);
+
+            const starGeo = new THREE.BufferGeometry();
+            const starCount = 450;
+            const positions = new Float32Array(starCount * 3);
+            for (let i = 0; i < starCount; i++) {
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(Math.random() * 0.85 + 0.15);
+                const r = 75;
+                positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+                positions[i * 3 + 1] = r * Math.cos(phi);
+                positions[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+            }
+            starGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            const starMat = new THREE.PointsMaterial({ color: 0xfffbeb, size: 0.55, transparent: true, opacity: 0 });
+            starField = new THREE.Points(starGeo, starMat);
+            scene.add(starField);
+        }
+
+        /**
+         * עדכון תאורת השמש/ירח, עששיות, חלונות ושעון לפי שעת היממה (0..24)
+         */
+        function updateLightingSystem(hour) {
+            const normalizedHour = ((hour % 24) + 24) % 24;
+            const sunAngle = ((normalizedHour - 6) / 24) * Math.PI * 2;
+            const radius = 34;
+            const sunX = Math.cos(sunAngle) * radius;
+            const sunY = Math.sin(sunAngle) * radius;
+            const sunZ = 12;
+
+            if (sunLight) {
+                sunLight.position.set(sunX, Math.max(-8, sunY), sunZ);
+            }
+            if (sunMesh) {
+                sunMesh.position.set(sunX * 1.8, sunY * 1.8, sunZ * 1.8);
+                sunMesh.visible = sunY > -4;
+            }
+            if (moonMesh) {
+                moonMesh.position.set(-sunX * 1.8, -sunY * 1.8, -sunZ * 1.8);
+                moonMesh.visible = sunY < 2;
+            }
+
+            // חישוב עוצמת יום מול לילה
+            const dayFactor = THREE.MathUtils.clamp((Math.sin(sunAngle) + 0.25) / 1.25, 0, 1);
+            const nightFactor = 1 - dayFactor;
+
+            const skyDay = new THREE.Color(0x7cc4f8);
+            const skySunset = new THREE.Color(0xe07a3f);
+            const skyNight = new THREE.Color(0x0d1324);
+
+            const isDuskOrDawn = Math.abs(Math.sin(sunAngle)) < 0.35;
+            const skyColor = isDuskOrDawn
+                ? skyNight.clone().lerp(skySunset, 0.75).lerp(skyDay, dayFactor * 0.55)
+                : skyNight.clone().lerp(skyDay, dayFactor);
+
+            scene.background = skyColor;
+            if (scene.fog) {
+                scene.fog.color.copy(skyColor);
+                scene.fog.density = 0.011 + nightFactor * 0.006;
+            }
+
+            if (sunLight) {
+                sunLight.intensity = 0.25 + dayFactor * 2.1;
+                sunLight.color.setHex(isDuskOrDawn ? 0xff9e54 : 0xfff3d6);
+            }
+            if (hemiLight) {
+                hemiLight.intensity = 0.25 + dayFactor * 0.65;
+            }
+            if (ambientLight) {
+                ambientLight.intensity = 0.16 + dayFactor * 0.35;
+            }
+            if (starField && starField.material) {
+                starField.material.opacity = THREE.MathUtils.clamp((nightFactor - 0.35) * 1.5, 0, 0.9);
+            }
+
+            // תאורת עששיות, חלונות ובתים פנימיים
+            const warmGlowFactor = THREE.MathUtils.clamp(nightFactor * 1.25 + (isDuskOrDawn ? 0.45 : 0), 0.15, 1.35);
+            lanternLights.forEach(item => {
+                if (item && item.light) {
+                    item.light.intensity = item.baseIntensity * warmGlowFactor;
+                }
+            });
+            lanternBulbs.forEach(bulb => {
+                if (bulb && bulb.material) {
+                    bulb.material.emissiveIntensity = 0.5 + warmGlowFactor * 1.3;
+                }
+            });
+            interiorLights.forEach(light => {
+                if (light) {
+                    light.intensity = 1.1 + warmGlowFactor * 1.1;
+                }
+            });
+            interiorBulbs.forEach(bulb => {
+                if (bulb && bulb.material) {
+                    bulb.material.emissiveIntensity = 0.9 + warmGlowFactor * 1.0;
+                }
+            });
+
+            scene.traverse(obj => {
+                if (obj.userData && obj.userData.isWindowGlass && obj.material) {
+                    obj.material.emissiveIntensity = THREE.MathUtils.clamp((nightFactor - 0.2) * 1.4, 0, 1.2);
+                }
+            });
+
+            // עדכון שעון ותווית מצב הזמן בממשק
+            const wholeHours = Math.floor(normalizedHour);
+            const mins = Math.floor((normalizedHour - wholeHours) * 60);
+            const clockEl = document.getElementById('clock-display');
+            if (clockEl) {
+                clockEl.textContent = `${String(wholeHours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+            }
+            const sliderEl = document.getElementById('time-slider');
+            if (sliderEl && document.activeElement !== sliderEl) {
+                sliderEl.value = normalizedHour.toFixed(2);
+            }
+
+            const labelEl = document.getElementById('current-time-label');
+            if (labelEl) {
+                if (normalizedHour >= 5 && normalizedHour < 8) labelEl.textContent = "זריחה בהרי תימן";
+                else if (normalizedHour >= 8 && normalizedHour < 16.5) labelEl.textContent = "אור יום מלא";
+                else if (normalizedHour >= 16.5 && normalizedHour < 19.5) labelEl.textContent = "שקיעה מוזהבת";
+                else labelEl.textContent = "לילה מואר בעששיות";
+            }
+        }
+
+        /**
+         * רישום אובייקט או דמות לאינטראקציה (ריחוף ולחיצה לכרטיס מידע)
+         */
+        function registerInteractive(object3D, title, description, category = "פריט מסורתי") {
+            if (!object3D) return;
+            object3D.traverse(child => {
+                child.userData.interactiveInfo = { title, description, category };
+                interactiveObjects.push(child);
+            });
+        }
+
+        /**
+         * הגדרת מאזיני עכבר, מגע ומקלדת להליכה, בחירת מיקום ובדיקת פריטים
+         */
+        function setupInteraction() {
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+
+            const dom = renderer.domElement;
+
+            dom.addEventListener('pointerdown', e => {
+                pointerDownPos = { x: e.clientX, y: e.clientY };
+            });
+
+            dom.addEventListener('pointermove', e => {
+                updateTooltip(e.clientX, e.clientY);
+            });
+
+            dom.addEventListener('pointerup', e => {
+                const dx = e.clientX - pointerDownPos.x;
+                const dy = e.clientY - pointerDownPos.y;
+                if (Math.hypot(dx, dy) < 6) {
+                    handleObjectClick(e.clientX, e.clientY);
+                }
+            });
+
+            window.addEventListener('keydown', e => {
+                keysPressed[e.key.toLowerCase()] = true;
+            });
+
+            window.addEventListener('keyup', e => {
+                keysPressed[e.key.toLowerCase()] = false;
+            });
+        }
+
+        /**
+         * הצגת תגית ריחוף מעל פריטים אינטראקטיביים
+         */
+        function updateTooltip(clientX, clientY) {
+            const tooltip = document.getElementById('tooltip');
+            if (!tooltip || !raycaster || !camera) return;
+
+            mouse.x = (clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const hits = raycaster.intersectObjects(interactiveObjects, false);
+
+            if (hits.length > 0 && hits[0].object.userData.interactiveInfo) {
+                const info = hits[0].object.userData.interactiveInfo;
+                tooltip.textContent = info.title;
+                tooltip.style.left = `${Math.min(window.innerWidth - 180, clientX + 14)}px`;
+                tooltip.style.top = `${Math.max(12, clientY - 34)}px`;
+                tooltip.classList.remove('hidden');
+                renderer.domElement.style.cursor = 'pointer';
+            } else {
+                tooltip.classList.add('hidden');
+                renderer.domElement.style.cursor = 'grab';
+            }
+        }
+
+        /**
+         * פתיחת כרטיס מידע בלחיצה על פריט או דמות
+         */
+        function handleObjectClick(clientX, clientY) {
+            if (!raycaster || !camera) return;
+
+            mouse.x = (clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const hits = raycaster.intersectObjects(interactiveObjects, false);
+
+            if (hits.length > 0 && hits[0].object.userData.interactiveInfo) {
+                const info = hits[0].object.userData.interactiveInfo;
+                document.getElementById('inspect-category').textContent = info.category || "פריט מסורתי";
+                document.getElementById('inspect-title').textContent = info.title;
+                document.getElementById('inspect-desc').textContent = info.description;
+                document.getElementById('inspect-card').classList.remove('hidden');
+            }
+        }
+
+        /**
+         * סגירת כרטיס המידע
+         */
+        function closeInspectCard() {
+            const card = document.getElementById('inspect-card');
+            if (card) card.classList.add('hidden');
+        }
+
+        /**
+         * מעבר מהיר למצלמה בין החצר, בית האירוח וחדר המלאכה
+         */
+        function goToLocation(locKey) {
+            const presets = {
+                courtyard: {
+                    pos: [0, 6.5, 16.5],
+                    target: [0, 2.2, -1],
+                    label: "מיקום: חצר השוק"
+                },
+                guestHouse: {
+                    pos: [-7.2, 2.1, -1.2],
+                    target: [-10.6, 1.4, -2.5],
+                    label: "מיקום: בית האירוח הצנעאני"
+                },
+                craftRoom: {
+                    pos: [7.2, 2.1, -1.2],
+                    target: [10.6, 1.4, -2.2],
+                    label: "מיקום: חדר המלאכה והקפה"
+                },
+                diningRoom: {
+                    pos: [0.0, 2.1, -12.3],
+                    target: [0.0, 1.3, -15.2],
+                    label: "מיקום: חדר האוכל המסורתי"
+                }
+            };
+
+            const chosen = presets[locKey];
+            if (!chosen) return;
+
+            camera.position.set(...chosen.pos);
+            controls.target.set(...chosen.target);
+            controls.update();
+
+            const zoneLabel = document.getElementById('zone-label');
+            if (zoneLabel) zoneLabel.textContent = chosen.label;
+
+            document.querySelectorAll('.preset-btn').forEach(btn => btn.classList.remove('active-loc'));
+            const activeBtn = document.getElementById(`loc-${locKey}`);
+            if (activeBtn) activeBtn.classList.add('active-loc');
+        }
+
+        /**
+         * תנועה במקשי WASD / חצים עם בדיקת התנגשות בקירות החדרים
+         */
+        function updateKeyboardWalk(delta) {
+            if (!camera || !controls) return;
+
+            const moveSpeed = 6.5 * delta;
+            const forward = new THREE.Vector3();
+            camera.getWorldDirection(forward);
+            forward.y = 0;
+            if (forward.lengthSq() > 0.0001) forward.normalize();
+
+            const right = new THREE.Vector3().crossVectors(forward, camera.up).normalize();
+            const deltaMove = new THREE.Vector3();
+
+            if (keysPressed['w'] || keysPressed['arrowup']) deltaMove.add(forward);
+            if (keysPressed['s'] || keysPressed['arrowdown']) deltaMove.sub(forward);
+            if (keysPressed['d'] || keysPressed['arrowright']) deltaMove.add(right);
+            if (keysPressed['a'] || keysPressed['arrowleft']) deltaMove.sub(right);
+
+            if (deltaMove.lengthSq() === 0) return;
+            deltaMove.normalize().multiplyScalar(moveSpeed);
+
+            const nextPos = camera.position.clone().add(deltaMove);
+            const playerBox = new THREE.Box3(
+                new THREE.Vector3(nextPos.x - 0.35, 0.2, nextPos.z - 0.35),
+                new THREE.Vector3(nextPos.x + 0.35, 2.2, nextPos.z + 0.35)
+            );
+
+            const blocked = roomColliders.some(wallBox => wallBox.intersectsBox(playerBox));
+            if (!blocked) {
+                camera.position.add(deltaMove);
+                controls.target.add(deltaMove);
+            }
+        }
+    </script>
+
+<a id="club-back" href="../index.html#products-shelf" style="position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#fff;color:#1d2433;border:2px solid #cfe0f0;border-radius:999px;padding:8px 18px;font:600 15px/1.2 Arial,sans-serif;text-decoration:none;direction:rtl;box-shadow:0 3px 0 #cfe0f0">→ חזרה לאתר החוג</a>
+<script>if (window.top !== window) document.getElementById("club-back").remove();</script>
+</body>
+</html>
