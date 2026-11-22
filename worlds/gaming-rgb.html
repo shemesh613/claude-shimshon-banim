@@ -316,7 +316,7 @@
             controls.minDistance = 0.9;
             controls.maxDistance = 6.2;
             controls.maxPolarAngle = Math.PI / 2 - 0.03;
-            controls.minAzimuthAngle = -0.25; controls.maxAzimuthAngle = 1.65; controls.maxDistance = 6.0; // keep the camera inside the room
+            controls.maxDistance = 6.0;
             controls.target.copy(state.targetLookAt);
 
             controls.addEventListener('start', () => {
@@ -1626,6 +1626,10 @@
             }
 
             controls.update();
+            // keep the camera inside the room (outside the walls everything looks black)
+            camera.position.x = Math.min(3.3, Math.max(-3.3, camera.position.x));
+            camera.position.z = Math.min(4.0, Math.max(-2.3, camera.position.z));
+            camera.position.y = Math.min(3.4, Math.max(0.3, camera.position.y));
             renderer.render(scene, camera);
         }
 
