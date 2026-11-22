@@ -1,0 +1,1155 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ממלכת האופל - עולם תלת-ממדי אינטראקטיבי</title>
+    <!-- Tailwind CSS לעיצוב ממשק המשתמש -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- גופן עברי מרשים -->
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <!-- Three.js ו-OrbitControls מ-CDN אמין -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #050203;
+            font-family: 'Rubik', sans-serif;
+        }
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1;
+        }
+        /* עיצוב גותי-עתידני לפאנל השליטה */
+        .gothic-glass {
+            background: rgba(12, 6, 10, 0.72);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(220, 38, 38, 0.35);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.85), inset 0 0 15px rgba(220, 38, 38, 0.12);
+        }
+        .gothic-btn {
+            background: linear-gradient(145deg, rgba(35, 12, 18, 0.9), rgba(15, 5, 8, 0.95));
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+        .gothic-btn:hover {
+            border-color: #f87171;
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0.5);
+            transform: translateY(-1px);
+        }
+        .gothic-btn:active {
+            transform: translateY(1px);
+        }
+        .gothic-btn.active {
+            background: linear-gradient(145deg, rgba(153, 27, 27, 0.85), rgba(88, 28, 135, 0.85));
+            border-color: #fca5a5;
+            box-shadow: 0 0 18px rgba(220, 38, 38, 0.7);
+        }
+        /* אפקט הבזק מסך בעת ברק */
+        #lightning-flash {
+            position: fixed;
+            inset: 0;
+            background: radial-gradient(circle, rgba(255,240,245,0.6) 0%, rgba(168,85,247,0.2) 60%, transparent 100%);
+            pointer-events: none;
+            opacity: 0;
+            z-index: 5;
+            transition: opacity 0.08s ease-out;
+        }
+        /* התאמה למסכים קטנים */
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(220, 38, 38, 0.5);
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="text-gray-100">
+
+    <!-- מיכל הקנבס התלת-ממדי -->
+    <div id="canvas-container"></div>
+
+    <!-- שכבת הבזק ברק -->
+    <div id="lightning-flash"></div>
+
+    <!-- כותרת עליונה מינימליסטית -->
+    <header class="fixed top-4 right-4 z-10 pointer-events-none flex flex-col items-start">
+        <div class="gothic-glass px-5 py-3 rounded-2xl pointer-events-auto flex items-center gap-3">
+            <div class="w-3 h-3 rounded-full bg-red-600 animate-ping"></div>
+            <div>
+                <h1 class="text-lg md:text-2xl font-extrabold tracking-wider text-transparent bg-clip-text bg-gradient-to-l from-red-500 via-rose-300 to-purple-400">
+                    ממלכת האופל הנצחית
+                </h1>
+                <p class="text-xs text-gray-400 hidden sm:block">גרור לסיבוב • גלגל לזום • לחץ ימני להזזה</p>
+            </div>
+        </div>
+    </header>
+
+    <!-- כפתור סאונד עליון משמאל -->
+    <div class="fixed top-4 left-4 z-10 flex gap-2">
+        <button id="btn-audio" class="gothic-glass gothic-btn px-4 py-3 rounded-2xl flex items-center gap-2 text-sm font-semibold text-red-200 cursor-pointer" title="הפעל / השתק סאונד אפל">
+            <span id="audio-icon">🔇</span>
+            <span id="audio-text" class="hidden sm:inline">הפעל שמע</span>
+        </button>
+        <button id="btn-toggle-ui" class="gothic-glass gothic-btn px-3 py-3 rounded-2xl text-sm font-semibold text-gray-300 cursor-pointer" title="הסתר/הצג ממשק">
+            👁️
+        </button>
+    </div>
+
+    <!-- הודעת סטטוס צפה -->
+    <div id="status-toast" class="fixed top-20 left-1/2 transform -translate-x-1/2 z-20 gothic-glass px-6 py-2 rounded-full text-sm font-semibold text-red-300 opacity-0 transition-opacity duration-300 pointer-events-none">
+        זימון סערת ברקים!
+    </div>
+
+    <!-- פאנל שליטה תחתון צף -->
+    <aside id="control-panel" class="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-10 w-[95%] max-w-4xl gothic-glass rounded-3xl p-3 md:p-4 transition-all duration-300">
+        <div class="flex flex-col gap-3">
+            
+            <!-- שורה עליונה: פעולות אפלות ומצבי אווירה -->
+            <div class="flex flex-wrap items-center justify-center gap-2">
+                <button id="btn-lightning" class="gothic-btn px-3.5 py-2 rounded-xl text-xs md:text-sm font-semibold flex items-center gap-1.5 text-purple-200 cursor-pointer">
+                    <span>⚡</span> זימון ברק
+                </button>
+                <button id="btn-eruption" class="gothic-btn px-3.5 py-2 rounded-xl text-xs md:text-sm font-semibold flex items-center gap-1.5 text-orange-200 cursor-pointer">
+                    <span>🌋</span> התפרצות לבה
+                </button>
+                <button id="btn-orbit" class="gothic-btn active px-3.5 py-2 rounded-xl text-xs md:text-sm font-semibold flex items-center gap-1.5 text-red-200 cursor-pointer">
+                    <span>🔄</span> סיור אוטומטי
+                </button>
+
+                <div class="h-6 w-px bg-red-900/50 mx-1 hidden md:block"></div>
+
+                <!-- בורר אווירה -->
+                <div class="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-red-900/40">
+                    <button data-mood="hellfire" class="mood-btn gothic-btn active px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-200 cursor-pointer">
+                        🔥 גיהנום
+                    </button>
+                    <button data-mood="eclipse" class="mood-btn gothic-btn px-2.5 py-1.5 rounded-lg text-xs font-medium text-purple-200 cursor-pointer">
+                        🌑 ליקוי ירח
+                    </button>
+                    <button data-mood="abyss" class="mood-btn gothic-btn px-2.5 py-1.5 rounded-lg text-xs font-medium text-gray-300 cursor-pointer">
+                        💀 תהום
+                    </button>
+                </div>
+            </div>
+
+            <!-- שורה תחתונה: נקודות מבט קולנועיות -->
+            <div class="flex flex-wrap items-center justify-center gap-2 pt-1 border-t border-red-950/60">
+                <span class="text-xs text-gray-400 ml-1">נקודת מבט:</span>
+                <button data-cam="overview" class="cam-btn gothic-btn active px-3 py-1.5 rounded-xl text-xs font-medium cursor-pointer">
+                    🏰 מבט על
+                </button>
+                <button data-cam="gate" class="cam-btn gothic-btn px-3 py-1.5 rounded-xl text-xs font-medium cursor-pointer">
+                    ⛩️ שער המבצר
+                </button>
+                <button data-cam="lava" class="cam-btn gothic-btn px-3 py-1.5 rounded-xl text-xs font-medium cursor-pointer">
+                    🌊 נהר הלבה
+                </button>
+                <button data-cam="crystal" class="cam-btn gothic-btn px-3 py-1.5 rounded-xl text-xs font-medium cursor-pointer">
+                    💎 הקריסטל האפל
+                </button>
+            </div>
+
+        </div>
+    </aside>
+
+    <script>
+        /**
+         * ממלכת האופל - מנוע תלת-ממד אינטראקטיבי מבוסס Three.js
+         * כולל יצירה פרוצדורלית של שטח וולקני, מבצר גותי, לבה זורמת, חלקיקים, ברקים וסאונד.
+         */
+
+        // --- משתנים גלובליים ---
+        let scene, camera, renderer, controls;
+        let clock = new THREE.Clock();
+        
+        // אלמנטים מרכזיים באנימציה
+        let crystalGroup, crystalCore, crystalRings = [];
+        let lavaMesh, lavaMaterial;
+        let embersSystem, emberVelocities;
+        let monolithRunes = [];
+        let braziers = [];
+        
+        // תאורה ואווירה
+        let ambientLight, dirLight, crystalLight, lightningLight;
+        let lightningTimer = 0;
+        let nextLightningTime = 4;
+        let lightningBolts = [];
+
+        // מצבי מערכת
+        let isAutoOrbit = true;
+        let eruptionIntensity = 0;
+        let cameraShake = 0;
+        let currentMood = 'hellfire';
+        let uiVisible = true;
+
+        // אנימציית מעבר מצלמה חלקה
+        let targetCamPos = null;
+        let targetLookAt = null;
+        let isTransitioningCam = false;
+
+        // מערכת סאונד פרוצדורלי (Web Audio API)
+        let audioCtx = null;
+        let isAudioEnabled = false;
+        let windGain = null;
+
+        // הגדרות מצבי אווירה
+        const MOODS = {
+            hellfire: {
+                bg: 0x120305,
+                fogColor: 0x1a0406,
+                fogDensity: 0.011,
+                ambientColor: 0x3b0d11,
+                dirColor: 0xff3b1f,
+                crystalColor: 0xff1e00,
+                lavaColor1: new THREE.Color(0x3a0500),
+                lavaColor2: new THREE.Color(0xff4500),
+                lavaColor3: new THREE.Color(0xffd700)
+            },
+            eclipse: {
+                bg: 0x090314,
+                fogColor: 0x110524,
+                fogDensity: 0.012,
+                ambientColor: 0x220c3b,
+                dirColor: 0x9333ea,
+                crystalColor: 0xc084fc,
+                lavaColor1: new THREE.Color(0x1e0536),
+                lavaColor2: new THREE.Color(0x9333ea),
+                lavaColor3: new THREE.Color(0xf472b6)
+            },
+            abyss: {
+                bg: 0x020203,
+                fogColor: 0x050508,
+                fogDensity: 0.016,
+                ambientColor: 0x0f111a,
+                dirColor: 0x475569,
+                crystalColor: 0xdc2626,
+                lavaColor1: new THREE.Color(0x1a0202),
+                lavaColor2: new THREE.Color(0x991b1b),
+                lavaColor3: new THREE.Color(0xef4444)
+            }
+        };
+
+        // נקודות מבט מוגדרות מראש
+        const CAMERA_PRESETS = {
+            overview: { pos: new THREE.Vector3(0, 38, 72), target: new THREE.Vector3(0, 12, 0) },
+            gate: { pos: new THREE.Vector3(0, 9, 34), target: new THREE.Vector3(0, 14, 0) },
+            lava: { pos: new THREE.Vector3(38, 6, 26), target: new THREE.Vector3(0, 8, -5) },
+            crystal: { pos: new THREE.Vector3(14, 34, 16), target: new THREE.Vector3(0, 29, 0) }
+        };
+
+        // --- אתחול ראשי ---
+        window.onload = function() {
+            initScene();
+            buildTerrainAndLava();
+            buildDarkCitadel();
+            buildFloatingCrystal();
+            buildMonolithsAndBraziers();
+            buildEmberParticles();
+            buildSkyElements();
+            setupEventListeners();
+            animate();
+        };
+
+        /**
+         * יצירת הסצנה, המצלמה, הרנדרר והתאורה הבסיסית
+         */
+        function initScene() {
+            const container = document.getElementById('canvas-container');
+            
+            scene = new THREE.Scene();
+            const mood = MOODS[currentMood];
+            scene.background = new THREE.Color(mood.bg);
+            scene.fog = new THREE.FogExp2(mood.fogColor, mood.fogDensity);
+
+            camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 400);
+            camera.position.copy(CAMERA_PRESETS.overview.pos);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.15;
+            container.appendChild(renderer.domElement);
+
+            // בקרת מצלמה
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.maxPolarAngle = Math.PI / 2 - 0.03; // מניעת ירידה מתחת לאדמה
+            controls.minDistance = 12;
+            controls.maxDistance = 135;
+            controls.target.copy(CAMERA_PRESETS.overview.target);
+            controls.autoRotate = isAutoOrbit;
+            controls.autoRotateSpeed = 0.65;
+
+            // הפסקת סיור אוטומטי או מעבר מצלמה אם המשתמש גורר ידנית
+            controls.addEventListener('start', () => {
+                isTransitioningCam = false;
+            });
+
+            // תאורת סביבה
+            ambientLight = new THREE.AmbientLight(mood.ambientColor, 1.4);
+            scene.add(ambientLight);
+
+            // תאורה כיוונית דרמטית (ירח דם / שמש אפלה)
+            dirLight = new THREE.DirectionalLight(mood.dirColor, 2.2);
+            dirLight.position.set(-40, 65, -50);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 2048;
+            dirLight.shadow.mapSize.height = 2048;
+            dirLight.shadow.camera.near = 10;
+            dirLight.shadow.camera.far = 180;
+            const d = 55;
+            dirLight.shadow.camera.left = -d;
+            dirLight.shadow.camera.right = d;
+            dirLight.shadow.camera.top = d;
+            dirLight.shadow.camera.bottom = -d;
+            scene.add(dirLight);
+
+            // אור פנימי מתוך נהרות הלבה כלפי מעלה
+            const lavaUnderGlow = new THREE.PointLight(0xff3300, 2.5, 90);
+            lavaUnderGlow.position.set(0, 2, 0);
+            scene.add(lavaUnderGlow);
+
+            // תאורת הבזק לברקים
+            lightningLight = new THREE.PointLight(0xd8b4fe, 0, 250);
+            lightningLight.position.set(0, 75, 0);
+            scene.add(lightningLight);
+        }
+
+        /**
+         * בניית השטח ההררי המשונן (Volcanic Terrain) ונהרות הלבה הזורמים
+         */
+        function buildTerrainAndLava() {
+            // 1. משטח הלבה הדינמי (Custom Shader לתנועת לבה מבעבעת)
+            const lavaGeo = new THREE.PlaneGeometry(320, 320, 64, 64);
+            lavaGeo.rotateX(-Math.PI / 2);
+
+            lavaMaterial = new THREE.ShaderMaterial({
+                uniforms: {
+                    uTime: { value: 0 },
+                    uEruption: { value: 0 },
+                    uColorDark: { value: MOODS.hellfire.lavaColor1 },
+                    uColorMid: { value: MOODS.hellfire.lavaColor2 },
+                    uColorHot: { value: MOODS.hellfire.lavaColor3 }
+                },
+                vertexShader: `
+                    varying vec2 vUv;
+                    varying vec3 vWorldPos;
+                    uniform float uTime;
+                    uniform float uEruption;
+                    void main() {
+                        vUv = uv * 18.0;
+                        vec3 pos = position;
+                        // גלים עדינים בלבה
+                        float wave = sin(pos.x * 0.2 + uTime * 1.5) * cos(pos.z * 0.2 + uTime * 1.2) * (0.25 + uEruption * 0.6);
+                        pos.y += wave;
+                        vec4 worldPosition = modelMatrix * vec4(pos, 1.0);
+                        vWorldPos = worldPosition.xyz;
+                        gl_Position = projectionMatrix * viewMatrix * worldPosition;
+                    }
+                `,
+                fragmentShader: `
+                    varying vec2 vUv;
+                    varying vec3 vWorldPos;
+                    uniform float uTime;
+                    uniform float uEruption;
+                    uniform vec3 uColorDark;
+                    uniform vec3 uColorMid;
+                    uniform vec3 uColorHot;
+
+                    // פונקציית רעש פשוטה ליצירת מרקם מגמה
+                    float hash(vec2 p) {
+                        return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+                    }
+                    float noise(vec2 p) {
+                        vec2 i = floor(p);
+                        vec2 f = fract(p);
+                        vec2 u = f * f * (3.0 - 2.0 * f);
+                        return mix(
+                            mix(hash(i + vec2(0.0, 0.0)), hash(i + vec2(1.0, 0.0)), u.x),
+                            mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x),
+                            u.y
+                        );
+                    }
+
+                    void main() {
+                        vec2 uv = vUv;
+                        float t = uTime * (0.35 + uEruption * 0.5);
+                        float n1 = noise(uv + vec2(t, t * 0.5));
+                        float n2 = noise(uv * 2.2 - vec2(t * 0.7, -t * 0.4));
+                        float magma = (n1 * 0.6 + n2 * 0.4) + uEruption * 0.25;
+
+                        vec3 col = mix(uColorDark, uColorMid, smoothstep(0.25, 0.6, magma));
+                        col = mix(col, uColorHot, smoothstep(0.62, 0.92, magma));
+
+                        // דעיכה בקצוות הרחוקים לתוך הערפל
+                        float dist = length(vWorldPos.xz);
+                        float edgeFade = 1.0 - smoothstep(90.0, 150.0, dist);
+                        
+                        gl_FragColor = vec4(col * (1.2 + uEruption * 0.8), edgeFade);
+                    }
+                `,
+                transparent: true
+            });
+
+            lavaMesh = new THREE.Mesh(lavaGeo, lavaMaterial);
+            lavaMesh.position.y = 0.2;
+            scene.add(lavaMesh);
+
+            // 2. שטח סלעי וולקני משונן סביב המבצר ובהיקף
+            const terrainGeo = new THREE.PlaneGeometry(300, 300, 140, 140);
+            terrainGeo.rotateX(-Math.PI / 2);
+
+            const posAttr = terrainGeo.attributes.position;
+            for (let i = 0; i < posAttr.count; i++) {
+                const x = posAttr.getX(i);
+                const z = posAttr.getZ(i);
+                const dist = Math.sqrt(x * x + z * z);
+
+                // יצירת אי מרכזי למבצר + תעלת לבה עגולה סביבו + הרים חדים בהיקף
+                let height = 0;
+
+                if (dist < 22) {
+                    // הרמה המרכזית של המבצר
+                    height = 2.5 + Math.cos(dist * 0.12) * 1.2;
+                } else if (dist >= 22 && dist < 32) {
+                    // תעלת הלבה המקיפה את המבצר (מתחת לפני הלבה)
+                    height = -1.8;
+                } else {
+                    // שטח הררי משונן ונהרות לבה מתפתלים
+                    const riverAngle = Math.atan2(z, x);
+                    const riverCurve = Math.sin(riverAngle * 3.0 + dist * 0.08);
+                    
+                    if (Math.abs(riverCurve) < 0.22 && dist < 95) {
+                        // נהרות לבה יוצאים החוצה
+                        height = -1.5;
+                    } else {
+                        // פסגות משוננות
+                        const mountainFactor = Math.min((dist - 30) / 45, 2.5);
+                        const jagged = Math.abs(Math.sin(x * 0.14) * Math.cos(z * 0.14)) * 14 * mountainFactor;
+                        const detail = Math.sin(x * 0.45 + z * 0.35) * 2.2;
+                        height = 1.2 + jagged + detail;
+                    }
+                }
+
+                // גשר יבשתי צר מדרום (כיוון הצופה) לעבר שער המבצר
+                if (z > 18 && z < 35 && Math.abs(x) < 3.8) {
+                    height = 2.2;
+                }
+
+                posAttr.setY(i, height);
+            }
+
+            terrainGeo.computeVertexNormals();
+
+            const rockMaterial = new THREE.MeshStandardMaterial({
+                color: 0x161214,
+                roughness: 0.88,
+                metalness: 0.25,
+                flatShading: true
+            });
+
+            const terrainMesh = new THREE.Mesh(terrainGeo, rockMaterial);
+            terrainMesh.receiveShadow = true;
+            terrainMesh.castShadow = true;
+            scene.add(terrainMesh);
+        }
+
+        /**
+         * בניית מבצר האופל הגותי במרכז
+         */
+        function buildDarkCitadel() {
+            const citadel = new THREE.Group();
+            citadel.position.y = 2.5;
+
+            const darkObsidian = new THREE.MeshStandardMaterial({
+                color: 0x0d0a0c,
+                roughness: 0.5,
+                metalness: 0.65,
+                flatShading: true
+            });
+
+            const crimsonTrim = new THREE.MeshStandardMaterial({
+                color: 0x450a0a,
+                emissive: 0x7f1d1d,
+                emissiveIntensity: 0.6,
+                roughness: 0.4
+            });
+
+            // בסיס המבצר המדורג
+            const base1 = new THREE.Mesh(new THREE.CylinderGeometry(13, 15.5, 4, 8), darkObsidian);
+            base1.position.y = 2;
+            base1.castShadow = true;
+            base1.receiveShadow = true;
+            citadel.add(base1);
+
+            const base2 = new THREE.Mesh(new THREE.CylinderGeometry(9.5, 12, 5, 8), darkObsidian);
+            base2.position.y = 6.5;
+            base2.castShadow = true;
+            citadel.add(base2);
+
+            // המגדל המרכזי האדיר (Spire)
+            const mainTower = new THREE.Mesh(new THREE.CylinderGeometry(4.2, 7.2, 16, 8), darkObsidian);
+            mainTower.position.y = 15;
+            mainTower.castShadow = true;
+            citadel.add(mainTower);
+
+            // קוצים גותיים חדים בראש המגדל המרכזי (כתר אופל)
+            for (let i = 0; i < 8; i++) {
+                const angle = (i / 8) * Math.PI * 2;
+                const spike = new THREE.Mesh(new THREE.ConeGeometry(0.9, 6.5, 4), darkObsidian);
+                spike.position.set(Math.cos(angle) * 4.2, 24.5, Math.sin(angle) * 4.2);
+                spike.rotation.z = -Math.cos(angle) * 0.25;
+                spike.rotation.x = Math.sin(angle) * 0.25;
+                spike.castShadow = true;
+                citadel.add(spike);
+            }
+
+            // 4 צריחי משנה חדים מסביב למבצר
+            const turretAngles = [Math.PI * 0.25, Math.PI * 0.75, Math.PI * 1.25, Math.PI * 1.75];
+            turretAngles.forEach(angle => {
+                const radius = 11.5;
+                const tx = Math.cos(angle) * radius;
+                const tz = Math.sin(angle) * radius;
+
+                const turretGroup = new THREE.Group();
+                turretGroup.position.set(tx, 0, tz);
+
+                const body = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 2.6, 14, 6), darkObsidian);
+                body.position.y = 7;
+                body.castShadow = true;
+                turretGroup.add(body);
+
+                const roof = new THREE.Mesh(new THREE.ConeGeometry(2.3, 7.5, 6), darkObsidian);
+                roof.position.y = 17.5;
+                roof.castShadow = true;
+                turretGroup.add(roof);
+
+                // חלון זוהר בכל צריח
+                const windowGlow = new THREE.Mesh(new THREE.BoxGeometry(0.5, 2.5, 0.5), crimsonTrim);
+                windowGlow.position.set(Math.cos(angle) * 1.9, 10, Math.sin(angle) * 1.9);
+                turretGroup.add(windowGlow);
+
+                // גשר תומך (Flying Buttress) המחבר למגדל המרכזי
+                const bridge = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.2, 7.5), darkObsidian);
+                bridge.position.set(-Math.cos(angle) * 3.5, 11, -Math.sin(angle) * 3.5);
+                bridge.rotation.y = -angle + Math.PI / 2;
+                bridge.rotation.x = 0.25;
+                turretGroup.add(bridge);
+
+                citadel.add(turretGroup);
+            });
+
+            // שער הכניסה המאיים בחזית המבצר (פונה ל-Z חיובי)
+            const gateGroup = new THREE.Group();
+            gateGroup.position.set(0, 0, 13.5);
+
+            const leftPillar = new THREE.Mesh(new THREE.BoxGeometry(2.2, 9, 2.8), darkObsidian);
+            leftPillar.position.set(-2.8, 4.5, 0);
+            gateGroup.add(leftPillar);
+
+            const rightPillar = new THREE.Mesh(new THREE.BoxGeometry(2.2, 9, 2.8), darkObsidian);
+            rightPillar.position.set(2.8, 4.5, 0);
+            gateGroup.add(rightPillar);
+
+            const archTop = new THREE.Mesh(new THREE.ConeGeometry(4.5, 4.5, 4), darkObsidian);
+            archTop.position.set(0, 10.5, 0);
+            archTop.rotation.y = Math.PI / 4;
+            gateGroup.add(archTop);
+
+            // פורטל אנרגיה זוהר בתוך השער
+            const portal = new THREE.Mesh(
+                new THREE.PlaneGeometry(3.6, 7.5),
+                new THREE.MeshBasicMaterial({ color: 0xdc2626, side: THREE.DoubleSide })
+            );
+            portal.position.set(0, 3.8, -0.2);
+            gateGroup.add(portal);
+
+            citadel.add(gateGroup);
+            scene.add(citadel);
+        }
+
+        /**
+         * בניית הקריסטל האפל המרחף מעל המבצר עם טבעות אנרגיה מסתובבות
+         */
+        function buildFloatingCrystal() {
+            crystalGroup = new THREE.Group();
+            crystalGroup.position.set(0, 31, 0);
+
+            // ליבת הקריסטל (אוקטהדרון מוארך)
+            const coreGeo = new THREE.OctahedronGeometry(2.6, 0);
+            coreGeo.scale(0.85, 1.8, 0.85);
+            const coreMat = new THREE.MeshStandardMaterial({
+                color: 0xff1e00,
+                emissive: 0xdc2626,
+                emissiveIntensity: 1.8,
+                roughness: 0.15,
+                metalness: 0.8,
+                flatShading: true
+            });
+            crystalCore = new THREE.Mesh(coreGeo, coreMat);
+            crystalGroup.add(crystalCore);
+
+            // טבעות רונות/אנרגיה המקיפות את הקריסטל
+            const ringMat = new THREE.MeshBasicMaterial({
+                color: 0xf87171,
+                wireframe: true
+            });
+
+            for (let i = 0; i < 2; i++) {
+                const ringGeo = new THREE.TorusGeometry(4.2 + i * 1.3, 0.08, 8, 32);
+                const ring = new THREE.Mesh(ringGeo, ringMat);
+                ring.rotation.x = Math.PI / 3 + i * 0.5;
+                ring.rotation.y = i * 0.8;
+                crystalGroup.add(ring);
+                crystalRings.push(ring);
+            }
+
+            // אור נקודתי חזק הבוקע מהקריסטל
+            crystalLight = new THREE.PointLight(0xff1e00, 4.5, 65);
+            crystalGroup.add(crystalLight);
+
+            scene.add(crystalGroup);
+        }
+
+        /**
+         * בניית מונוליטים עתיקים עם רונות זוהרות ועמודי אש לאורך הגשר וההיקף
+         */
+        function buildMonolithsAndBraziers() {
+            const stoneMat = new THREE.MeshStandardMaterial({
+                color: 0x110e10,
+                roughness: 0.85,
+                flatShading: true
+            });
+
+            const runeMat = new THREE.MeshBasicMaterial({
+                color: 0xef4444
+            });
+
+            // 1. עמודי אש לאורך הגשר המוביל לשער
+            const bridgeZ = [20, 26, 32];
+            bridgeZ.forEach(zPos => {
+                [-3.2, 3.2].forEach(xPos => {
+                    const brazierGroup = new THREE.Group();
+                    brazierGroup.position.set(xPos, 2.2, zPos);
+
+                    const stand = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.8, 3.2, 6), stoneMat);
+                    stand.position.y = 1.6;
+                    stand.castShadow = true;
+                    brazierGroup.add(stand);
+
+                    // להבה מסוגננת
+                    const flameGeo = new THREE.OctahedronGeometry(0.65, 0);
+                    flameGeo.scale(0.8, 1.6, 0.8);
+                    const flameMat = new THREE.MeshBasicMaterial({ color: 0xff6b00 });
+                    const flame = new THREE.Mesh(flameGeo, flameMat);
+                    flame.position.y = 3.7;
+                    brazierGroup.add(flame);
+
+                    // אור קטן לכל לפיד
+                    const torchLight = new THREE.PointLight(0xff5500, 1.5, 14);
+                    torchLight.position.y = 4.2;
+                    brazierGroup.add(torchLight);
+
+                    braziers.push({ flame, light: torchLight, baseY: 3.7, phase: Math.random() * 10 });
+                    scene.add(brazierGroup);
+                });
+            });
+
+            // 2. מונוליטים ענקיים עם רונות זוהרות במעגל החיצוני
+            const monolithCount = 10;
+            for (let i = 0; i < monolithCount; i++) {
+                const angle = (i / monolithCount) * Math.PI * 2 + 0.3;
+                // דילוג על אזור הגשר הדרומי
+                if (Math.abs(angle - Math.PI / 2) < 0.35) continue;
+
+                const radius = 38 + (i % 3) * 6;
+                const mx = Math.cos(angle) * radius;
+                const mz = Math.sin(angle) * radius;
+
+                const monoGroup = new THREE.Group();
+                monoGroup.position.set(mx, 1.5, mz);
+                monoGroup.lookAt(0, 5, 0);
+                // הטיה קלה למראה עתיק ומאיים
+                monoGroup.rotation.z = (Math.random() - 0.5) * 0.2;
+
+                const height = 9 + Math.random() * 6;
+                const slab = new THREE.Mesh(new THREE.BoxGeometry(2.4, height, 1.2), stoneMat);
+                slab.position.y = height / 2;
+                slab.castShadow = true;
+                monoGroup.add(slab);
+
+                // רונה אנכית זוהרת הפונה לכיוון המבצר
+                const rune = new THREE.Mesh(new THREE.PlaneGeometry(0.35, height * 0.65), runeMat);
+                rune.position.set(0, height * 0.52, 0.62);
+                monoGroup.add(rune);
+                monolithRunes.push(rune);
+
+                scene.add(monoGroup);
+            }
+        }
+
+        /**
+         * יצירת מערכת חלקיקים של גחלים, אפר וניצוצות אש המרחפים באוויר
+         */
+        function buildEmberParticles() {
+            const count = 900;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(count * 3);
+            const colors = new Float32Array(count * 3);
+            emberVelocities = [];
+
+            const colorHot = new THREE.Color(0xffaa00);
+            const colorRed = new THREE.Color(0xdc2626);
+
+            for (let i = 0; i < count; i++) {
+                positions[i * 3] = (Math.random() - 0.5) * 140;
+                positions[i * 3 + 1] = Math.random() * 55;
+                positions[i * 3 + 2] = (Math.random() - 0.5) * 140;
+
+                const mixedColor = colorHot.clone().lerp(colorRed, Math.random());
+                colors[i * 3] = mixedColor.r;
+                colors[i * 3 + 1] = mixedColor.g;
+                colors[i * 3 + 2] = mixedColor.b;
+
+                emberVelocities.push({
+                    y: 0.04 + Math.random() * 0.09,
+                    x: (Math.random() - 0.5) * 0.04,
+                    z: (Math.random() - 0.5) * 0.04,
+                    phase: Math.random() * Math.PI * 2
+                });
+            }
+
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+            const material = new THREE.PointsMaterial({
+                size: 0.55,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.85,
+                blending: THREE.AdditiveBlending
+            });
+
+            embersSystem = new THREE.Points(geometry, material);
+            scene.add(embersSystem);
+        }
+
+        /**
+         * הוספת ירח דם ענק בשמיים האפלים
+         */
+        function buildSkyElements() {
+            const moonGeo = new THREE.SphereGeometry(14, 32, 32);
+            const moonMat = new THREE.MeshBasicMaterial({
+                color: 0x991b1b,
+                fog: false
+            });
+            const bloodMoon = new THREE.Mesh(moonGeo, moonMat);
+            bloodMoon.position.set(-65, 85, -110);
+            scene.add(bloodMoon);
+
+            // הילה מסביב לירח
+            const haloGeo = new THREE.RingGeometry(14.5, 22, 32);
+            const haloMat = new THREE.MeshBasicMaterial({
+                color: 0x7f1d1d,
+                transparent: true,
+                opacity: 0.25,
+                side: THREE.DoubleSide,
+                fog: false
+            });
+            const halo = new THREE.Mesh(haloGeo, haloMat);
+            halo.position.copy(bloodMoon.position);
+            halo.lookAt(camera.position);
+            scene.add(halo);
+        }
+
+        /**
+         * זימון ברק תלת-ממדי בשמיים עם הבזק תאורה ורעם
+         */
+        function triggerLightning() {
+            // הבזק אור בסצנה וב-DOM
+            lightningLight.intensity = 12;
+            lightningLight.position.set((Math.random() - 0.5) * 60, 70, (Math.random() - 0.5) * 60);
+
+            const flashEl = document.getElementById('lightning-flash');
+            flashEl.style.opacity = '0.85';
+            setTimeout(() => { flashEl.style.opacity = '0'; }, 90);
+            setTimeout(() => { 
+                flashEl.style.opacity = '0.45'; 
+                lightningLight.intensity = 7;
+            }, 160);
+            setTimeout(() => { 
+                flashEl.style.opacity = '0'; 
+                lightningLight.intensity = 0;
+            }, 260);
+
+            // יצירת קו ברק זיגזג תלת-ממדי
+            const points = [];
+            let startX = (Math.random() - 0.5) * 70;
+            let startZ = (Math.random() - 0.5) * 70;
+            let currY = 85;
+            points.push(new THREE.Vector3(startX, currY, startZ));
+
+            const segments = 12;
+            for (let i = 1; i <= segments; i++) {
+                currY -= 85 / segments;
+                startX += (Math.random() - 0.5) * 7;
+                startZ += (Math.random() - 0.5) * 7;
+                points.push(new THREE.Vector3(startX, Math.max(currY, 0), startZ));
+            }
+
+            const boltGeo = new THREE.BufferGeometry().setFromPoints(points);
+            const boltMat = new THREE.LineBasicMaterial({ color: 0xf3e8ff, linewidth: 2 });
+            const bolt = new THREE.Line(boltGeo, boltMat);
+            scene.add(bolt);
+            lightningBolts.push({ mesh: bolt, life: 0.25 });
+
+            // רעידה קלה ורעם
+            cameraShake = Math.max(cameraShake, 0.35);
+            playThunderSound();
+        }
+
+        /**
+         * הפעלת התפרצות לבה ורעידת אדמה
+         */
+        function triggerEruption() {
+            eruptionIntensity = 1.0;
+            cameraShake = 1.1;
+            triggerLightning();
+            showToast("התפרצות לבה ורעידת אדמה!");
+            playRumbleSound();
+        }
+
+        /**
+         * החלפת מצב אווירה
+         */
+        function setMood(moodKey) {
+            if (!MOODS[moodKey]) return;
+            currentMood = moodKey;
+            const m = MOODS[moodKey];
+
+            scene.background.setHex(m.bg);
+            scene.fog.color.setHex(m.fogColor);
+            scene.fog.density = m.fogDensity;
+
+            ambientLight.color.setHex(m.ambientColor);
+            dirLight.color.setHex(m.dirColor);
+            crystalLight.color.setHex(m.crystalColor);
+            crystalCore.material.color.setHex(m.crystalColor);
+            crystalCore.material.emissive.setHex(m.crystalColor);
+
+            lavaMaterial.uniforms.uColorDark.value.copy(m.lavaColor1);
+            lavaMaterial.uniforms.uColorMid.value.copy(m.lavaColor2);
+            lavaMaterial.uniforms.uColorHot.value.copy(m.lavaColor3);
+        }
+
+        /**
+         * מעבר חלק לנקודת מבט נבחרת
+         */
+        function moveToCameraPreset(presetKey) {
+            const preset = CAMERA_PRESETS[presetKey];
+            if (!preset) return;
+            targetCamPos = preset.pos.clone();
+            targetLookAt = preset.target.clone();
+            isTransitioningCam = true;
+        }
+
+        /**
+         * מערכת סאונד פרוצדורלית (ללא קבצים חיצוניים)
+         */
+        function toggleAudio() {
+            const icon = document.getElementById('audio-icon');
+            const text = document.getElementById('audio-text');
+
+            if (!isAudioEnabled) {
+                if (!audioCtx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    audioCtx = new AudioContext();
+                    startAmbientWind();
+                }
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+                if (windGain) windGain.gain.setTargetAtTime(0.14, audioCtx.currentTime, 0.5);
+                isAudioEnabled = true;
+                icon.textContent = '🔊';
+                text.textContent = 'שמע פעיל';
+                showToast("אודיו אפל הופעל");
+            } else {
+                if (windGain && audioCtx) {
+                    windGain.gain.setTargetAtTime(0.0001, audioCtx.currentTime, 0.3);
+                }
+                isAudioEnabled = false;
+                icon.textContent = '🔇';
+                text.textContent = 'הפעל שמע';
+            }
+        }
+
+        function startAmbientWind() {
+            // יצירת רעש חום (Brown Noise) מסונן המדמה רוח עמוקה בגיהנום
+            const bufferSize = 2 * audioCtx.sampleRate;
+            const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const output = noiseBuffer.getChannelData(0);
+            let lastOut = 0.0;
+            for (let i = 0; i < bufferSize; i++) {
+                const white = Math.random() * 2 - 1;
+                output[i] = (lastOut + (0.02 * white)) / 1.02;
+                lastOut = output[i];
+                output[i] *= 3.5;
+            }
+
+            const whiteNoise = audioCtx.createBufferSource();
+            whiteNoise.buffer = noiseBuffer;
+            whiteNoise.loop = true;
+
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 160;
+
+            windGain = audioCtx.createGain();
+            windGain.gain.value = 0.14;
+
+            whiteNoise.connect(filter);
+            filter.connect(windGain);
+            windGain.connect(audioCtx.destination);
+            whiteNoise.start(0);
+        }
+
+        function playThunderSound() {
+            if (!isAudioEnabled || !audioCtx) return;
+            const now = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(95, now);
+            osc.frequency.exponentialRampToValueAtTime(24, now + 1.4);
+
+            gain.gain.setValueAtTime(0.35, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 1.5);
+
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start(now);
+            osc.stop(now + 1.5);
+        }
+
+        function playRumbleSound() {
+            if (!isAudioEnabled || !audioCtx) return;
+            const now = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(55, now);
+            osc.frequency.linearRampToValueAtTime(30, now + 2.5);
+
+            gain.gain.setValueAtTime(0.45, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 2.6);
+
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start(now);
+            osc.stop(now + 2.6);
+        }
+
+        /**
+         * הצגת הודעה קצרה למשתמש
+         */
+        function showToast(msg) {
+            const toast = document.getElementById('status-toast');
+            toast.textContent = msg;
+            toast.style.opacity = '1';
+            clearTimeout(toast._timeout);
+            toast._timeout = setTimeout(() => {
+                toast.style.opacity = '0';
+            }, 2200);
+        }
+
+        /**
+         * הגדרת אירועי לחיצה ושינוי גודל מסך
+         */
+        function setupEventListeners() {
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+
+            // זימון ברק
+            document.getElementById('btn-lightning').addEventListener('click', () => {
+                triggerLightning();
+                showToast("⚡ ברק אפל הכה בממלכה!");
+            });
+
+            // התפרצות לבה
+            document.getElementById('btn-eruption').addEventListener('click', () => {
+                triggerEruption();
+            });
+
+            // סיור אוטומטי
+            const btnOrbit = document.getElementById('btn-orbit');
+            btnOrbit.addEventListener('click', () => {
+                isAutoOrbit = !isAutoOrbit;
+                controls.autoRotate = isAutoOrbit;
+                btnOrbit.classList.toggle('active', isAutoOrbit);
+                showToast(isAutoOrbit ? "סיור אוטומטי הופעל" : "סיור אוטומטי הושהה");
+            });
+
+            // כפתורי אווירה
+            document.querySelectorAll('.mood-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    setMood(btn.dataset.mood);
+                });
+            });
+
+            // כפתורי נקודות מבט
+            document.querySelectorAll('.cam-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.cam-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    moveToCameraPreset(btn.dataset.cam);
+                });
+            });
+
+            // סאונד
+            document.getElementById('btn-audio').addEventListener('click', toggleAudio);
+
+            // הסתרת/הצגת ממשק
+            document.getElementById('btn-toggle-ui').addEventListener('click', () => {
+                uiVisible = !uiVisible;
+                const panel = document.getElementById('control-panel');
+                panel.style.opacity = uiVisible ? '1' : '0';
+                panel.style.pointerEvents = uiVisible ? 'auto' : 'none';
+            });
+        }
+
+        /**
+         * לולאת האנימציה הראשית
+         */
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const delta = clock.getDelta();
+            const elapsed = clock.getElapsedTime();
+
+            // 1. עדכון שיידר הלבה
+            if (lavaMaterial) {
+                lavaMaterial.uniforms.uTime.value = elapsed;
+                lavaMaterial.uniforms.uEruption.value = eruptionIntensity;
+            }
+            if (eruptionIntensity > 0) {
+                eruptionIntensity = Math.max(0, eruptionIntensity - delta * 0.28);
+            }
+
+            // 2. אנימציית הקריסטל המרחף והטבעות
+            if (crystalGroup) {
+                crystalGroup.position.y = 31 + Math.sin(elapsed * 1.8) * 1.1;
+                crystalCore.rotation.y += delta * 0.9;
+                crystalRings[0].rotation.x += delta * 1.2;
+                crystalRings[0].rotation.y += delta * 0.7;
+                crystalRings[1].rotation.z -= delta * 1.0;
+                crystalRings[1].rotation.y -= delta * 0.8;
+
+                // פעימות אור בקריסטל
+                crystalLight.intensity = 4.2 + Math.sin(elapsed * 4) * 1.2 + eruptionIntensity * 4;
+            }
+
+            // 3. ריצוד לפידים ועמודי אש
+            braziers.forEach(b => {
+                const flicker = Math.sin(elapsed * 14 + b.phase) * 0.15 + Math.cos(elapsed * 23 + b.phase) * 0.1;
+                b.flame.scale.set(0.8 + flicker, 1.6 + flicker * 1.5, 0.8 + flicker);
+                b.flame.rotation.y += delta * 3;
+                b.light.intensity = 1.5 + flicker * 2.5;
+            });
+
+            // 4. פעימת זוהר ברונות המונוליטים
+            monolithRunes.forEach((rune, idx) => {
+                const pulse = 0.6 + Math.sin(elapsed * 2.5 + idx) * 0.4;
+                rune.material.color.setRGB(pulse, 0.08 * pulse, 0.15 * pulse);
+            });
+
+            // 5. תנועת חלקיקי הגחלים העולים למעלה
+            if (embersSystem) {
+                const positions = embersSystem.geometry.attributes.position.array;
+                for (let i = 0; i < emberVelocities.length; i++) {
+                    const v = emberVelocities[i];
+                    positions[i * 3 + 1] += v.y * (1 + eruptionIntensity * 2.5);
+                    positions[i * 3] += v.x + Math.sin(elapsed + v.phase) * 0.02;
+                    positions[i * 3 + 2] += v.z + Math.cos(elapsed + v.phase) * 0.02;
+
+                    // איפוס חלקיק שעלה גבוה מדי
+                    if (positions[i * 3 + 1] > 58) {
+                        positions[i * 3 + 1] = 0.5;
+                        positions[i * 3] = (Math.random() - 0.5) * 130;
+                        positions[i * 3 + 2] = (Math.random() - 0.5) * 130;
+                    }
+                }
+                embersSystem.geometry.attributes.position.needsUpdate = true;
+            }
+
+            // 6. ברקים אקראיים ודעיכת קווי ברק
+            lightningTimer += delta;
+            if (lightningTimer >= nextLightningTime) {
+                triggerLightning();
+                lightningTimer = 0;
+                nextLightningTime = 5 + Math.random() * 9;
+            }
+
+            for (let i = lightningBolts.length - 1; i >= 0; i--) {
+                lightningBolts[i].life -= delta;
+                if (lightningBolts[i].life <= 0) {
+                    scene.remove(lightningBolts[i].mesh);
+                    lightningBolts[i].mesh.geometry.dispose();
+                    lightningBolts.splice(i, 1);
+                }
+            }
+
+            // 7. מעבר מצלמה חלק לנקודות מבט
+            if (isTransitioningCam && targetCamPos && targetLookAt) {
+                camera.position.lerp(targetCamPos, delta * 3.2);
+                controls.target.lerp(targetLookAt, delta * 3.2);
+                if (camera.position.distanceTo(targetCamPos) < 0.5) {
+                    isTransitioningCam = false;
+                }
+            }
+
+            // 8. רעידת מצלמה בעת התפרצות או ברק
+            if (cameraShake > 0) {
+                camera.position.x += (Math.random() - 0.5) * cameraShake;
+                camera.position.y += (Math.random() - 0.5) * cameraShake;
+                camera.position.z += (Math.random() - 0.5) * cameraShake;
+                cameraShake = Math.max(0, cameraShake - delta * 1.6);
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+    </script>
+
+<a id="club-back" href="../index.html#products-shelf" style="position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#fff;color:#1d2433;border:2px solid #cfe0f0;border-radius:999px;padding:8px 18px;font:600 15px/1.2 Arial,sans-serif;text-decoration:none;direction:rtl;box-shadow:0 3px 0 #cfe0f0">→ חזרה לאתר החוג</a>
+<script>if (window.top !== window) document.getElementById("club-back").remove();</script>
+</body>
+</html>

@@ -1,0 +1,1783 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>תיכון הראל - עולם תלת ממדי אינטראקטיבי</title>
+    <!-- Tailwind CSS for modern responsive HUD styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Heebo & Assistant for clean modern Hebrew typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;600;700;800&family=Heebo:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+    <!-- Three.js r128 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Font Awesome for crisp UI icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Heebo', 'Assistant', sans-serif;
+            background-color: #0f172a;
+        }
+        #canvas-container {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            cursor: grab;
+        }
+        #canvas-container:active {
+            cursor: grabbing;
+        }
+        /* Glassmorphism HUD styling */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.72);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.45);
+        }
+        .glass-btn {
+            background: rgba(30, 41, 59, 0.75);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .glass-btn:hover {
+            background: rgba(59, 130, 246, 0.35);
+            border-color: rgba(96, 165, 250, 0.6);
+            transform: translateY(-2px);
+        }
+        .glass-btn.active {
+            background: linear-gradient(135deg, #2563eb, #0284c7);
+            border-color: #7dd3fc;
+            box-shadow: 0 0 16px rgba(37, 99, 235, 0.55);
+        }
+
+        /* Floating 3D Hotspot Labels */
+        .hotspot-marker {
+            position: absolute;
+            z-index: 10;
+            transform: translate(-50%, -100%);
+            pointer-events: auto;
+            cursor: pointer;
+            transition: transform 0.2s ease, opacity 0.25s ease;
+        }
+        .hotspot-marker:hover {
+            transform: translate(-50%, -108%) scale(1.08);
+            z-index: 20;
+        }
+        .hotspot-pulse {
+            animation: pulseRing 2.2s infinite;
+        }
+        @keyframes pulseRing {
+            0% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.7); }
+            70% { box-shadow: 0 0 0 12px rgba(56, 189, 248, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0); }
+        }
+
+        /* Custom scrollbar for horizontal tour menu on mobile */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        /* Touch Joystick for Walk Mode */
+        #joystick-zone {
+            position: fixed;
+            bottom: 105px;
+            right: 24px;
+            width: 110px;
+            height: 110px;
+            border-radius: 9999px;
+            background: rgba(15, 23, 42, 0.55);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            z-index: 25;
+            touch-action: none;
+        }
+        #joystick-knob {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 44px;
+            height: 44px;
+            margin-top: -22px;
+            margin-left: -22px;
+            border-radius: 9999px;
+            background: linear-gradient(135deg, #38bdf8, #2563eb);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+            pointer-events: none;
+        }
+
+        /* Loading Screen Fade */
+        #loader-overlay {
+            transition: opacity 0.7s ease, visibility 0.7s ease;
+        }
+    </style>
+</head>
+<body class="text-slate-100">
+
+    <!-- Loading Overlay -->
+    <div id="loader-overlay" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-950 text-white p-6 text-center">
+        <div class="w-16 h-16 border-4 border-sky-400 border-t-transparent rounded-full animate-spin mb-5"></div>
+        <h1 class="text-3xl md:text-4xl font-black tracking-tight bg-gradient-to-l from-sky-300 via-blue-400 to-amber-200 bg-clip-text text-transparent mb-2">
+            תיכון הראל • מבשרת ציון
+        </h1>
+        <p class="text-slate-400 text-sm md:text-base">בונה את הקמפוס בהרי ירושלים בתלת-ממד...</p>
+    </div>
+
+    <!-- 3D WebGL Canvas Container -->
+    <div id="canvas-container"></div>
+
+    <!-- Dynamic 3D Projected Hotspots Container -->
+    <div id="hotspots-layer" class="fixed inset-0 pointer-events-none z-10 overflow-hidden"></div>
+
+    <!-- Top Header HUD -->
+    <header class="fixed top-3 left-3 right-3 md:top-5 md:left-6 md:right-6 z-30 flex flex-wrap items-center justify-between gap-3 pointer-events-none">
+        <!-- Brand / School Title Card -->
+        <div class="glass-panel rounded-2xl px-4 py-2.5 md:px-5 md:py-3 flex items-center gap-3.5 pointer-events-auto">
+            <div class="w-10 h-10 md:w-11 md:h-11 rounded-xl bg-gradient-to-br from-sky-500 to-blue-700 flex items-center justify-center shadow-lg border border-sky-300/30 shrink-0">
+                <i class="fa-solid fa-graduation-cap text-white text-lg md:text-xl"></i>
+            </div>
+            <div>
+                <div class="flex items-center gap-2">
+                    <h1 class="text-base md:text-xl font-extrabold text-white leading-tight">תיכון הראל</h1>
+                    <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-400/30">מבשרת ציון</span>
+                </div>
+                <p class="text-xs text-slate-300 hidden sm:block">סיור וירטואלי תלת-ממדי בקמפוס • הרי ירושלים</p>
+            </div>
+        </div>
+
+        <!-- Controls Toolbar: Camera Mode, Time of Day, School Bell / Audio, Help -->
+        <div class="glass-panel rounded-2xl p-1.5 md:p-2 flex flex-wrap items-center gap-1.5 pointer-events-auto">
+            <!-- Camera Mode Switch -->
+            <div class="flex bg-slate-900/70 rounded-xl p-1 border border-white/10">
+                <button id="btn-mode-orbit" onclick="setCameraMode('orbit')" class="glass-btn active px-2.5 py-1.5 rounded-lg text-xs md:text-sm font-semibold flex items-center gap-1.5">
+                    <i class="fa-solid fa-helicopter text-sky-300"></i>
+                    <span>רחפן / מבט על</span>
+                </button>
+                <button id="btn-mode-walk" onclick="setCameraMode('walk')" class="glass-btn px-2.5 py-1.5 rounded-lg text-xs md:text-sm font-semibold flex items-center gap-1.5 mr-1">
+                    <i class="fa-solid fa-person-walking text-emerald-300"></i>
+                    <span>סיור רגלי</span>
+                </button>
+            </div>
+
+            <!-- Time of Day Selector -->
+            <div class="flex bg-slate-900/70 rounded-xl p-1 border border-white/10">
+                <button id="btn-time-morning" onclick="setTimeOfDay('morning')" title="בוקר שמשי" class="glass-btn active px-2.5 py-1.5 rounded-lg text-xs md:text-sm font-medium flex items-center gap-1">
+                    <i class="fa-solid fa-sun text-amber-300"></i>
+                    <span class="hidden lg:inline">בוקר</span>
+                </button>
+                <button id="btn-time-sunset" onclick="setTimeOfDay('sunset')" title="שקיעה בהרים" class="glass-btn px-2.5 py-1.5 rounded-lg text-xs md:text-sm font-medium flex items-center gap-1 mx-1">
+                    <i class="fa-solid fa-cloud-sun text-orange-400"></i>
+                    <span class="hidden lg:inline">שקיעה</span>
+                </button>
+                <button id="btn-time-night" onclick="setTimeOfDay('night')" title="לילה מואר" class="glass-btn px-2.5 py-1.5 rounded-lg text-xs md:text-sm font-medium flex items-center gap-1">
+                    <i class="fa-solid fa-moon text-indigo-300"></i>
+                    <span class="hidden lg:inline">לילה</span>
+                </button>
+            </div>
+
+            <!-- School Bell / Ambient Sound Button -->
+            <button id="btn-bell" onclick="ringSchoolBell()" title="צלצול בית ספר / שמע אווירה" class="glass-btn px-3 py-2 rounded-xl text-xs md:text-sm font-semibold flex items-center gap-1.5 text-amber-200">
+                <i class="fa-solid fa-bell"></i>
+                <span class="hidden md:inline">צלצול</span>
+            </button>
+
+            <!-- Toggle Hotspots Visibility -->
+            <button id="btn-hotspots" onclick="toggleHotspots()" title="הצג/הסתר נקודות עניין" class="glass-btn active px-3 py-2 rounded-xl text-xs md:text-sm font-semibold flex items-center gap-1.5">
+                <i class="fa-solid fa-location-dot text-rose-400"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Landmark Info Card Modal (Appears when clicking a 3D hotspot or tour info) -->
+    <aside id="info-card" class="fixed top-24 right-3 left-3 md:left-auto md:right-6 md:w-96 glass-panel rounded-2xl p-5 z-30 transition-all duration-300 opacity-0 pointer-events-none translate-y-3">
+        <div class="flex items-start justify-between gap-3 mb-2">
+            <div class="flex items-center gap-2.5">
+                <span id="info-icon" class="w-9 h-9 rounded-xl bg-sky-500/20 border border-sky-400/40 flex items-center justify-center text-sky-300 text-base">
+                    <i class="fa-solid fa-school"></i>
+                </span>
+                <div>
+                    <span id="info-badge" class="text-[11px] font-bold uppercase tracking-wider text-sky-400 block">מוקד בקמפוס</span>
+                    <h2 id="info-title" class="text-lg md:text-xl font-extrabold text-white">כותרת המוקד</h2>
+                </div>
+            </div>
+            <button onclick="closeInfoCard()" class="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center text-slate-300 transition">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+        <p id="info-desc" class="text-sm text-slate-200 leading-relaxed mb-4">
+            תיאור המבנה או האזור בבית הספר.
+        </p>
+        <div id="info-highlights" class="flex flex-wrap gap-1.5 mb-4"></div>
+        <div class="flex justify-between items-center pt-2 border-t border-white/10">
+            <button id="info-walk-here-btn" class="text-xs font-bold text-emerald-300 hover:text-emerald-200 flex items-center gap-1.5">
+                <i class="fa-solid fa-person-walking"></i>
+                <span>עבור לסיור רגלי כאן</span>
+            </button>
+            <button onclick="nextTourStop()" class="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-xs font-bold text-white flex items-center gap-1.5 transition">
+                <span>לתחנה הבאה</span>
+                <i class="fa-solid fa-arrow-left"></i>
+            </button>
+        </div>
+    </aside>
+
+    <!-- Controls Hint Pill (Bottom Right / Left) -->
+    <div id="controls-hint" class="fixed bottom-24 left-4 md:left-6 z-20 glass-panel rounded-xl px-3.5 py-2 text-xs text-slate-300 hidden sm:flex items-center gap-3 pointer-events-none">
+        <span id="hint-orbit"><i class="fa-solid fa-computer-mouse text-sky-400 ml-1"></i> גרירה לסיבוב • גלגלת לזום • לחיצה כפולה למעבר</span>
+        <span id="hint-walk" class="hidden"><i class="fa-solid fa-keyboard text-emerald-400 ml-1"></i> חיצי מקלדת / WASD להליכה • גרירת עכבר למבט מסביב</span>
+    </div>
+
+    <!-- Virtual Touch Joystick (Visible in Walk Mode on touch/mobile or optional) -->
+    <div id="joystick-zone" class="hidden md:hidden">
+        <div id="joystick-knob"></div>
+    </div>
+
+    <!-- Bottom Guided Tour Navigation Bar -->
+    <nav class="fixed bottom-3 left-3 right-3 md:bottom-5 md:left-6 md:right-6 z-30 flex justify-center pointer-events-none">
+        <div class="glass-panel rounded-2xl p-2 max-w-full overflow-x-auto no-scrollbar flex items-center gap-2 pointer-events-auto">
+            <div class="px-2.5 py-1 text-xs font-bold text-sky-300 whitespace-nowrap flex items-center gap-1.5 border-l border-white/15 pl-3">
+                <i class="fa-solid fa-compass"></i>
+                <span>סיור מודרך:</span>
+            </div>
+            <button onclick="flyToLandmark('entrance')" data-landmark="entrance" class="tour-btn glass-btn active px-3.5 py-2 rounded-xl text-xs md:text-sm font-semibold whitespace-nowrap flex items-center gap-2">
+                <i class="fa-solid fa-archway text-amber-300"></i>
+                <span>שער הכניסה</span>
+            </button>
+            <button onclick="flyToLandmark('courtyard')" data-landmark="courtyard" class="tour-btn glass-btn px-3.5 py-2 rounded-xl text-xs md:text-sm font-semibold whitespace-nowrap flex items-center gap-2">
+                <i class="fa-solid fa-tree text-emerald-400"></i>
+                <span>הרחבה המרכזית</span>
+            </button>
+            <button onclick="flyToLandmark('academics')" data-landmark="academics" class="tour-btn glass-btn px-3.5 py-2 rounded-xl text-xs md:text-sm font-semibold whitespace-nowrap flex items-center gap-2">
+                <i class="fa-solid fa-flask text-sky-400"></i>
+                <span>הכיתות והמעבדות</span>
+            </button>
+            <button onclick="flyToLandmark('sports')" data-landmark="sports" class="tour-btn glass-btn px-3.5 py-2 rounded-xl text-xs md:text-sm font-semibold whitespace-nowrap flex items-center gap-2">
+                <i class="fa-solid fa-basketball text-orange-400"></i>
+                <span>מגרשי הספורט</span>
+            </button>
+            <button onclick="flyToLandmark('library')" data-landmark="library" class="tour-btn glass-btn px-3.5 py-2 rounded-xl text-xs md:text-sm font-semibold whitespace-nowrap flex items-center gap-2">
+                <i class="fa-solid fa-book-open text-purple-400"></i>
+                <span>הספרייה והאודיטוריום</span>
+            </button>
+            <button onclick="flyToLandmark('overlook')" data-landmark="overlook" class="tour-btn glass-btn px-3.5 py-2 rounded-xl text-xs md:text-sm font-semibold whitespace-nowrap flex items-center gap-2">
+                <i class="fa-solid fa-mountain-sun text-teal-300"></i>
+                <span>תצפית הרי ירושלים</span>
+            </button>
+        </div>
+    </nav>
+
+    <script>
+        /**
+         * ============================================================================
+         * תיכון הראל - מבשרת ציון | עולם תלת-ממדי אינטראקטיבי (Three.js)
+         * ארכיטקטורה, סביבה טבעית, תאורה דינמית, דמויות חיות ומערכת סיור מודרך
+         * ============================================================================
+         */
+
+        // --- Global State & Configuration ---
+        let scene, camera, renderer, clock;
+        let sunLight, ambientLight, hemiLight;
+        let campusLights = []; // Night spotlights & window glow materials
+        let windowMaterials = [];
+        let flags = [];        // Waving Israeli & School flags
+        let students = [];     // Animated walking/playing figures
+        let particles;         // Floating atmospheric dust / pollen
+        let basketball;        // Bouncing basketball on the court
+        let showHotspots = true;
+        let currentCameraMode = 'orbit'; // 'orbit' | 'walk'
+        let currentTimeOfDay = 'morning'; // 'morning' | 'sunset' | 'night'
+        let currentLandmarkKey = 'entrance';
+
+        // Orbit Camera State
+        const orbitState = {
+            target: new THREE.Vector3(0, 4, 18),
+            spherical: new THREE.Spherical(56, Math.PI / 3.1, 0.25),
+            isDragging: false,
+            prevMouse: { x: 0, y: 0 },
+            autoFly: false,
+            desiredTarget: new THREE.Vector3(0, 4, 18),
+            desiredSpherical: new THREE.Spherical(56, Math.PI / 3.1, 0.25)
+        };
+
+        // First-Person / Walk Camera State
+        const walkState = {
+            position: new THREE.Vector3(0, 2.2, 46),
+            yaw: 0,
+            pitch: 0,
+            keys: {},
+            joyVec: { x: 0, y: 0 },
+            isLooking: false,
+            prevLook: { x: 0, y: 0 }
+        };
+
+        // Campus Landmarks Data (Coordinates, Camera Presets & Hebrew Descriptions)
+        const LANDMARKS = {
+            entrance: {
+                key: 'entrance',
+                title: 'שער הכניסה הראשי',
+                badge: 'ברוכים הבאים',
+                icon: 'fa-archway',
+                pos: new THREE.Vector3(0, 7.5, 42),
+                camTarget: new THREE.Vector3(0, 3.5, 38),
+                camSpherical: new THREE.Spherical(26, Math.PI / 2.6, 0.12),
+                walkPos: new THREE.Vector3(0, 2.2, 48),
+                walkYaw: 0,
+                desc: 'הכניסה הראשית לקמפוס תיכון הראל במבשרת ציון. כאן מתחיל היום של מאות תלמידים ותלמידות באווירה קהילתית חמה, מוקפת עצי זית ואורנים.',
+                tags: ['אבטחה וקבלה', 'דגלי הלאום ובית הספר', 'שדרת עצי זית']
+            },
+            courtyard: {
+                key: 'courtyard',
+                title: 'הרחבה המרכזית והאמפי',
+                badge: 'לב הקמפוס',
+                icon: 'fa-tree',
+                pos: new THREE.Vector3(0, 6.5, 10),
+                camTarget: new THREE.Vector3(0, 3, 10),
+                camSpherical: new THREE.Spherical(38, Math.PI / 3.0, -0.45),
+                walkPos: new THREE.Vector3(0, 2.2, 22),
+                walkYaw: 0,
+                desc: 'הרחבה המרכזית המוצלת בפרגולות מעץ ומתכת, ספסלי ישיבה ואמפיתיאטרון פתוח המשמש להפסקות פעילות, טקסים ואירועי תרבות של שכבות י׳-י״ב.',
+                tags: ['אמפיתיאטרון פתוח', 'הצללות ופינות ישיבה', 'מפגש חברתי']
+            },
+            academics: {
+                key: 'academics',
+                title: 'אגף הכיתות והמעבדות',
+                badge: 'מצוינות אקדמית',
+                icon: 'fa-flask',
+                pos: new THREE.Vector3(-24, 12, -2),
+                camTarget: new THREE.Vector3(-22, 6, -2),
+                camSpherical: new THREE.Spherical(36, Math.PI / 2.8, -0.85),
+                walkPos: new THREE.Vector3(-10, 2.2, 8),
+                walkYaw: 0.75,
+                desc: 'מבנה אבן ירושלמית וזכוכית בן שלוש קומות הכולל כיתות חכמות, מעבדות פיזיקה, כימיה, ביולוגיה ורובוטיקה מתקדמות.',
+                tags: ['מעבדות מדעים', 'כיתות חכמות', 'אבן ירושלמית']
+            },
+            sports: {
+                key: 'sports',
+                title: 'קריית הספורט והמגרשים',
+                badge: 'חינוך גופני',
+                icon: 'fa-basketball',
+                pos: new THREE.Vector3(28, 6.5, 6),
+                camTarget: new THREE.Vector3(28, 2, 6),
+                camSpherical: new THREE.Spherical(38, Math.PI / 3.2, 0.9),
+                walkPos: new THREE.Vector3(14, 2.2, 12),
+                walkYaw: -0.9,
+                desc: 'מתחם ספורט מקצועי הכולל מגרש כדורסל תיקני ומגרש קט-רגל משולב, טריבונות צפייה ותאורת לילה למשחקי נבחרות בית הספר.',
+                tags: ['מגרש כדורסל', 'מגרש קט-רגל', 'נבחרות ספורט']
+            },
+            library: {
+                key: 'library',
+                title: 'הספרייה, האודיטוריום והאמנויות',
+                badge: 'תרבות ויצירה',
+                icon: 'fa-book-open',
+                pos: new THREE.Vector3(0, 11, -24),
+                camTarget: new THREE.Vector3(0, 5, -22),
+                camSpherical: new THREE.Spherical(36, Math.PI / 2.8, 0.25),
+                walkPos: new THREE.Vector3(0, 2.2, -8),
+                walkYaw: 0,
+                desc: 'מרכז הלמידה והתרבות של תיכון הראל: ספרייה עשירה, מרחבי למידה שקטים, אודיטוריום להרצאות והצגות וחדרי מוזיקה ואמנות.',
+                tags: ['ספרייה ומרחבי למידה', 'אודיטוריום', 'מגמות אמנות ומוזיקה']
+            },
+            overlook: {
+                key: 'overlook',
+                title: 'מרפסת תצפית הרי ירושלים',
+                badge: 'נוף עוצר נשימה',
+                icon: 'fa-mountain-sun',
+                pos: new THREE.Vector3(-24, 8, -28),
+                camTarget: new THREE.Vector3(-22, 5, -35),
+                camSpherical: new THREE.Spherical(45, Math.PI / 2.7, -0.5),
+                walkPos: new THREE.Vector3(-22, 2.2, -26),
+                walkYaw: 0.3,
+                desc: 'נקודת תצפית פנורמית הצופה אל רכסי הרי ירושלים, חורש האורנים הטבעי של מבשרת ציון והאוויר הצלול של ההר.',
+                tags: ['נוף פנורמי', 'חורש ים-תיכוני', 'אוויר הרים']
+            }
+        };
+
+        const LANDMARK_ORDER = ['entrance', 'courtyard', 'academics', 'sports', 'library', 'overlook'];
+
+        // --- Procedural Canvas Textures (Hebrew Signs, Stone, Court Lines, Flags) ---
+        function createSignTexture(mainText, subText, bgColor = '#1e3a8a', borderColor = '#fbbf24') {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1024;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+
+            // Background gradient
+            const grad = ctx.createLinearGradient(0, 0, 1024, 256);
+            grad.addColorStop(0, bgColor);
+            grad.addColorStop(1, '#0f172a');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, 1024, 256);
+
+            // Decorative border
+            ctx.strokeStyle = borderColor;
+            ctx.lineWidth = 10;
+            ctx.strokeRect(14, 14, 996, 228);
+
+            // Subtle geometric emblem on right side (RTL)
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.beginPath();
+            ctx.arc(890, 128, 75, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Main Hebrew Title
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '900 74px Heebo, Arial, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(mainText, 500, 105);
+
+            // Subtitle
+            ctx.fillStyle = '#fde68a';
+            ctx.font = '600 36px Heebo, Arial, sans-serif';
+            ctx.fillText(subText, 500, 180);
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.anisotropy = 4;
+            return tex;
+        }
+
+        function createIsraeliFlagTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 340;
+            const ctx = canvas.getContext('2d');
+
+            // White field
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, 512, 340);
+
+            // Two horizontal blue stripes
+            ctx.fillStyle = '#0038b8';
+            ctx.fillRect(0, 38, 512, 48);
+            ctx.fillRect(0, 254, 512, 48);
+
+            // Star of David in center
+            const cx = 256, cy = 170, r = 54;
+            ctx.strokeStyle = '#0038b8';
+            ctx.lineWidth = 9;
+            for (let t = 0; t < 2; t++) {
+                ctx.beginPath();
+                for (let i = 0; i < 3; i++) {
+                    const angle = (i * 2 * Math.PI / 3) - Math.PI / 2 + (t * Math.PI);
+                    const x = cx + r * Math.cos(angle);
+                    const y = cy + r * Math.sin(angle);
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.closePath();
+                ctx.stroke();
+            }
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        function createSchoolFlagTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 340;
+            const ctx = canvas.getContext('2d');
+
+            const grad = ctx.createLinearGradient(0, 0, 512, 340);
+            grad.addColorStop(0, '#0284c7');
+            grad.addColorStop(1, '#1e3a8a');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, 512, 340);
+
+            ctx.strokeStyle = '#38bdf8';
+            ctx.lineWidth = 12;
+            ctx.strokeRect(18, 18, 476, 304);
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '900 64px Heebo, Arial, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('תיכון הראל', 256, 155);
+
+            ctx.fillStyle = '#bae6fd';
+            ctx.font = '700 32px Heebo, Arial, sans-serif';
+            ctx.fillText('מבשרת ציון', 256, 220);
+
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        function createJerusalemStoneTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+
+            // Warm creamy Jerusalem limestone base
+            ctx.fillStyle = '#e7dcc8';
+            ctx.fillRect(0, 0, 512, 512);
+
+            const rows = 8;
+            const rowH = 512 / rows;
+            for (let r = 0; r < rows; r++) {
+                let x = (r % 2 === 0) ? 0 : -45;
+                while (x < 512) {
+                    const w = 90 + ((r * 37 + x) % 40);
+                    const shade = 225 + ((r * 19 + Math.floor(x)) % 22);
+                    ctx.fillStyle = `rgb(${shade}, ${shade - 12}, ${shade - 32})`;
+                    ctx.fillRect(x + 2, r * rowH + 2, w - 4, rowH - 4);
+                    x += w;
+                }
+            }
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.RepeatWrapping;
+            tex.repeat.set(3, 2);
+            return tex;
+        }
+
+        function createBasketballCourtTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1024;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+
+            // Court acrylic surface (Blue & Terracotta)
+            ctx.fillStyle = '#1d4ed8';
+            ctx.fillRect(0, 0, 1024, 512);
+
+            // Inner court boundary
+            ctx.fillStyle = '#2563eb';
+            ctx.fillRect(40, 32, 944, 448);
+
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 6;
+            ctx.strokeRect(40, 32, 944, 448);
+
+            // Half court line & center circle
+            ctx.beginPath();
+            ctx.moveTo(512, 32);
+            ctx.lineTo(512, 480);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.arc(512, 256, 65, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Left & Right Keys + 3-point arcs
+            [40, 984].forEach((edgeX, idx) => {
+                const dir = idx === 0 ? 1 : -1;
+                ctx.fillStyle = '#ea580c';
+                ctx.fillRect(idx === 0 ? edgeX : edgeX - 160, 176, 160, 160);
+                ctx.strokeRect(idx === 0 ? edgeX : edgeX - 160, 176, 160, 160);
+
+                ctx.beginPath();
+                ctx.arc(edgeX + dir * 160, 256, 80, 0, Math.PI * 2);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.arc(edgeX + dir * 40, 256, 195, idx === 0 ? -Math.PI / 2.2 : Math.PI - Math.PI / 2.2, idx === 0 ? Math.PI / 2.2 : Math.PI + Math.PI / 2.2);
+                ctx.stroke();
+            });
+
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        // --- Initialize Three.js Scene ---
+        function init() {
+            clock = new THREE.Clock();
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87ceeb);
+            scene.fog = new THREE.FogExp2(0x9ecae1, 0.0042);
+
+            const container = document.getElementById('canvas-container');
+            camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.5, 650);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.outputEncoding = THREE.sRGBEncoding;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.08;
+            container.appendChild(renderer.domElement);
+
+            setupLighting();
+            buildTerrainAndJerusalemHills();
+            buildCampusPathsAndCourtyard();
+            buildEntranceGate();
+            buildAcademicWing();
+            buildLibraryAndAuditorium();
+            buildSportsComplex();
+            buildGreeneryAndTrees();
+            buildFlags();
+            buildAnimatedStudents();
+            buildAtmosphericParticles();
+            createHotspotElements();
+
+            setupEventListeners();
+            updateOrbitCamera();
+
+            // Hide loading screen smoothly
+            setTimeout(() => {
+                const loader = document.getElementById('loader-overlay');
+                loader.style.opacity = '0';
+                loader.style.visibility = 'hidden';
+                // Open entrance info gently after load
+                setTimeout(() => openInfoCard('entrance'), 650);
+            }, 750);
+
+            animate();
+        }
+
+        // --- Lighting Setup ---
+        function setupLighting() {
+            hemiLight = new THREE.HemisphereLight(0xdbeafe, 0x4d7c0f, 0.65);
+            hemiLight.position.set(0, 80, 0);
+            scene.add(hemiLight);
+
+            ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
+            scene.add(ambientLight);
+
+            sunLight = new THREE.DirectionalLight(0xfffbeb, 1.35);
+            sunLight.position.set(55, 85, 45);
+            sunLight.castShadow = true;
+            sunLight.shadow.mapSize.width = 2048;
+            sunLight.shadow.mapSize.height = 2048;
+            sunLight.shadow.camera.near = 10;
+            sunLight.shadow.camera.far = 230;
+            const d = 75;
+            sunLight.shadow.camera.left = -d;
+            sunLight.shadow.camera.right = d;
+            sunLight.shadow.camera.top = d;
+            sunLight.shadow.camera.bottom = -d;
+            sunLight.shadow.bias = -0.0005;
+            scene.add(sunLight);
+        }
+
+        // --- Surrounding Jerusalem Hills & Campus Base ---
+        function buildTerrainAndJerusalemHills() {
+            // Main rolling hills terrain around the campus plateau
+            const geo = new THREE.PlaneGeometry(560, 560, 72, 72);
+            geo.rotateX(-Math.PI / 2);
+            const pos = geo.attributes.position;
+            const colors = [];
+
+            const colorPlateau = new THREE.Color(0x658354);
+            const colorHillMid = new THREE.Color(0x4d6b3c);
+            const colorHillRock = new THREE.Color(0x9ca38f);
+
+            for (let i = 0; i < pos.count; i++) {
+                const x = pos.getX(i);
+                const z = pos.getZ(i);
+                const distFromCenter = Math.hypot(x * 0.9, z * 0.9);
+
+                let y = 0;
+                if (distFromCenter > 68) {
+                    const factor = Math.min((distFromCenter - 68) / 140, 1.5);
+                    y = (Math.sin(x * 0.025) * Math.cos(z * 0.025) * 18 + Math.sin(x * 0.012 + z * 0.015) * 26 + 16) * factor;
+                    if (y < -2) y = -2;
+                }
+                pos.setY(i, y);
+
+                // Vertex color blending for natural Mediterranean hillside
+                const c = colorPlateau.clone();
+                if (y > 14) c.lerp(colorHillRock, Math.min((y - 14) / 22, 0.65));
+                else if (y > 2) c.lerp(colorHillMid, Math.min(y / 14, 0.8));
+                colors.push(c.r, c.g, c.b);
+            }
+            geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+            geo.computeVertexNormals();
+
+            const terrainMat = new THREE.MeshStandardMaterial({
+                vertexColors: true,
+                roughness: 0.92,
+                metalness: 0.02
+            });
+            const terrain = new THREE.Mesh(geo, terrainMat);
+            terrain.receiveShadow = true;
+            terrain.position.y = -0.15;
+            scene.add(terrain);
+
+            // Distant pine clusters on the Jerusalem hills
+            const hillTreeGeo = new THREE.ConeGeometry(2.6, 8, 6);
+            const hillTreeMat = new THREE.MeshStandardMaterial({ color: 0x2d4c2b, roughness: 0.9 });
+            for (let i = 0; i < 160; i++) {
+                const angle = (i / 160) * Math.PI * 2 + (i % 7) * 0.1;
+                const radius = 85 + (i % 13) * 11;
+                const tx = Math.cos(angle) * radius;
+                const tz = Math.sin(angle) * radius;
+                const ty = (Math.sin(tx * 0.025) * Math.cos(tz * 0.025) * 18 + Math.sin(tx * 0.012 + tz * 0.015) * 26 + 16) * Math.min((radius - 68) / 140, 1.5);
+                if (ty > 1) {
+                    const tree = new THREE.Mesh(hillTreeGeo, hillTreeMat);
+                    tree.position.set(tx, ty + 3.2, tz);
+                    const s = 0.8 + (i % 5) * 0.25;
+                    tree.scale.set(s, s, s);
+                    scene.add(tree);
+                }
+            }
+        }
+
+        // --- Central Plaza, Stone Walkways, Pergolas & Amphitheater ---
+        function buildCampusPathsAndCourtyard() {
+            const pavingMat = new THREE.MeshStandardMaterial({ color: 0xd6d3d1, roughness: 0.85 });
+            const stoneTrimMat = new THREE.MeshStandardMaterial({ color: 0xa8a29e, roughness: 0.8 });
+
+            // Main Entrance Promenade
+            const entryWalk = new THREE.Mesh(new THREE.BoxGeometry(10, 0.2, 34), pavingMat);
+            entryWalk.position.set(0, 0.02, 30);
+            entryWalk.receiveShadow = true;
+            scene.add(entryWalk);
+
+            // Central Courtyard Plaza (רחבת בית הספר)
+            const plaza = new THREE.Mesh(new THREE.BoxGeometry(36, 0.22, 34), pavingMat);
+            plaza.position.set(0, 0.03, 4);
+            plaza.receiveShadow = true;
+            scene.add(plaza);
+
+            // Decorative Circular Emblem in Center of Plaza
+            const circleOuter = new THREE.Mesh(
+                new THREE.CylinderGeometry(5.5, 5.5, 0.25, 32),
+                new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.7 })
+            );
+            circleOuter.position.set(0, 0.04, 10);
+            circleOuter.receiveShadow = true;
+            scene.add(circleOuter);
+
+            const circleInner = new THREE.Mesh(
+                new THREE.CylinderGeometry(4.2, 4.2, 0.27, 32),
+                new THREE.MeshStandardMaterial({ color: 0xfef3c7, roughness: 0.75 })
+            );
+            circleInner.position.set(0, 0.04, 10);
+            circleInner.receiveShadow = true;
+            scene.add(circleInner);
+
+            // Outdoor Amphitheater Steps (אמפי פתוח)
+            for (let step = 0; step < 4; step++) {
+                const arcMesh = new THREE.Mesh(
+                    new THREE.BoxGeometry(16 - step * 1.4, 0.45, 1.3),
+                    stoneTrimMat
+                );
+                arcMesh.position.set(0, 0.22 + step * 0.42, -3.5 - step * 1.25);
+                arcMesh.castShadow = true;
+                arcMesh.receiveShadow = true;
+                scene.add(arcMesh);
+            }
+
+            // Shaded Wooden & Steel Pergolas in Courtyard
+            createPergola(-11, 14, 7, 12);
+            createPergola(11, 14, 7, 12);
+
+            // Benches around the plaza
+            const benchLocations = [
+                [-6.5, 22, 0], [6.5, 22, 0],
+                [-11, 11, Math.PI / 2], [11, 11, Math.PI / 2],
+                [-11, 17, Math.PI / 2], [11, 17, Math.PI / 2]
+            ];
+            benchLocations.forEach(([bx, bz, rot]) => createBench(bx, bz, rot));
+        }
+
+        function createPergola(x, z, width, depth) {
+            const group = new THREE.Group();
+            group.position.set(x, 0, z);
+
+            const postMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.5, roughness: 0.4 });
+            const woodMat = new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.75 });
+
+            const hw = width / 2 - 0.3;
+            const hd = depth / 2 - 0.3;
+            [[-hw, -hd], [hw, -hd], [-hw, hd], [hw, hd]].forEach(([px, pz]) => {
+                const post = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 3.8, 12), postMat);
+                post.position.set(px, 1.9, pz);
+                post.castShadow = true;
+                group.add(post);
+            });
+
+            // Crossbeams
+            const beam1 = new THREE.Mesh(new THREE.BoxGeometry(width + 0.4, 0.22, 0.22), postMat);
+            beam1.position.set(0, 3.85, -hd);
+            group.add(beam1);
+
+            const beam2 = beam1.clone();
+            beam2.position.set(0, 3.85, hd);
+            group.add(beam2);
+
+            // Wooden shade slats
+            const slatCount = 11;
+            for (let i = 0; i < slatCount; i++) {
+                const sz = -hd + (i / (slatCount - 1)) * depth;
+                const slat = new THREE.Mesh(new THREE.BoxGeometry(width + 0.8, 0.14, 0.24), woodMat);
+                slat.position.set(0, 4.02, sz);
+                slat.castShadow = true;
+                group.add(slat);
+            }
+
+            scene.add(group);
+        }
+
+        function createBench(x, z, rotY) {
+            const group = new THREE.Group();
+            group.position.set(x, 0, z);
+            group.rotation.y = rotY;
+
+            const woodMat = new THREE.MeshStandardMaterial({ color: 0xb45309, roughness: 0.7 });
+            const metalMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.6 });
+
+            const seat = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.1, 0.65), woodMat);
+            seat.position.y = 0.52;
+            seat.castShadow = true;
+            group.add(seat);
+
+            const back = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.45, 0.08), woodMat);
+            back.position.set(0, 0.82, -0.28);
+            back.rotation.x = -0.15;
+            back.castShadow = true;
+            group.add(back);
+
+            [-0.95, 0.95].forEach(lx => {
+                const leg = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.52, 0.6), metalMat);
+                leg.position.set(lx, 0.26, 0);
+                group.add(leg);
+            });
+
+            scene.add(group);
+        }
+
+        // --- Main Entrance Gate with Hebrew Sign ---
+        function buildEntranceGate() {
+            const gateGroup = new THREE.Group();
+            gateGroup.position.set(0, 0, 42);
+
+            const stoneTex = createJerusalemStoneTexture();
+            const pillarMat = new THREE.MeshStandardMaterial({ map: stoneTex, roughness: 0.8 });
+            const steelMat = new THREE.MeshStandardMaterial({ color: 0x1e3a8a, metalness: 0.55, roughness: 0.35 });
+
+            // Left & Right Stone Pillars
+            [-6.2, 6.2].forEach(px => {
+                const pillar = new THREE.Mesh(new THREE.BoxGeometry(1.8, 5.6, 1.8), pillarMat);
+                pillar.position.set(px, 2.8, 0);
+                pillar.castShadow = true;
+                pillar.receiveShadow = true;
+                gateGroup.add(pillar);
+
+                // Pillar Cap Light
+                const lamp = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.32, 16, 16),
+                    new THREE.MeshStandardMaterial({ color: 0xfef08a, emissive: 0xf59e0b, emissiveIntensity: 0.6 })
+                );
+                lamp.position.set(px, 5.85, 0);
+                gateGroup.add(lamp);
+            });
+
+            // Overhead Archway Beam
+            const topBeam = new THREE.Mesh(new THREE.BoxGeometry(14.8, 1.6, 1.4), steelMat);
+            topBeam.position.set(0, 5.2, 0);
+            topBeam.castShadow = true;
+            gateGroup.add(topBeam);
+
+            // Main Signboard ("תיכון הראל - מבשרת ציון")
+            const signTex = createSignTexture('תיכון הראל', 'מבשרת ציון • חינוך למצוינות וערכים');
+            const signMat = new THREE.MeshStandardMaterial({ map: signTex, roughness: 0.35 });
+            const signBoard = new THREE.Mesh(new THREE.BoxGeometry(11.6, 2.2, 0.25), signMat);
+            signBoard.position.set(0, 5.25, 0.72);
+            gateGroup.add(signBoard);
+
+            // Back side sign as well
+            const signBoardBack = signBoard.clone();
+            signBoardBack.position.set(0, 5.25, -0.72);
+            signBoardBack.rotation.y = Math.PI;
+            gateGroup.add(signBoardBack);
+
+            // Decorative Perimeter Fence Walls
+            [-19, 19].forEach(fx => {
+                const wall = new THREE.Mesh(new THREE.BoxGeometry(23, 2.1, 0.6), pillarMat);
+                wall.position.set(fx, 1.05, 0);
+                wall.castShadow = true;
+                wall.receiveShadow = true;
+                gateGroup.add(wall);
+            });
+
+            scene.add(gateGroup);
+        }
+
+        // --- Academic Wing (Classrooms & Science Labs - Jerusalem Stone & Glass) ---
+        function buildAcademicWing() {
+            const building = new THREE.Group();
+            building.position.set(-25, 0, -2);
+
+            const stoneTex = createJerusalemStoneTexture();
+            const wallMat = new THREE.MeshStandardMaterial({ map: stoneTex, roughness: 0.78 });
+            const roofMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.85 });
+            const accentMat = new THREE.MeshStandardMaterial({ color: 0x0369a1, roughness: 0.4, metalness: 0.3 });
+
+            const winMat = new THREE.MeshStandardMaterial({
+                color: 0x38bdf8,
+                emissive: 0x0ea5e9,
+                emissiveIntensity: 0.12,
+                roughness: 0.15,
+                metalness: 0.8
+            });
+            windowMaterials.push(winMat);
+
+            // Main 3-Story Structure
+            const mainBody = new THREE.Mesh(new THREE.BoxGeometry(15, 11.5, 34), wallMat);
+            mainBody.position.set(0, 5.75, 0);
+            mainBody.castShadow = true;
+            mainBody.receiveShadow = true;
+            building.add(mainBody);
+
+            // Modern Blue Architectural Frame & Roof Parapet
+            const roof = new THREE.Mesh(new THREE.BoxGeometry(15.8, 0.7, 34.8), roofMat);
+            roof.position.set(0, 11.75, 0);
+            roof.castShadow = true;
+            building.add(roof);
+
+            const verticalFin = new THREE.Mesh(new THREE.BoxGeometry(16.2, 12.2, 3.2), accentMat);
+            verticalFin.position.set(0, 6.1, 0);
+            verticalFin.castShadow = true;
+            building.add(verticalFin);
+
+            // Glass Stairwell Tower in Center
+            const glassAtrium = new THREE.Mesh(new THREE.BoxGeometry(16.4, 10.6, 2.4), winMat);
+            glassAtrium.position.set(0, 5.5, 0);
+            building.add(glassAtrium);
+
+            // Classroom Windows across 3 floors
+            for (let floor = 0; floor < 3; floor++) {
+                const wy = 2.4 + floor * 3.4;
+                for (let wz = -13; wz <= 13; wz += 4.3) {
+                    if (Math.abs(wz) < 2.5) continue;
+                    const win = new THREE.Mesh(new THREE.BoxGeometry(15.3, 1.65, 2.6), winMat);
+                    win.position.set(0, wy, wz);
+                    building.add(win);
+
+                    // Sunshade louvers above windows
+                    const louver = new THREE.Mesh(new THREE.BoxGeometry(15.8, 0.18, 2.9), accentMat);
+                    louver.position.set(0, wy + 0.95, wz);
+                    building.add(louver);
+                }
+            }
+
+            // Solar Panels on Roof (Sustainable Israeli school design)
+            const solarMat = new THREE.MeshStandardMaterial({ color: 0x1e3a8a, metalness: 0.7, roughness: 0.25 });
+            for (let sz = -12; sz <= 12; sz += 6) {
+                const panel = new THREE.Mesh(new THREE.BoxGeometry(8, 0.15, 3.2), solarMat);
+                panel.position.set(0, 12.6, sz);
+                panel.rotation.z = -0.22;
+                panel.castShadow = true;
+                building.add(panel);
+            }
+
+            // Building Hebrew Sign
+            const wingSign = new THREE.Mesh(
+                new THREE.PlaneGeometry(8.5, 1.5),
+                new THREE.MeshStandardMaterial({ map: createSignTexture('אגף המדעים והכיתות', 'מעבדות • רובוטיקה • כיתות י׳-י״ב', '#0369a1') })
+            );
+            wingSign.position.set(8.25, 9.6, 0);
+            wingSign.rotation.y = Math.PI / 2;
+            building.add(wingSign);
+
+            scene.add(building);
+        }
+
+        // --- Library & Auditorium Building (North Wing) ---
+        function buildLibraryAndAuditorium() {
+            const libGroup = new THREE.Group();
+            libGroup.position.set(0, 0, -24);
+
+            const stoneTex = createJerusalemStoneTexture();
+            const wallMat = new THREE.MeshStandardMaterial({ map: stoneTex, roughness: 0.8 });
+            const woodAccent = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.65 });
+            const glassMat = new THREE.MeshStandardMaterial({
+                color: 0x7dd3fc,
+                emissive: 0xfef08a,
+                emissiveIntensity: 0.15,
+                roughness: 0.15,
+                metalness: 0.75
+            });
+            windowMaterials.push(glassMat);
+
+            // Curved / Rotunda-inspired Library Front + Auditorium Hall
+            const hall = new THREE.Mesh(new THREE.BoxGeometry(28, 9.5, 14), wallMat);
+            hall.position.set(0, 4.75, -2);
+            hall.castShadow = true;
+            hall.receiveShadow = true;
+            libGroup.add(hall);
+
+            // Panoramic Library Glass Rotunda Facing Courtyard
+            const rotunda = new THREE.Mesh(new THREE.CylinderGeometry(8.5, 8.5, 8.2, 24, 1, false, -Math.PI / 2, Math.PI), glassMat);
+            rotunda.position.set(0, 4.1, 4.5);
+            libGroup.add(rotunda);
+
+            // Rotunda Roof Canopy
+            const canopy = new THREE.Mesh(new THREE.CylinderGeometry(9.4, 9.4, 0.7, 24), woodAccent);
+            canopy.position.set(0, 8.5, 4.5);
+            canopy.castShadow = true;
+            libGroup.add(canopy);
+
+            // Hebrew Sign above Library Entrance
+            const libSign = new THREE.Mesh(
+                new THREE.PlaneGeometry(9.5, 1.7),
+                new THREE.MeshStandardMaterial({ map: createSignTexture('הספרייה והאודיטוריום', 'מרכז תרבות, למידה ואמנויות', '#312e81') })
+            );
+            libSign.position.set(0, 7.6, 13.05);
+            libGroup.add(libSign);
+
+            scene.add(libGroup);
+        }
+
+        // --- Sports Complex (Basketball & Mini-Soccer Courts) ---
+        function buildSportsComplex() {
+            const sportsGroup = new THREE.Group();
+            sportsGroup.position.set(28, 0, 6);
+
+            // Basketball Court Surface
+            const courtTex = createBasketballCourtTexture();
+            const courtMat = new THREE.MeshStandardMaterial({ map: courtTex, roughness: 0.65 });
+            const court = new THREE.Mesh(new THREE.BoxGeometry(18, 0.24, 30), courtMat);
+            court.rotation.y = Math.PI / 2;
+            court.position.set(0, 0.05, -7);
+            court.receiveShadow = true;
+            sportsGroup.add(court);
+
+            // Two Basketball Hoops (North & South ends of court)
+            createBasketballHoop(sportsGroup, 0, -20.5, 0);
+            createBasketballHoop(sportsGroup, 0, 6.5, Math.PI);
+
+            // Bouncing Basketball
+            basketball = new THREE.Mesh(
+                new THREE.SphereGeometry(0.32, 16, 16),
+                new THREE.MeshStandardMaterial({ color: 0xea580c, roughness: 0.6 })
+            );
+            basketball.position.set(28, 1.2, -1);
+            basketball.castShadow = true;
+            scene.add(basketball);
+
+            // Mini-Soccer Pitch (מגרש קט-רגל דשא סינטטי)
+            const turfMat = new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.85 });
+            const turf = new THREE.Mesh(new THREE.BoxGeometry(24, 0.22, 15), turfMat);
+            turf.position.set(0, 0.04, 15);
+            turf.receiveShadow = true;
+            sportsGroup.add(turf);
+
+            // Soccer Goals
+            createSoccerGoal(sportsGroup, -10.5, 15, Math.PI / 2);
+            createSoccerGoal(sportsGroup, 10.5, 15, -Math.PI / 2);
+
+            // Spectator Bleachers (טריבונות)
+            const bleacherMat = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.7 });
+            for (let b = 0; b < 3; b++) {
+                const step = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.45 + b * 0.45, 18), bleacherMat);
+                step.position.set(-13.5 - b * 1.1, 0.22 + b * 0.22, -7);
+                step.castShadow = true;
+                step.receiveShadow = true;
+                sportsGroup.add(step);
+            }
+
+            // Stadium Floodlights
+            [[-14, -22], [14, -22], [-14, 22], [14, 22]].forEach(([lx, lz]) => {
+                const pole = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.18, 0.25, 11, 8),
+                    new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.6 })
+                );
+                pole.position.set(lx, 5.5, lz);
+                pole.castShadow = true;
+                sportsGroup.add(pole);
+
+                const head = new THREE.Mesh(
+                    new THREE.BoxGeometry(1.4, 0.6, 0.5),
+                    new THREE.MeshStandardMaterial({ color: 0xfef9c3, emissive: 0xfef08a, emissiveIntensity: 0.4 })
+                );
+                head.position.set(lx, 11, lz);
+                sportsGroup.add(head);
+            });
+
+            scene.add(sportsGroup);
+        }
+
+        function createBasketballHoop(parent, x, z, rotY) {
+            const hoop = new THREE.Group();
+            hoop.position.set(x, 0, z);
+            hoop.rotation.y = rotY;
+
+            const poleMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.6 });
+            const post = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.16, 4.2, 10), poleMat);
+            post.position.set(0, 2.1, -0.6);
+            post.castShadow = true;
+            hoop.add(post);
+
+            const arm = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 1.1), poleMat);
+            arm.position.set(0, 3.8, -0.1);
+            hoop.add(arm);
+
+            const board = new THREE.Mesh(
+                new THREE.BoxGeometry(1.8, 1.1, 0.08),
+                new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2 })
+            );
+            board.position.set(0, 3.85, 0.45);
+            hoop.add(board);
+
+            const rim = new THREE.Mesh(
+                new THREE.TorusGeometry(0.32, 0.03, 8, 20),
+                new THREE.MeshStandardMaterial({ color: 0xea580c })
+            );
+            rim.rotation.x = Math.PI / 2;
+            rim.position.set(0, 3.45, 0.82);
+            hoop.add(rim);
+
+            parent.add(hoop);
+        }
+
+        function createSoccerGoal(parent, x, z, rotY) {
+            const goal = new THREE.Group();
+            goal.position.set(x, 0, z);
+            goal.rotation.y = rotY;
+
+            const postMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3 });
+            const leftPost = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 2.2, 8), postMat);
+            leftPost.position.set(-1.8, 1.1, 0);
+            const rightPost = leftPost.clone();
+            rightPost.position.set(1.8, 1.1, 0);
+            const crossbar = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 3.68, 8), postMat);
+            crossbar.rotation.z = Math.PI / 2;
+            crossbar.position.set(0, 2.2, 0);
+
+            goal.add(leftPost, rightPost, crossbar);
+            parent.add(goal);
+        }
+
+        // --- Mediterranean Pine & Olive Trees around Campus ---
+        function buildGreeneryAndTrees() {
+            const treeSpots = [
+                [-12, 34, 'olive'], [12, 34, 'olive'],
+                [-12, 27, 'olive'], [12, 27, 'olive'],
+                [-18, 20, 'pine'], [15, 22, 'pine'],
+                [-36, 16, 'pine'], [-36, -18, 'pine'],
+                [-16, -15, 'olive'], [16, -15, 'olive'],
+                [-26, -28, 'pine'], [24, -26, 'pine']
+            ];
+
+            treeSpots.forEach(([tx, tz, type]) => {
+                if (type === 'olive') createOliveTree(tx, tz);
+                else createPineTree(tx, tz);
+            });
+        }
+
+        function createOliveTree(x, z) {
+            const group = new THREE.Group();
+            group.position.set(x, 0, z);
+
+            const trunkMat = new THREE.MeshStandardMaterial({ color: 0x5c4033, roughness: 0.95 });
+            const foliageMat = new THREE.MeshStandardMaterial({ color: 0x6b8e63, roughness: 0.85 }); // Silvery-green olive leaves
+
+            const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.45, 2.3, 7), trunkMat);
+            trunk.position.y = 1.15;
+            trunk.castShadow = true;
+            group.add(trunk);
+
+            [[0, 2.8, 0, 1.8], [-0.9, 2.5, 0.5, 1.3], [0.9, 2.6, -0.4, 1.35]].forEach(([fx, fy, fz, r]) => {
+                const crown = new THREE.Mesh(new THREE.DodecahedronGeometry(r, 1), foliageMat);
+                crown.position.set(fx, fy, fz);
+                crown.scale.y = 0.72;
+                crown.castShadow = true;
+                group.add(crown);
+            });
+
+            scene.add(group);
+        }
+
+        function createPineTree(x, z) {
+            const group = new THREE.Group();
+            group.position.set(x, 0, z);
+
+            const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4a3525, roughness: 0.9 });
+            const pineMat = new THREE.MeshStandardMaterial({ color: 0x2e5a36, roughness: 0.85 });
+
+            const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.48, 4.5, 8), trunkMat);
+            trunk.position.y = 2.25;
+            trunk.castShadow = true;
+            group.add(trunk);
+
+            for (let tier = 0; tier < 3; tier++) {
+                const cone = new THREE.Mesh(new THREE.ConeGeometry(2.6 - tier * 0.55, 3.4, 8), pineMat);
+                cone.position.y = 4.2 + tier * 1.9;
+                cone.castShadow = true;
+                group.add(cone);
+            }
+
+            scene.add(group);
+        }
+
+        // --- Waving Israeli & Harel High School Flags ---
+        function buildFlags() {
+            const flagConfigs = [
+                { x: -7.5, z: 38, tex: createIsraeliFlagTexture() },
+                { x: 7.5, z: 38, tex: createSchoolFlagTexture() }
+            ];
+
+            const poleMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.8, roughness: 0.2 });
+
+            flagConfigs.forEach(cfg => {
+                const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.11, 9.5, 12), poleMat);
+                pole.position.set(cfg.x, 4.75, cfg.z);
+                pole.castShadow = true;
+                scene.add(pole);
+
+                const flagGeo = new THREE.PlaneGeometry(2.8, 1.85, 16, 10);
+                // Shift geometry so left edge attaches to flagpole
+                flagGeo.translate(1.4, 0, 0);
+
+                const flagMat = new THREE.MeshStandardMaterial({
+                    map: cfg.tex,
+                    side: THREE.DoubleSide,
+                    roughness: 0.6
+                });
+                const flagMesh = new THREE.Mesh(flagGeo, flagMat);
+                flagMesh.position.set(cfg.x, 8.4, cfg.z);
+                flagMesh.castShadow = true;
+                scene.add(flagMesh);
+
+                flags.push({ mesh: flagMesh, basePos: flagGeo.attributes.position.array.slice() });
+            });
+        }
+
+        // --- Animated Students Walking & Playing Around Campus ---
+        function buildAnimatedStudents() {
+            const shirtColors = [0x0284c7, 0x1e3a8a, 0xf8fafc, 0x334155, 0x0d9488, 0xd97706];
+            const paths = [
+                { center: new THREE.Vector3(0, 0, 12), rx: 7, rz: 9, speed: 0.42, phase: 0 },
+                { center: new THREE.Vector3(-4, 0, 26), rx: 3.5, rz: 10, speed: 0.36, phase: 1.5 },
+                { center: new THREE.Vector3(4, 0, 26), rx: 3.5, rz: 10, speed: -0.34, phase: 3.1 },
+                { center: new THREE.Vector3(-13, 0, 2), rx: 4, rz: 12, speed: 0.38, phase: 2.2 },
+                { center: new THREE.Vector3(28, 0, -6), rx: 5, rz: 7, speed: 0.75, phase: 0.8 },
+                { center: new THREE.Vector3(28, 0, -8), rx: 5, rz: 7, speed: -0.72, phase: 3.9 },
+                { center: new THREE.Vector3(0, 0, -12), rx: 9, rz: 3, speed: 0.32, phase: 4.5 }
+            ];
+
+            paths.forEach((p, idx) => {
+                const student = new THREE.Group();
+                const shirtMat = new THREE.MeshStandardMaterial({ color: shirtColors[idx % shirtColors.length] });
+                const pantsMat = new THREE.MeshStandardMaterial({ color: 0x1e293b });
+                const skinMat = new THREE.MeshStandardMaterial({ color: 0xf1c27d });
+
+                const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.22, 0.75, 8), shirtMat);
+                torso.position.y = 1.05;
+                torso.castShadow = true;
+                student.add(torso);
+
+                const head = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 12), skinMat);
+                head.position.y = 1.62;
+                head.castShadow = true;
+                student.add(head);
+
+                const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.68, 0.14), pantsMat);
+                leftLeg.position.set(-0.11, 0.34, 0);
+                const rightLeg = leftLeg.clone();
+                rightLeg.position.set(0.11, 0.34, 0);
+                student.add(leftLeg, rightLeg);
+
+                scene.add(student);
+                students.push({ group: student, leftLeg, rightLeg, path: p });
+            });
+        }
+
+        // --- Floating Atmospheric Sunlight Particles ---
+        function buildAtmosphericParticles() {
+            const count = 260;
+            const geo = new THREE.BufferGeometry();
+            const positions = new Float32Array(count * 3);
+
+            for (let i = 0; i < count; i++) {
+                positions[i * 3] = (Math.random() - 0.5) * 110;
+                positions[i * 3 + 1] = 1 + Math.random() * 22;
+                positions[i * 3 + 2] = (Math.random() - 0.5) * 110;
+            }
+            geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+            const mat = new THREE.PointsMaterial({
+                color: 0xfef3c7,
+                size: 0.28,
+                transparent: true,
+                opacity: 0.55
+            });
+            particles = new THREE.Points(geo, mat);
+            scene.add(particles);
+        }
+
+        // --- Create Projected HTML Hotspot Markers ---
+        function createHotspotElements() {
+            const layer = document.getElementById('hotspots-layer');
+            layer.innerHTML = '';
+
+            Object.values(LANDMARKS).forEach(lm => {
+                const el = document.createElement('div');
+                el.id = `hotspot-${lm.key}`;
+                el.className = 'hotspot-marker flex flex-col items-center';
+                el.innerHTML = `
+                    <div class="glass-panel px-3 py-1.5 rounded-full flex items-center gap-2 border border-sky-300/50 shadow-lg">
+                        <span class="w-2.5 h-2.5 rounded-full bg-sky-400 hotspot-pulse"></span>
+                        <span class="text-xs font-bold text-white whitespace-nowrap">${lm.title}</span>
+                    </div>
+                    <div class="w-0.5 h-4 bg-gradient-to-b from-sky-400 to-transparent"></div>
+                `;
+                el.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    flyToLandmark(lm.key);
+                });
+                layer.appendChild(el);
+            });
+        }
+
+        function updateHotspotPositions() {
+            const layer = document.getElementById('hotspots-layer');
+            if (!showHotspots) {
+                layer.style.display = 'none';
+                return;
+            }
+            layer.style.display = 'block';
+
+            Object.values(LANDMARKS).forEach(lm => {
+                const el = document.getElementById(`hotspot-${lm.key}`);
+                if (!el) return;
+
+                const projected = lm.pos.clone().project(camera);
+                // Hide if behind camera
+                if (projected.z > 1) {
+                    el.style.opacity = '0';
+                    el.style.pointerEvents = 'none';
+                    return;
+                }
+
+                const x = (projected.x * 0.5 + 0.5) * window.innerWidth;
+                const y = (-(projected.y * 0.5) + 0.5) * window.innerHeight;
+
+                el.style.left = `${x}px`;
+                el.style.top = `${y}px`;
+                el.style.opacity = '1';
+                el.style.pointerEvents = 'auto';
+            });
+        }
+
+        // --- Guided Tour & UI Actions ---
+        function flyToLandmark(key) {
+            const lm = LANDMARKS[key];
+            if (!lm) return;
+            currentLandmarkKey = key;
+
+            // Update active button styling in bottom tour bar
+            document.querySelectorAll('.tour-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.landmark === key);
+            });
+
+            if (currentCameraMode === 'orbit') {
+                orbitState.desiredTarget.copy(lm.camTarget);
+                orbitState.desiredSpherical.copy(lm.camSpherical);
+                orbitState.autoFly = true;
+            } else {
+                walkState.position.copy(lm.walkPos);
+                walkState.yaw = lm.walkYaw;
+                walkState.pitch = 0;
+            }
+
+            openInfoCard(key);
+        }
+
+        function openInfoCard(key) {
+            const lm = LANDMARKS[key];
+            if (!lm) return;
+
+            document.getElementById('info-badge').textContent = lm.badge;
+            document.getElementById('info-title').textContent = lm.title;
+            document.getElementById('info-desc').textContent = lm.desc;
+            document.getElementById('info-icon').innerHTML = `<i class="fa-solid ${lm.icon}"></i>`;
+
+            const tagsContainer = document.getElementById('info-highlights');
+            tagsContainer.innerHTML = lm.tags.map(tag =>
+                `<span class="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-white/10 text-sky-200 border border-white/10">${tag}</span>`
+            ).join('');
+
+            const walkBtn = document.getElementById('info-walk-here-btn');
+            walkBtn.onclick = () => {
+                setCameraMode('walk');
+                walkState.position.copy(lm.walkPos);
+                walkState.yaw = lm.walkYaw;
+                walkState.pitch = 0;
+            };
+
+            const card = document.getElementById('info-card');
+            card.classList.remove('opacity-0', 'pointer-events-none', 'translate-y-3');
+        }
+
+        function closeInfoCard() {
+            const card = document.getElementById('info-card');
+            card.classList.add('opacity-0', 'pointer-events-none', 'translate-y-3');
+        }
+
+        function nextTourStop() {
+            const idx = LANDMARK_ORDER.indexOf(currentLandmarkKey);
+            const nextKey = LANDMARK_ORDER[(idx + 1) % LANDMARK_ORDER.length];
+            flyToLandmark(nextKey);
+        }
+
+        function toggleHotspots() {
+            showHotspots = !showHotspots;
+            document.getElementById('btn-hotspots').classList.toggle('active', showHotspots);
+        }
+
+        // --- Camera Modes (Orbit / Drone vs First-Person Walk) ---
+        function setCameraMode(mode) {
+            currentCameraMode = mode;
+            document.getElementById('btn-mode-orbit').classList.toggle('active', mode === 'orbit');
+            document.getElementById('btn-mode-walk').classList.toggle('active', mode === 'walk');
+
+            document.getElementById('hint-orbit').classList.toggle('hidden', mode !== 'orbit');
+            document.getElementById('hint-walk').classList.toggle('hidden', mode !== 'walk');
+
+            const joy = document.getElementById('joystick-zone');
+            if (mode === 'walk') {
+                joy.classList.remove('hidden');
+                const lm = LANDMARKS[currentLandmarkKey] || LANDMARKS.entrance;
+                walkState.position.copy(lm.walkPos);
+                walkState.yaw = lm.walkYaw;
+                walkState.pitch = 0;
+            } else {
+                joy.classList.add('hidden');
+                orbitState.autoFly = true;
+            }
+        }
+
+        // --- Time of Day Lighting Presets (Morning / Sunset / Night) ---
+        function setTimeOfDay(period) {
+            currentTimeOfDay = period;
+            ['morning', 'sunset', 'night'].forEach(p => {
+                document.getElementById(`btn-time-${p}`).classList.toggle('active', p === period);
+            });
+
+            if (period === 'morning') {
+                scene.background.setHex(0x87ceeb);
+                scene.fog.color.setHex(0x9ecae1);
+                sunLight.color.setHex(0xfffbeb);
+                sunLight.intensity = 1.35;
+                sunLight.position.set(55, 85, 45);
+                hemiLight.color.setHex(0xdbeafe);
+                hemiLight.groundColor.setHex(0x4d7c0f);
+                hemiLight.intensity = 0.65;
+                windowMaterials.forEach(m => m.emissiveIntensity = 0.12);
+            } else if (period === 'sunset') {
+                scene.background.setHex(0xf97316);
+                scene.fog.color.setHex(0xfb923c);
+                sunLight.color.setHex(0xffedd5);
+                sunLight.intensity = 1.45;
+                sunLight.position.set(-75, 22, -45);
+                hemiLight.color.setHex(0xfed7aa);
+                hemiLight.groundColor.setHex(0x451a03);
+                hemiLight.intensity = 0.55;
+                windowMaterials.forEach(m => m.emissiveIntensity = 0.45);
+            } else if (period === 'night') {
+                scene.background.setHex(0x090d16);
+                scene.fog.color.setHex(0x0f172a);
+                sunLight.color.setHex(0x93c5fd);
+                sunLight.intensity = 0.35;
+                sunLight.position.set(-35, 65, -35);
+                hemiLight.color.setHex(0x1e293b);
+                hemiLight.groundColor.setHex(0x020617);
+                hemiLight.intensity = 0.4;
+                windowMaterials.forEach(m => m.emissiveIntensity = 1.15);
+            }
+        }
+
+        // --- Web Audio API Synthesized School Bell Chime ---
+        function ringSchoolBell() {
+            try {
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                const ctx = new AudioCtx();
+                const notes = [523.25, 659.25, 783.99, 1046.50]; // C5 - E5 - G5 - C6 pleasant school chime
+                notes.forEach((freq, idx) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(freq, ctx.currentTime + idx * 0.28);
+
+                    gain.gain.setValueAtTime(0.001, ctx.currentTime + idx * 0.28);
+                    gain.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime + idx * 0.28 + 0.05);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + idx * 0.28 + 1.4);
+
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start(ctx.currentTime + idx * 0.28);
+                    osc.stop(ctx.currentTime + idx * 0.28 + 1.45);
+                });
+            } catch (err) {
+                // Ignore audio block if browser restricts
+            }
+        }
+
+        // --- Input & Navigation Event Listeners ---
+        function setupEventListeners() {
+            const dom = renderer.domElement;
+
+            // Mouse Controls
+            dom.addEventListener('mousedown', (e) => {
+                orbitState.autoFly = false;
+                if (currentCameraMode === 'orbit') {
+                    orbitState.isDragging = true;
+                    orbitState.prevMouse = { x: e.clientX, y: e.clientY };
+                } else {
+                    walkState.isLooking = true;
+                    walkState.prevLook = { x: e.clientX, y: e.clientY };
+                }
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                if (currentCameraMode === 'orbit' && orbitState.isDragging) {
+                    const dx = e.clientX - orbitState.prevMouse.x;
+                    const dy = e.clientY - orbitState.prevMouse.y;
+                    orbitState.prevMouse = { x: e.clientX, y: e.clientY };
+
+                    orbitState.spherical.theta -= dx * 0.0065;
+                    orbitState.spherical.phi = Math.max(0.22, Math.min(Math.PI / 2.08, orbitState.spherical.phi - dy * 0.0065));
+                } else if (currentCameraMode === 'walk' && walkState.isLooking) {
+                    const dx = e.clientX - walkState.prevLook.x;
+                    const dy = e.clientY - walkState.prevLook.y;
+                    walkState.prevLook = { x: e.clientX, y: e.clientY };
+
+                    walkState.yaw -= dx * 0.0045;
+                    walkState.pitch = Math.max(-0.75, Math.min(0.75, walkState.pitch - dy * 0.0045));
+                }
+            });
+
+            window.addEventListener('mouseup', () => {
+                orbitState.isDragging = false;
+                walkState.isLooking = false;
+            });
+
+            dom.addEventListener('wheel', (e) => {
+                if (currentCameraMode === 'orbit') {
+                    orbitState.autoFly = false;
+                    orbitState.spherical.radius = Math.max(12, Math.min(115, orbitState.spherical.radius + e.deltaY * 0.035));
+                }
+            }, { passive: true });
+
+            // Touch Controls (Orbit Drag & Pinch Zoom + Walk Look)
+            let prevTouchDist = 0;
+            dom.addEventListener('touchstart', (e) => {
+                orbitState.autoFly = false;
+                if (e.touches.length === 1) {
+                    if (currentCameraMode === 'orbit') {
+                        orbitState.isDragging = true;
+                        orbitState.prevMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                    } else {
+                        walkState.isLooking = true;
+                        walkState.prevLook = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                    }
+                } else if (e.touches.length === 2 && currentCameraMode === 'orbit') {
+                    prevTouchDist = Math.hypot(
+                        e.touches[0].clientX - e.touches[1].clientX,
+                        e.touches[0].clientY - e.touches[1].clientY
+                    );
+                }
+            }, { passive: true });
+
+            dom.addEventListener('touchmove', (e) => {
+                if (e.touches.length === 1) {
+                    if (currentCameraMode === 'orbit' && orbitState.isDragging) {
+                        const dx = e.touches[0].clientX - orbitState.prevMouse.x;
+                        const dy = e.touches[0].clientY - orbitState.prevMouse.y;
+                        orbitState.prevMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+
+                        orbitState.spherical.theta -= dx * 0.007;
+                        orbitState.spherical.phi = Math.max(0.22, Math.min(Math.PI / 2.08, orbitState.spherical.phi - dy * 0.007));
+                    } else if (currentCameraMode === 'walk' && walkState.isLooking) {
+                        const dx = e.touches[0].clientX - walkState.prevLook.x;
+                        const dy = e.touches[0].clientY - walkState.prevLook.y;
+                        walkState.prevLook = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+
+                        walkState.yaw -= dx * 0.006;
+                        walkState.pitch = Math.max(-0.75, Math.min(0.75, walkState.pitch - dy * 0.006));
+                    }
+                } else if (e.touches.length === 2 && currentCameraMode === 'orbit') {
+                    const dist = Math.hypot(
+                        e.touches[0].clientX - e.touches[1].clientX,
+                        e.touches[0].clientY - e.touches[1].clientY
+                    );
+                    const delta = prevTouchDist - dist;
+                    prevTouchDist = dist;
+                    orbitState.spherical.radius = Math.max(12, Math.min(115, orbitState.spherical.radius + delta * 0.12));
+                }
+            }, { passive: true });
+
+            dom.addEventListener('touchend', () => {
+                orbitState.isDragging = false;
+                walkState.isLooking = false;
+            });
+
+            // Keyboard WASD / Arrows for Walk Mode
+            window.addEventListener('keydown', (e) => { walkState.keys[e.code] = true; });
+            window.addEventListener('keyup', (e) => { walkState.keys[e.code] = false; });
+
+            // Touch Joystick Setup
+            const joyZone = document.getElementById('joystick-zone');
+            const joyKnob = document.getElementById('joystick-knob');
+            joyZone.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                const rect = joyZone.getBoundingClientRect();
+                const cx = rect.left + rect.width / 2;
+                const cy = rect.top + rect.height / 2;
+                const touch = e.touches[0];
+                let dx = touch.clientX - cx;
+                let dy = touch.clientY - cy;
+                const maxR = 36;
+                const dist = Math.hypot(dx, dy);
+                if (dist > maxR) {
+                    dx = (dx / dist) * maxR;
+                    dy = (dy / dist) * maxR;
+                }
+                joyKnob.style.transform = `translate(${dx}px, ${dy}px)`;
+                walkState.joyVec.x = dx / maxR;
+                walkState.joyVec.y = dy / maxR;
+            }, { passive: false });
+
+            joyZone.addEventListener('touchend', () => {
+                joyKnob.style.transform = `translate(0px, 0px)`;
+                walkState.joyVec = { x: 0, y: 0 };
+            });
+
+            // Window Resize
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+        }
+
+        // --- Camera Update Loop ---
+        function updateOrbitCamera() {
+            if (orbitState.autoFly) {
+                orbitState.target.lerp(orbitState.desiredTarget, 0.06);
+                orbitState.spherical.radius += (orbitState.desiredSpherical.radius - orbitState.spherical.radius) * 0.06;
+                orbitState.spherical.phi += (orbitState.desiredSpherical.phi - orbitState.spherical.phi) * 0.06;
+                orbitState.spherical.theta += (orbitState.desiredSpherical.theta - orbitState.spherical.theta) * 0.06;
+
+                if (
+                    orbitState.target.distanceTo(orbitState.desiredTarget) < 0.08 &&
+                    Math.abs(orbitState.spherical.radius - orbitState.desiredSpherical.radius) < 0.1
+                ) {
+                    orbitState.autoFly = false;
+                }
+            }
+
+            const offset = new THREE.Vector3().setFromSpherical(orbitState.spherical);
+            camera.position.copy(orbitState.target).add(offset);
+            camera.lookAt(orbitState.target);
+        }
+
+        function updateWalkCamera(delta) {
+            const speed = 13.5 * delta;
+            let forward = 0;
+            let strafe = 0;
+
+            if (walkState.keys['KeyW'] || walkState.keys['ArrowUp']) forward += 1;
+            if (walkState.keys['KeyS'] || walkState.keys['ArrowDown']) forward -= 1;
+            if (walkState.keys['KeyA'] || walkState.keys['ArrowLeft']) strafe -= 1;
+            if (walkState.keys['KeyD'] || walkState.keys['ArrowRight']) strafe += 1;
+
+            forward -= walkState.joyVec.y;
+            strafe += walkState.joyVec.x;
+
+            const dirForward = new THREE.Vector3(-Math.sin(walkState.yaw), 0, -Math.cos(walkState.yaw));
+            const dirRight = new THREE.Vector3(Math.cos(walkState.yaw), 0, -Math.sin(walkState.yaw));
+
+            walkState.position.addScaledVector(dirForward, forward * speed);
+            walkState.position.addScaledVector(dirRight, strafe * speed);
+
+            // Keep walker within campus boundaries
+            walkState.position.x = Math.max(-48, Math.min(48, walkState.position.x));
+            walkState.position.z = Math.max(-42, Math.min(54, walkState.position.z));
+            walkState.position.y = 2.2;
+
+            camera.position.copy(walkState.position);
+            const lookTarget = new THREE.Vector3(
+                walkState.position.x - Math.sin(walkState.yaw) * Math.cos(walkState.pitch),
+                walkState.position.y + Math.sin(walkState.pitch),
+                walkState.position.z - Math.cos(walkState.yaw) * Math.cos(walkState.pitch)
+            );
+            camera.lookAt(lookTarget);
+        }
+
+        // --- Main Animation Loop ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const delta = Math.min(clock.getDelta(), 0.1);
+            const elapsed = clock.getElapsedTime();
+
+            // 1. Animate Waving Flags in Jerusalem Mountain Breeze
+            flags.forEach(flagObj => {
+                const pos = flagObj.mesh.geometry.attributes.position;
+                for (let i = 0; i < pos.count; i++) {
+                    const x = flagObj.basePos[i * 3];
+                    const y = flagObj.basePos[i * 3 + 1];
+                    const wave = Math.sin(x * 2.4 - elapsed * 5.2 + y * 0.6) * (x * 0.11);
+                    pos.setZ(i, wave);
+                }
+                pos.needsUpdate = true;
+                flagObj.mesh.geometry.computeVertexNormals();
+            });
+
+            // 2. Animate Walking & Playing Students
+            students.forEach(s => {
+                const t = elapsed * s.path.speed + s.path.phase;
+                const nx = s.path.center.x + Math.cos(t) * s.path.rx;
+                const nz = s.path.center.z + Math.sin(t) * s.path.rz;
+
+                const dx = nx - s.group.position.x;
+                const dz = nz - s.group.position.z;
+                s.group.position.set(nx, 0.14, nz);
+                s.group.rotation.y = Math.atan2(dx, dz);
+
+                // Leg swing stride
+                const stride = Math.sin(elapsed * 8 + s.path.phase) * 0.45;
+                s.leftLeg.rotation.x = stride;
+                s.rightLeg.rotation.x = -stride;
+            });
+
+            // 3. Animate Bouncing Basketball
+            if (basketball) {
+                basketball.position.y = 0.55 + Math.abs(Math.sin(elapsed * 4.5)) * 2.4;
+                basketball.position.z = -1 + Math.sin(elapsed * 1.4) * 6;
+            }
+
+            // 4. Gently Drift Atmospheric Sunlight Dust
+            if (particles) {
+                particles.rotation.y = elapsed * 0.02;
+            }
+
+            // 5. Update Active Camera
+            if (currentCameraMode === 'orbit') {
+                updateOrbitCamera();
+            } else {
+                updateWalkCamera(delta);
+            }
+
+            // 6. Project 3D Hotspot Labels to Screen
+            updateHotspotPositions();
+
+            renderer.render(scene, camera);
+        }
+
+        // Start simulation once window loads
+        window.onload = init;
+    </script>
+
+<a id="club-back" href="../index.html#products-shelf" style="position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#fff;color:#1d2433;border:2px solid #cfe0f0;border-radius:999px;padding:8px 18px;font:600 15px/1.2 Arial,sans-serif;text-decoration:none;direction:rtl;box-shadow:0 3px 0 #cfe0f0">→ חזרה לאתר החוג</a>
+<script>if (window.top !== window) document.getElementById("club-back").remove();</script>
+</body>
+</html>

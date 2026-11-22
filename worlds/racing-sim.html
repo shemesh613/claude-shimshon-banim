@@ -1,0 +1,1873 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>עולם הגיימינג 3D - סימולטור מרוצי מכוניות</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;600;800;900&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            font-family: 'Rubik', sans-serif;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #090514;
+            color: #ffffff;
+        }
+        #game-canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+        /* אפקטים חזותיים לממשק */
+        .neon-text-cyan {
+            text-shadow: 0 0 10px rgba(0, 243, 255, 0.8), 0 0 20px rgba(0, 243, 255, 0.5);
+        }
+        .neon-text-pink {
+            text-shadow: 0 0 10px rgba(255, 0, 128, 0.8), 0 0 20px rgba(255, 0, 128, 0.5);
+        }
+        .neon-box {
+            background: rgba(15, 10, 35, 0.75);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(0, 243, 255, 0.35);
+            box-shadow: 0 0 25px rgba(0, 243, 255, 0.15), inset 0 0 15px rgba(255, 0, 128, 0.1);
+        }
+        .pulse-btn {
+            animation: pulseGlow 2s infinite;
+        }
+        @keyframes pulseGlow {
+            0%, 100% { box-shadow: 0 0 15px rgba(0, 243, 255, 0.6), 0 0 30px rgba(255, 0, 128, 0.4); transform: scale(1); }
+            50% { box-shadow: 0 0 25px rgba(0, 243, 255, 0.9), 0 0 45px rgba(255, 0, 128, 0.7); transform: scale(1.03); }
+        }
+        /* כוונת מרכזית בחדר הגיימינג */
+        #crosshair {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            width: 10px;
+            height: 10px;
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+            border: 2px solid rgba(0, 243, 255, 0.85);
+            background: rgba(255, 255, 255, 0.4);
+            pointer-events: none;
+            z-index: 15;
+            transition: transform 0.15s ease, border-color 0.15s ease;
+        }
+        #crosshair.active {
+            transform: translate(-50%, -50%) scale(1.8);
+            border-color: #ff0080;
+            background: rgba(255, 0, 128, 0.5);
+        }
+        /* אפקט מעבר מסך בעת כניסה/יציאה מהמחשב */
+        #screen-transition {
+            position: fixed;
+            inset: 0;
+            background: radial-gradient(circle, rgba(0,243,255,0.9) 0%, rgba(12,4,32,1) 100%);
+            z-index: 50;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.45s ease-in-out;
+        }
+        /* כפתורי מגע למובייל */
+        .touch-btn {
+            background: rgba(20, 15, 45, 0.7);
+            border: 2px solid rgba(0, 243, 255, 0.5);
+            backdrop-filter: blur(6px);
+            touch-action: manipulation;
+        }
+        .touch-btn:active {
+            background: rgba(0, 243, 255, 0.4);
+            transform: scale(0.95);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- קנבס תלת-מימד ראשי -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- שכבת מעבר זוהרת -->
+    <div id="screen-transition"></div>
+
+    <!-- כוונת למצב חדר הגיימינג -->
+    <div id="crosshair" class="hidden"></div>
+
+    <!-- מסך פתיחה / הוראות ראשוני -->
+    <div id="intro-overlay" class="fixed inset-0 z-40 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+        <div class="neon-box max-w-xl w-full rounded-3xl p-6 sm:p-8 text-center relative overflow-hidden">
+            <div class="absolute -top-20 -right-20 w-44 h-44 bg-cyan-500/20 rounded-full blur-3xl"></div>
+            <div class="absolute -bottom-20 -left-20 w-44 h-44 bg-pink-500/20 rounded-full blur-3xl"></div>
+
+            <div class="inline-block px-4 py-1 rounded-full bg-cyan-500/20 border border-cyan-400/40 text-cyan-300 text-xs sm:text-sm font-bold mb-3">
+                חוויית תלת-מימד אינטראקטיבית 3D
+            </div>
+            <h1 class="text-3xl sm:text-5xl font-black mb-3 neon-text-cyan tracking-tight">
+                חדר הגיימינג האולטימטיבי
+            </h1>
+            <p class="text-gray-300 text-sm sm:text-base mb-6 leading-relaxed">
+                הסתובב בחדר הגיימינג המעוצב שלך, גש אל עמדת המחשב המוארת ולחץ <span class="text-cyan-400 font-bold">E</span> (או על הכפתור) כדי לשבת ולשחק במשחק מרוצי מכוניות תלת-מימדי מלא!
+            </p>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-right text-xs sm:text-sm mb-7">
+                <div class="bg-white/5 p-3 rounded-2xl border border-white/10">
+                    <div class="text-cyan-400 font-bold mb-1">🚶‍♂️ בחדר הגיימינג:</div>
+                    <div class="text-gray-300">תנועה: <span class="text-white font-semibold">W A S D</span> או חצים</div>
+                    <div class="text-gray-300">מבט: <span class="text-white font-semibold">עכבר</span> (לחץ על המסך)</div>
+                    <div class="text-gray-300">הפעלת מחשב: <span class="text-pink-400 font-bold">מקש E</span></div>
+                </div>
+                <div class="bg-white/5 p-3 rounded-2xl border border-white/10">
+                    <div class="text-pink-400 font-bold mb-1">🏎️ במשחק המכוניות:</div>
+                    <div class="text-gray-300">גז / רוורס: <span class="text-white font-semibold">W / S</span> או חצים</div>
+                    <div class="text-gray-300">היגוי: <span class="text-white font-semibold">A / D</span> | דריפט: <span class="text-white font-semibold">רווח</span></div>
+                    <div class="text-gray-300">ניטרו: <span class="text-cyan-300 font-bold">Shift</span> | מצלמה: <span class="text-white font-semibold">C</span></div>
+                </div>
+            </div>
+
+            <div class="flex flex-col sm:flex-row gap-3 justify-center">
+                <button id="btn-start-room" class="pulse-btn px-7 py-3.5 rounded-2xl bg-gradient-to-l from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-extrabold text-base sm:text-lg transition cursor-pointer">
+                    🎮 כנס לחדר הגיימינג
+                </button>
+                <button id="btn-jump-race" class="px-6 py-3.5 rounded-2xl bg-pink-600/30 hover:bg-pink-600/50 border border-pink-400/50 text-pink-200 font-bold text-sm sm:text-base transition cursor-pointer">
+                    🏎️ קפוץ ישר למרוץ
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ממשק עליון קבוע (כפתורי סאונד ומעבר מצב) -->
+    <div id="top-bar" class="fixed top-4 left-4 right-4 z-30 flex justify-between items-center pointer-events-none">
+        <div class="flex items-center gap-2 pointer-events-auto">
+            <button id="btn-toggle-audio" class="neon-box px-3.5 py-2 rounded-xl text-sm font-bold text-cyan-300 hover:bg-cyan-500/20 transition flex items-center gap-2 cursor-pointer">
+                <span id="audio-icon">🔊</span>
+                <span class="hidden sm:inline" id="audio-label">סאונד פעיל</span>
+            </button>
+            <button id="btn-mode-switch" class="hidden neon-box px-4 py-2 rounded-xl text-sm font-bold text-pink-300 hover:bg-pink-500/20 transition cursor-pointer">
+                🚪 קום מהמחשב (ESC)
+            </button>
+        </div>
+
+        <div id="mode-badge" class="neon-box px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold text-cyan-300">
+            🏠 מצב: חדר הגיימינג
+        </div>
+    </div>
+
+    <!-- ממשק מצב 1: חדר הגיימינג -->
+    <div id="room-hud" class="hidden fixed inset-0 z-20 pointer-events-none">
+        <!-- הנחיית התקרבות למחשב -->
+        <div id="pc-prompt" class="hidden fixed bottom-24 left-1/2 -translate-x-1/2 pointer-events-auto">
+            <button id="btn-sit-pc" class="pulse-btn neon-box px-6 py-3.5 rounded-2xl border-2 border-cyan-400 bg-slate-900/90 text-white font-extrabold text-base sm:text-lg flex items-center gap-3 cursor-pointer">
+                <span class="bg-cyan-500 text-slate-950 px-2.5 py-0.5 rounded-lg font-black">E</span>
+                <span>שב ושחק במרוץ המכוניות התלת-מימדי!</span>
+            </button>
+        </div>
+
+        <!-- טיפים בתחתית החדר -->
+        <div class="fixed bottom-4 right-4 neon-box px-4 py-2.5 rounded-2xl text-xs sm:text-sm text-gray-300 hidden md:block">
+            <span class="text-cyan-400 font-bold">טיפ:</span> התקרב לעמדת המחשב המוארת במרכז החדר • לחץ על המסך לסיבוב מבט חופשי
+        </div>
+
+        <!-- כפתור מהיר למובייל / עכבר -->
+        <div class="fixed bottom-4 left-4 pointer-events-auto">
+            <button id="btn-quick-pc" class="neon-box px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-bold text-cyan-300 hover:bg-cyan-500/20 transition cursor-pointer">
+                🖥️ גש אוטומטית למחשב
+            </button>
+        </div>
+    </div>
+
+    <!-- ממשק מצב 2: משחק מרוצי המכוניות -->
+    <div id="race-hud" class="hidden fixed inset-0 z-20 pointer-events-none">
+        <!-- נתוני מרוץ עליונים -->
+        <div class="fixed top-16 left-1/2 -translate-x-1/2 flex gap-3 sm:gap-5">
+            <div class="neon-box px-4 py-2 rounded-2xl text-center min-w-[85px] sm:min-w-[110px]">
+                <div class="text-[10px] sm:text-xs text-cyan-300 font-semibold">הקפה</div>
+                <div id="hud-lap" class="text-lg sm:text-2xl font-black text-white">1 / 3</div>
+            </div>
+            <div class="neon-box px-4 py-2 rounded-2xl text-center min-w-[95px] sm:min-w-[125px]">
+                <div class="text-[10px] sm:text-xs text-pink-300 font-semibold">ניקוד ומטבעות</div>
+                <div id="hud-score" class="text-lg sm:text-2xl font-black text-yellow-400">0</div>
+            </div>
+            <div class="neon-box px-4 py-2 rounded-2xl text-center min-w-[85px] sm:min-w-[110px]">
+                <div class="text-[10px] sm:text-xs text-emerald-300 font-semibold">מיקום</div>
+                <div id="hud-pos" class="text-lg sm:text-2xl font-black text-emerald-400">1 / 4</div>
+            </div>
+        </div>
+
+        <!-- הודעות אירוע במרכז המסך (ניטרו, הקפה חדשה, סיום) -->
+        <div id="race-banner" class="hidden fixed top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center">
+            <div id="race-banner-text" class="text-3xl sm:text-5xl font-black neon-text-pink tracking-wide">
+                הקפה 2!
+            </div>
+        </div>
+
+        <!-- מכמונת מהירות ומד ניטרו (פינה ימנית תחתונה) -->
+        <div class="fixed bottom-4 right-4 neon-box p-4 rounded-3xl w-48 sm:w-60 hidden sm:block">
+            <div class="flex justify-between items-end mb-2">
+                <span class="text-xs text-gray-400 font-bold">מהירות</span>
+                <div>
+                    <span id="hud-speed" class="text-3xl font-black text-cyan-400">0</span>
+                    <span class="text-xs text-cyan-200 mr-1">קמ"ש</span>
+                </div>
+            </div>
+            <!-- מד ניטרו -->
+            <div class="mb-1 flex justify-between text-xs font-bold">
+                <span class="text-pink-400">⚡ ניטרו (Shift)</span>
+                <span id="hud-nitro-pct" class="text-pink-300">100%</span>
+            </div>
+            <div class="w-full h-3 bg-slate-900 rounded-full overflow-hidden border border-pink-500/40">
+                <div id="hud-nitro-bar" class="h-full bg-gradient-to-l from-cyan-400 via-blue-500 to-pink-500 transition-all duration-75" style="width: 100%;"></div>
+            </div>
+            <div class="mt-2.5 flex justify-between text-[11px] text-gray-400">
+                <span>מצלמה: <b class="text-white">C</b></span>
+                <span>דריפט: <b class="text-white">רווח</b></span>
+            </div>
+        </div>
+
+        <!-- מכמונת מהירות קומפקטית למובייל -->
+        <div class="fixed top-32 right-4 neon-box px-3 py-1.5 rounded-xl sm:hidden">
+            <span id="hud-speed-mobile" class="text-lg font-black text-cyan-400">0</span>
+            <span class="text-[10px] text-gray-300">קמ"ש</span>
+        </div>
+
+        <!-- מפת מסלול קטנה (פינה שמאלית תחתונה בדסקטופ) -->
+        <div class="fixed bottom-4 left-4 neon-box p-2 rounded-2xl hidden md:block">
+            <canvas id="minimap-canvas" width="130" height="130" class="rounded-xl"></canvas>
+        </div>
+
+        <!-- כפתורי שליטה למגע (מובייל / טאבלט) -->
+        <div class="fixed bottom-4 inset-x-4 flex justify-between items-end md:hidden pointer-events-none">
+            <!-- היגוי שמאל / ימין -->
+            <div class="flex gap-3 pointer-events-auto" dir="ltr">
+                <button id="touch-left" class="touch-btn w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-black text-cyan-300">◀</button>
+                <button id="touch-right" class="touch-btn w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-black text-cyan-300">▶</button>
+            </div>
+            <!-- ניטרו, ברקס, גז -->
+            <div class="flex gap-2.5 items-end pointer-events-auto">
+                <button id="touch-nitro" class="touch-btn w-14 h-14 rounded-2xl flex items-center justify-center text-xl font-black text-pink-400 border-pink-500/60">⚡</button>
+                <button id="touch-brake" class="touch-btn w-14 h-16 rounded-2xl flex items-center justify-center text-sm font-bold text-red-300 border-red-500/50">בלם</button>
+                <button id="touch-gas" class="touch-btn w-16 h-20 rounded-2xl flex items-center justify-center text-base font-black text-emerald-300 border-emerald-500/60">גז</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- מסך סיום מרוץ -->
+    <div id="finish-modal" class="hidden fixed inset-0 z-40 flex items-center justify-center bg-black/75 backdrop-blur-md p-4">
+        <div class="neon-box max-w-md w-full rounded-3xl p-7 text-center">
+            <div class="text-5xl mb-3">🏆</div>
+            <h2 class="text-3xl font-black neon-text-cyan mb-2">המרוץ הסתיים!</h2>
+            <p id="finish-summary" class="text-gray-300 mb-6 text-base">סיימת במקום ה-1 עם 1,250 נקודות!</p>
+            <div class="flex flex-col sm:flex-row gap-3 justify-center">
+                <button id="btn-restart-race" class="pulse-btn px-6 py-3 rounded-2xl bg-gradient-to-l from-cyan-500 to-blue-600 text-white font-extrabold cursor-pointer">
+                    🔄 מרוץ חדש
+                </button>
+                <button id="btn-back-to-room" class="px-6 py-3 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/20 text-white font-bold cursor-pointer">
+                    🏠 חזור לחדר הגיימינג
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    /**
+     * ============================================================================
+     * עולם גיימינג 3D אינטראקטיבי + סימולטור מרוצי מכוניות בתלת-מימד
+     * ארכיטקטורה:
+     * 1. מנוע סאונד פרוצדורלי (Web Audio API) לצלילי מנוע, ניטרו, דריפט ומטבעות.
+     * 2. סצנה 1: חדר גיימינג (Gaming Room) עם תאורת RGB, מחשב גיימינג, מסך חי
+     *    המציג תצוגה מקדימה של המסלול בזמן אמת, ואפשרות הליכה חופשית.
+     * 3. סצנה 2: עולם מרוצי מכוניות תלת-מימדי מלא (Cyber Neon Circuit) עם פיזיקת
+     *    נהיגה, דריפט, ניטרו, מקפצות, רכבים מתחרים, מטבעות ומצלמות מתחלפות.
+     * ============================================================================
+     */
+
+    // --- ניהול מצב גלובלי ---
+    const STATE = {
+        mode: 'INTRO', // 'INTRO' | 'ROOM' | 'RACE' | 'FINISHED'
+        audioEnabled: true,
+        isTransitioning: false,
+        keys: {},
+        touch: { left: false, right: false, gas: false, brake: false, nitro: false }
+    };
+
+    // --- מערכת סאונד פרוצדורלית (Web Audio API) ---
+    class SoundEngine {
+        constructor() {
+            this.ctx = null;
+            this.engineOsc = null;
+            this.engineGain = null;
+            this.nitroNode = null;
+            this.nitroGain = null;
+            this.initialized = false;
+        }
+
+        init() {
+            if (this.initialized) return;
+            try {
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                this.ctx = new AudioCtx();
+
+                // מתנד מנוע רכב
+                this.engineOsc = this.ctx.createOscillator();
+                this.engineOsc.type = 'sawtooth';
+                this.engineOsc.frequency.value = 55;
+
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.value = 260;
+
+                this.engineGain = this.ctx.createGain();
+                this.engineGain.gain.value = 0.0;
+
+                this.engineOsc.connect(filter);
+                filter.connect(this.engineGain);
+                this.engineGain.connect(this.ctx.destination);
+                this.engineOsc.start();
+
+                this.initialized = true;
+            } catch (e) {
+                console.warn('Web Audio not supported:', e);
+            }
+        }
+
+        resume() {
+            if (this.ctx && this.ctx.state === 'suspended') {
+                this.ctx.resume();
+            }
+        }
+
+        updateEngine(speedRatio, isNitro, isRaceActive) {
+            if (!this.initialized || !STATE.audioEnabled || !isRaceActive) {
+                if (this.engineGain) this.engineGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.08);
+                return;
+            }
+            const baseFreq = 48 + Math.abs(speedRatio) * 145 + (isNitro ? 45 : 0);
+            this.engineOsc.frequency.setTargetAtTime(baseFreq, this.ctx.currentTime, 0.05);
+            const targetVol = 0.04 + Math.abs(speedRatio) * 0.07 + (isNitro ? 0.04 : 0);
+            this.engineGain.gain.setTargetAtTime(targetVol, this.ctx.currentTime, 0.05);
+        }
+
+        playCoin() {
+            if (!this.initialized || !STATE.audioEnabled) return;
+            const now = this.ctx.currentTime;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(680, now);
+            osc.frequency.exponentialRampToValueAtTime(1250, now + 0.14);
+            gain.gain.setValueAtTime(0.12, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.17);
+        }
+
+        playBoostPad() {
+            if (!this.initialized || !STATE.audioEnabled) return;
+            const now = this.ctx.currentTime;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(220, now);
+            osc.frequency.exponentialRampToValueAtTime(880, now + 0.35);
+            gain.gain.setValueAtTime(0.16, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.4);
+        }
+
+        playStep() {
+            if (!this.initialized || !STATE.audioEnabled) return;
+            const now = this.ctx.currentTime;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(110, now);
+            osc.frequency.exponentialRampToValueAtTime(45, now + 0.06);
+            gain.gain.setValueAtTime(0.05, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.08);
+        }
+
+        playTransition() {
+            if (!this.initialized || !STATE.audioEnabled) return;
+            const now = this.ctx.currentTime;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(280, now);
+            osc.frequency.exponentialRampToValueAtTime(920, now + 0.3);
+            gain.gain.setValueAtTime(0.12, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.35);
+        }
+    }
+
+    const sound = new SoundEngine();
+
+    // --- אתחול רנדרר מרכזי ---
+    const canvas = document.getElementById('game-canvas');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.15;
+
+    // ============================================================================
+    // חלק 1: בניית חדר הגיימינג התלת-מימדי (GAMING ROOM SCENE)
+    // ============================================================================
+    const roomScene = new THREE.Scene();
+    roomScene.background = new THREE.Color(0x090616);
+    roomScene.fog = new THREE.FogExp2(0x090616, 0.035);
+
+    const roomCamera = new THREE.PerspectiveCamera(68, window.innerWidth / window.innerHeight, 0.1, 100);
+    const playerRig = {
+        pos: new THREE.Vector3(0, 1.75, 4.2),
+        yaw: 0,
+        pitch: -0.05,
+        speed: 4.5,
+        stepTimer: 0,
+        bobPhase: 0,
+        nearPC: false
+    };
+
+    // טקסטורות פרוצדורליות לחדר הגיימינג
+    function createGridFloorTexture() {
+        const c = document.createElement('canvas');
+        c.width = 512; c.height = 512;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#120d24';
+        ctx.fillRect(0, 0, 512, 512);
+        ctx.strokeStyle = '#251c47';
+        ctx.lineWidth = 4;
+        for (let i = 0; i <= 512; i += 64) {
+            ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 512); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(512, i); ctx.stroke();
+        }
+        ctx.strokeStyle = 'rgba(0, 243, 255, 0.22)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(2, 2, 508, 508);
+        const tex = new THREE.CanvasTexture(c);
+        tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+        tex.repeat.set(6, 6);
+        return tex;
+    }
+
+    function createPosterTexture(title, subtitle, c1, c2) {
+        const c = document.createElement('canvas');
+        c.width = 512; c.height = 640;
+        const ctx = c.getContext('2d');
+        const grad = ctx.createLinearGradient(0, 0, 512, 640);
+        grad.addColorStop(0, c1);
+        grad.addColorStop(1, c2);
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, 512, 640);
+
+        // קווי ניאון גיאומטריים
+        ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+        ctx.lineWidth = 6;
+        ctx.strokeRect(24, 24, 464, 592);
+
+        ctx.beginPath();
+        ctx.arc(256, 260, 120, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+        ctx.fill();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '900 54px Rubik, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(title, 256, 450);
+
+        ctx.fillStyle = '#00f3ff';
+        ctx.font = 'bold 28px Rubik, sans-serif';
+        ctx.fillText(subtitle, 256, 510);
+
+        return new THREE.CanvasTexture(c);
+    }
+
+    // מסך חי של המחשב בחדר (מציג אנימציה של משחק המכוניות!)
+    const monitorCanvas = document.createElement('canvas');
+    monitorCanvas.width = 512;
+    monitorCanvas.height = 288;
+    const monitorCtx = monitorCanvas.getContext('2d');
+    const monitorTexture = new THREE.CanvasTexture(monitorCanvas);
+
+    function updateMonitorPreview(time) {
+        const ctx = monitorCtx;
+        const w = monitorCanvas.width;
+        const h = monitorCanvas.height;
+
+        // שמיים סייברפאנק
+        const sky = ctx.createLinearGradient(0, 0, 0, h * 0.55);
+        sky.addColorStop(0, '#09021a');
+        sky.addColorStop(1, '#3b0764');
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, w, h * 0.55);
+
+        // שמש ניאון
+        ctx.fillStyle = '#ff0080';
+        ctx.beginPath();
+        ctx.arc(w / 2, h * 0.52, 46, Math.PI, 0);
+        ctx.fill();
+
+        // כביש פרספקטיבי
+        ctx.fillStyle = '#111827';
+        ctx.beginPath();
+        ctx.moveTo(w * 0.42, h * 0.55);
+        ctx.lineTo(w * 0.58, h * 0.55);
+        ctx.lineTo(w * 0.95, h);
+        ctx.lineTo(w * 0.05, h);
+        ctx.closePath();
+        ctx.fill();
+
+        // קווי כביש נעים
+        ctx.strokeStyle = '#00f3ff';
+        ctx.lineWidth = 3;
+        const offset = (time * 180) % 40;
+        for (let y = h * 0.58 + offset * 0.3; y < h; y += 26) {
+            const ratio = (y - h * 0.55) / (h * 0.45);
+            ctx.beginPath();
+            ctx.moveTo(w / 2 - 4 * ratio, y);
+            ctx.lineTo(w / 2 + 4 * ratio, y);
+            ctx.stroke();
+        }
+
+        // מכונית קטנה על המסך
+        const carX = w / 2 + Math.sin(time * 2.2) * 38;
+        ctx.fillStyle = '#00f3ff';
+        ctx.fillRect(carX - 24, h - 55, 48, 22);
+        ctx.fillStyle = '#ff0080';
+        ctx.fillRect(carX - 18, h - 42, 10, 6);
+        ctx.fillRect(carX + 8, h - 42, 10, 6);
+
+        // טקסט על צג המחשב
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 20px Rubik, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('NEON TURBO 3D - מוכן למשחק!', w / 2, 34);
+
+        ctx.fillStyle = '#00f3ff';
+        ctx.font = 'bold 16px Rubik, sans-serif';
+        ctx.fillText('לחץ E כדי לשבת ולנהוג', w / 2, 60);
+
+        monitorTexture.needsUpdate = true;
+    }
+
+    let rgbLight1, rgbLight2, pcScreenGlow, floatingRing;
+
+    function buildGamingRoom() {
+        // רצפה ותקרה
+        const floorMat = new THREE.MeshStandardMaterial({
+            map: createGridFloorTexture(),
+            roughness: 0.35,
+            metalness: 0.4
+        });
+        const floor = new THREE.Mesh(new THREE.PlaneGeometry(14, 14), floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        roomScene.add(floor);
+
+        // שטיח גיימינג עגול מואר במרכז
+        const rugMat = new THREE.MeshStandardMaterial({
+            color: 0x161130,
+            roughness: 0.8
+        });
+        const rug = new THREE.Mesh(new THREE.CircleGeometry(3.2, 48), rugMat);
+        rug.rotation.x = -Math.PI / 2;
+        rug.position.y = 0.01;
+        roomScene.add(rug);
+
+        const rugRing = new THREE.Mesh(
+            new THREE.RingGeometry(3.12, 3.22, 48),
+            new THREE.MeshBasicMaterial({ color: 0x00f3ff, side: THREE.DoubleSide })
+        );
+        rugRing.rotation.x = -Math.PI / 2;
+        rugRing.position.y = 0.015;
+        roomScene.add(rugRing);
+
+        // קירות החדר
+        const wallMat = new THREE.MeshStandardMaterial({ color: 0x130e26, roughness: 0.7 });
+        const backWall = new THREE.Mesh(new THREE.BoxGeometry(14, 5, 0.3), wallMat);
+        backWall.position.set(0, 2.5, -5.5);
+        backWall.receiveShadow = true;
+        roomScene.add(backWall);
+
+        const frontWall = new THREE.Mesh(new THREE.BoxGeometry(14, 5, 0.3), wallMat);
+        frontWall.position.set(0, 2.5, 6.5);
+        roomScene.add(frontWall);
+
+        const leftWall = new THREE.Mesh(new THREE.BoxGeometry(0.3, 5, 12), wallMat);
+        leftWall.position.set(-6.5, 2.5, 0.5);
+        roomScene.add(leftWall);
+
+        const rightWall = new THREE.Mesh(new THREE.BoxGeometry(0.3, 5, 12), wallMat);
+        rightWall.position.set(6.5, 2.5, 0.5);
+        roomScene.add(rightWall);
+
+        const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(14, 14), new THREE.MeshStandardMaterial({ color: 0x0a0718 }));
+        ceiling.rotation.x = Math.PI / 2;
+        ceiling.position.y = 5;
+        roomScene.add(ceiling);
+
+        // פסי LED RGB לאורך הקירות והתקרה
+        const stripCyan = new THREE.MeshBasicMaterial({ color: 0x00f3ff });
+        const stripPink = new THREE.MeshBasicMaterial({ color: 0xff0080 });
+
+        const topStripBack = new THREE.Mesh(new THREE.BoxGeometry(12.8, 0.08, 0.08), stripCyan);
+        topStripBack.position.set(0, 4.85, -5.3);
+        roomScene.add(topStripBack);
+
+        const topStripLeft = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 11.8), stripPink);
+        topStripLeft.position.set(-6.3, 4.85, 0.5);
+        roomScene.add(topStripLeft);
+
+        const topStripRight = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 11.8), stripCyan);
+        topStripRight.position.set(6.3, 4.85, 0.5);
+        roomScene.add(topStripRight);
+
+        // פוסטרים מוארים על הקירות
+        const poster1 = new THREE.Mesh(
+            new THREE.PlaneGeometry(1.7, 2.1),
+            new THREE.MeshBasicMaterial({ map: createPosterTexture('CYBER DRIFT', 'TURBO EDITION', '#1e1b4b', '#831843') })
+        );
+        poster1.position.set(-3.4, 2.6, -5.33);
+        roomScene.add(poster1);
+
+        const poster2 = new THREE.Mesh(
+            new THREE.PlaneGeometry(1.7, 2.1),
+            new THREE.MeshBasicMaterial({ map: createPosterTexture('NEON CITY', 'RACING 3D', '#0f172a', '#0e7490') })
+        );
+        poster2.position.set(3.4, 2.6, -5.33);
+        roomScene.add(poster2);
+
+        // --- עמדת הגיימינג המרכזית (שולחן, מחשב RGB, מסך קעור, הגה וכיסא) ---
+        const setupGroup = new THREE.Group();
+        setupGroup.position.set(0, 0, -3.6);
+        roomScene.add(setupGroup);
+
+        // משטח שולחן קרבון כהה עם קצה מואר
+        const deskTop = new THREE.Mesh(
+            new THREE.BoxGeometry(3.4, 0.1, 1.4),
+            new THREE.MeshStandardMaterial({ color: 0x181824, roughness: 0.3, metalness: 0.6 })
+        );
+        deskTop.position.set(0, 0.85, 0);
+        deskTop.castShadow = true;
+        deskTop.receiveShadow = true;
+        setupGroup.add(deskTop);
+
+        const deskEdge = new THREE.Mesh(
+            new THREE.BoxGeometry(3.42, 0.04, 0.04),
+            stripCyan
+        );
+        deskEdge.position.set(0, 0.85, 0.7);
+        setupGroup.add(deskEdge);
+
+        // רגלי שולחן
+        const legMat = new THREE.MeshStandardMaterial({ color: 0x0f0f17, metalness: 0.8, roughness: 0.2 });
+        [-1.5, 1.5].forEach(lx => {
+            const leg = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.85, 1.1), legMat);
+            leg.position.set(lx, 0.425, 0);
+            setupGroup.add(leg);
+        });
+
+        // מסך גיימינג רחב במרכז השולחן
+        const monitorStand = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.45, 0.12), legMat);
+        monitorStand.position.set(0, 1.1, -0.35);
+        setupGroup.add(monitorStand);
+
+        const monitorFrame = new THREE.Mesh(
+            new THREE.BoxGeometry(1.95, 1.12, 0.08),
+            new THREE.MeshStandardMaterial({ color: 0x0b0b12, roughness: 0.4 })
+        );
+        monitorFrame.position.set(0, 1.55, -0.25);
+        setupGroup.add(monitorFrame);
+
+        const monitorScreen = new THREE.Mesh(
+            new THREE.PlaneGeometry(1.84, 1.02),
+            new THREE.MeshBasicMaterial({ map: monitorTexture })
+        );
+        monitorScreen.position.set(0, 1.55, -0.205);
+        setupGroup.add(monitorScreen);
+
+        // מארז מחשב גיימינג שקוף עם מאווררי RGB (בצד ימין של השולחן)
+        const pcCase = new THREE.Mesh(
+            new THREE.BoxGeometry(0.46, 0.78, 0.82),
+            new THREE.MeshStandardMaterial({ color: 0x11131f, metalness: 0.7, roughness: 0.2 })
+        );
+        pcCase.position.set(1.25, 1.29, -0.1);
+        setupGroup.add(pcCase);
+
+        // 3 מאווררים זוהרים בחזית המארז
+        [1.05, 1.29, 1.53].forEach((fy, idx) => {
+            const fan = new THREE.Mesh(
+                new THREE.RingGeometry(0.06, 0.1, 24),
+                idx % 2 === 0 ? stripCyan : stripPink
+            );
+            fan.position.set(1.25, fy, 0.315);
+            setupGroup.add(fan);
+        });
+
+        // מקלדת RGB + עכבר + הגה סימולטור על השולחן
+        const keyboard = new THREE.Mesh(
+            new THREE.BoxGeometry(0.68, 0.03, 0.24),
+            new THREE.MeshStandardMaterial({ color: 0x1e1e2e })
+        );
+        keyboard.position.set(-0.45, 0.91, 0.25);
+        setupGroup.add(keyboard);
+
+        const kbGlow = new THREE.Mesh(new THREE.PlaneGeometry(0.64, 0.2), stripPink);
+        kbGlow.rotation.x = -Math.PI / 2;
+        kbGlow.position.set(-0.45, 0.927, 0.25);
+        setupGroup.add(kbGlow);
+
+        // הגה סימולטור מרוצים מחובר לשולחן
+        const wheelBase = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.18, 0.28), legMat);
+        wheelBase.position.set(0.28, 0.96, 0.38);
+        setupGroup.add(wheelBase);
+
+        const steeringWheel = new THREE.Mesh(
+            new THREE.TorusGeometry(0.16, 0.028, 12, 24),
+            new THREE.MeshStandardMaterial({ color: 0x222230, roughness: 0.4 })
+        );
+        steeringWheel.position.set(0.28, 1.05, 0.55);
+        steeringWheel.rotation.x = -0.25;
+        setupGroup.add(steeringWheel);
+
+        // כיסא גיימינג ארגונומי מול השולחן (מוסט מעט הצידה כדי לא לחסום)
+        const chairGroup = new THREE.Group();
+        chairGroup.position.set(-0.55, 0, 1.25);
+        chairGroup.rotation.y = 0.35;
+        setupGroup.add(chairGroup);
+
+        const chairSeat = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.12, 0.65), new THREE.MeshStandardMaterial({ color: 0x1a1a28 }));
+        chairSeat.position.y = 0.52;
+        chairGroup.add(chairSeat);
+
+        const chairBack = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.95, 0.12), new THREE.MeshStandardMaterial({ color: 0x161622 }));
+        chairBack.position.set(0, 1.0, 0.28);
+        chairBack.rotation.x = -0.12;
+        chairGroup.add(chairBack);
+
+        const chairAccent = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.96, 0.04), stripPink);
+        chairAccent.position.set(0, 1.0, 0.33);
+        chairAccent.rotation.x = -0.12;
+        chairGroup.add(chairAccent);
+
+        const chairPole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.5), legMat);
+        chairPole.position.y = 0.25;
+        chairGroup.add(chairPole);
+
+        // טבעת הולוגרמה מרחפת מעל עמדת המחשב לסימון ברור
+        floatingRing = new THREE.Mesh(
+            new THREE.TorusGeometry(0.35, 0.025, 12, 32),
+            stripCyan
+        );
+        floatingRing.position.set(0, 2.45, -3.6);
+        floatingRing.rotation.x = Math.PI / 2;
+        roomScene.add(floatingRing);
+
+        // מדפים עם גביעים וקוביות ניאון בצדדים
+        [-5.2, 5.2].forEach((sx, idx) => {
+            const shelf = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.08, 2.6), legMat);
+            shelf.position.set(sx, 2.2, -1.5);
+            roomScene.add(shelf);
+
+            const cube = new THREE.Mesh(
+                new THREE.BoxGeometry(0.32, 0.32, 0.32),
+                idx === 0 ? stripPink : stripCyan
+            );
+            cube.position.set(sx, 2.45, -1.5);
+            roomScene.add(cube);
+        });
+
+        // תאורת החדר
+        const ambient = new THREE.AmbientLight(0x4c3b85, 0.9);
+        roomScene.add(ambient);
+
+        rgbLight1 = new THREE.PointLight(0x00f3ff, 2.2, 12);
+        rgbLight1.position.set(-2.5, 3.8, -2.5);
+        roomScene.add(rgbLight1);
+
+        rgbLight2 = new THREE.PointLight(0xff0080, 2.2, 12);
+        rgbLight2.position.set(2.5, 3.8, -2.5);
+        roomScene.add(rgbLight2);
+
+        pcScreenGlow = new THREE.PointLight(0x00f3ff, 1.8, 5);
+        pcScreenGlow.position.set(0, 1.6, -2.8);
+        roomScene.add(pcScreenGlow);
+    }
+
+    buildGamingRoom();
+
+    // ============================================================================
+    // חלק 2: בניית עולם מרוצי המכוניות התלת-מימדי (3D RACING GAME SCENE)
+    // ============================================================================
+    const raceScene = new THREE.Scene();
+    raceScene.background = new THREE.Color(0x070312);
+    raceScene.fog = new THREE.FogExp2(0x0b0520, 0.0042);
+
+    const raceCamera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.2, 500);
+
+    // מסלול מרוצים סגור בצורת מסלול מרוצים מפותל ומרתק (CatmullRomCurve3)
+    const trackPoints = [
+        new THREE.Vector3(0, 0, 0),
+        new THREE.Vector3(0, 0, -90),
+        new THREE.Vector3(45, 0, -165),
+        new THREE.Vector3(135, 0, -180),
+        new THREE.Vector3(210, 0, -120),
+        new THREE.Vector3(220, 0, -25),
+        new THREE.Vector3(165, 0, 45),
+        new THREE.Vector3(195, 0, 130),
+        new THREE.Vector3(130, 0, 200),
+        new THREE.Vector3(35, 0, 185),
+        new THREE.Vector3(-25, 0, 115),
+        new THREE.Vector3(0, 0, 55)
+    ];
+    const trackCurve = new THREE.CatmullRomCurve3(trackPoints, true, 'catmullrom', 0.5);
+    const TRACK_WIDTH = 22;
+    const TRACK_SAMPLES = 400;
+    const sampledPoints = trackCurve.getSpacedPoints(TRACK_SAMPLES);
+
+    // מבני נתונים למשחק המרוץ
+    const raceData = {
+        lap: 1,
+        maxLaps: 3,
+        score: 0,
+        coins: [],
+        boostPads: [],
+        aiCars: [],
+        particles: [],
+        cameraMode: 0, // 0 = מצלמת מרדף דינמית, 1 = מכסה מנוע (גוף ראשון)
+        lastTrackIdx: 0,
+        checkpointPassed: false
+    };
+
+    // בניית רכב מרוץ תלת-מימדי מפורט
+    function createSportsCar(primaryColor, accentColor) {
+        const carGroup = new THREE.Group();
+
+        const bodyMat = new THREE.MeshStandardMaterial({
+            color: primaryColor,
+            metalness: 0.75,
+            roughness: 0.2
+        });
+        const darkMat = new THREE.MeshStandardMaterial({
+            color: 0x11131c,
+            metalness: 0.5,
+            roughness: 0.5
+        });
+        const neonMat = new THREE.MeshBasicMaterial({ color: accentColor });
+
+        // שלדה תחתונה
+        const chassis = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.55, 4.5), bodyMat);
+        chassis.position.y = 0.55;
+        chassis.castShadow = true;
+        carGroup.add(chassis);
+
+        // תא נהג (חופה אווירודינמית)
+        const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.65, 0.48, 2.1), darkMat);
+        cabin.position.set(0, 1.0, -0.15);
+        carGroup.add(cabin);
+
+        // פסי ניאון על המרכב
+        const stripeLeft = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.1, 4.4), neonMat);
+        stripeLeft.position.set(-1.06, 0.55, 0);
+        carGroup.add(stripeLeft);
+
+        const stripeRight = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.1, 4.4), neonMat);
+        stripeRight.position.set(1.06, 0.55, 0);
+        carGroup.add(stripeRight);
+
+        // ספוילר אחורי
+        const wing = new THREE.Mesh(new THREE.BoxGeometry(2.15, 0.08, 0.42), bodyMat);
+        wing.position.set(0, 1.15, 2.0);
+        carGroup.add(wing);
+
+        [-0.75, 0.75].forEach(sx => {
+            const strut = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.35, 0.25), darkMat);
+            strut.position.set(sx, 0.95, 2.0);
+            carGroup.add(strut);
+        });
+
+        // פנסים קדמיים ואחוריים
+        const headLightMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        const tailLightMat = new THREE.MeshBasicMaterial({ color: 0xff1144 });
+
+        [-0.7, 0.7].forEach(lx => {
+            const hl = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.14, 0.08), headLightMat);
+            hl.position.set(lx, 0.6, -2.26);
+            carGroup.add(hl);
+
+            const tl = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.14, 0.08), tailLightMat);
+            tl.position.set(lx, 0.65, 2.26);
+            carGroup.add(tl);
+        });
+
+        // להבות אגזוז (ניטרו)
+        const flameMat = new THREE.MeshBasicMaterial({ color: 0x00f3ff, transparent: true, opacity: 0.9 });
+        const flameLeft = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.9, 10), flameMat);
+        flameLeft.rotation.x = Math.PI / 2;
+        flameLeft.position.set(-0.45, 0.42, 2.65);
+        flameLeft.visible = false;
+        carGroup.add(flameLeft);
+
+        const flameRight = flameLeft.clone();
+        flameRight.position.x = 0.45;
+        carGroup.add(flameRight);
+
+        // גלגלים
+        const wheels = [];
+        const wheelGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.34, 18);
+        wheelGeo.rotateZ(Math.PI / 2);
+        const rimMat = new THREE.MeshBasicMaterial({ color: accentColor });
+
+        const wheelPositions = [
+            [-1.12, 0.42, -1.4], // קדמי שמאל
+            [1.12, 0.42, -1.4],  // קדמי ימין
+            [-1.12, 0.42, 1.4],  // אחורי שמאל
+            [1.12, 0.42, 1.4]    // אחורי ימין
+        ];
+
+        wheelPositions.forEach(pos => {
+            const wGroup = new THREE.Group();
+            wGroup.position.set(...pos);
+            const tire = new THREE.Mesh(wheelGeo, darkMat);
+            const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.36, 12).rotateZ(Math.PI / 2), rimMat);
+            wGroup.add(tire, rim);
+            carGroup.add(wGroup);
+            wheels.push(wGroup);
+        });
+
+        return { mesh: carGroup, wheels, flames: [flameLeft, flameRight], tailLightMat };
+    }
+
+    // רכב השחקן
+    const playerCarObj = createSportsCar(0x0ea5e9, 0x00f3ff);
+    const playerPhysics = {
+        pos: new THREE.Vector3(0, 0, -5),
+        heading: 0, // זווית כיוון ברדיאנים (0 = לכיוון -Z)
+        speed: 0,
+        maxSpeed: 68,
+        nitroMaxSpeed: 98,
+        accel: 34,
+        brakeDecel: 48,
+        friction: 12,
+        steerAngle: 0,
+        nitro: 100,
+        isNitro: false,
+        boostTimer: 0
+    };
+
+    function buildRaceWorld() {
+        raceScene.add(playerCarObj.mesh);
+
+        // תאורה סביבתית + שמש ניאון
+        const hemiLight = new THREE.HemisphereLight(0x818cf8, 0x1e1b4b, 1.1);
+        raceScene.add(hemiLight);
+
+        const dirLight = new THREE.DirectionalLight(0xf472b6, 1.3);
+        dirLight.position.set(80, 140, 60);
+        dirLight.castShadow = true;
+        raceScene.add(dirLight);
+
+        // שמש ענקית באופק
+        const sunMesh = new THREE.Mesh(
+            new THREE.CircleGeometry(65, 48),
+            new THREE.MeshBasicMaterial({ color: 0xff007f })
+        );
+        sunMesh.position.set(110, 65, -290);
+        raceScene.add(sunMesh);
+
+        // מישור קרקע ענק עם רשת סייבר זוהרת
+        const groundGrid = new THREE.GridHelper(900, 90, 0xff0080, 0x1e1b4b);
+        groundGrid.position.y = -0.08;
+        raceScene.add(groundGrid);
+
+        const groundPlane = new THREE.Mesh(
+            new THREE.PlaneGeometry(900, 900),
+            new THREE.MeshStandardMaterial({ color: 0x080416, roughness: 0.9 })
+        );
+        groundPlane.rotation.x = -Math.PI / 2;
+        groundPlane.position.y = -0.1;
+        raceScene.add(groundPlane);
+
+        // בניית משטח הכביש והשוליים לאורך העקומה
+        const roadPositions = [];
+        const roadUVs = [];
+        const roadIndices = [];
+
+        const leftEdgePts = [];
+        const rightEdgePts = [];
+
+        for (let i = 0; i <= TRACK_SAMPLES; i++) {
+            const t = (i % TRACK_SAMPLES) / TRACK_SAMPLES;
+            const pt = trackCurve.getPointAt(t);
+            const tangent = trackCurve.getTangentAt(t).normalize();
+            const normal = new THREE.Vector3(-tangent.z, 0, tangent.x);
+
+            const leftPt = pt.clone().addScaledVector(normal, -TRACK_WIDTH / 2);
+            const rightPt = pt.clone().addScaledVector(normal, TRACK_WIDTH / 2);
+
+            leftEdgePts.push(leftPt);
+            rightEdgePts.push(rightPt);
+
+            roadPositions.push(leftPt.x, 0.02, leftPt.z);
+            roadPositions.push(rightPt.x, 0.02, rightPt.z);
+
+            roadUVs.push(0, i * 0.25);
+            roadUVs.push(1, i * 0.25);
+
+            if (i < TRACK_SAMPLES) {
+                const base = i * 2;
+                roadIndices.push(base, base + 1, base + 2);
+                roadIndices.push(base + 1, base + 3, base + 2);
+            }
+        }
+
+        // טקסטורת אספלט עם פסי מרוץ
+        const roadCanvas = document.createElement('canvas');
+        roadCanvas.width = 512; roadCanvas.height = 512;
+        const rCtx = roadCanvas.getContext('2d');
+        rCtx.fillStyle = '#141625';
+        rCtx.fillRect(0, 0, 512, 512);
+
+        // שוליים זוהרים
+        rCtx.fillStyle = '#00f3ff';
+        rCtx.fillRect(0, 0, 18, 512);
+        rCtx.fillStyle = '#ff0080';
+        rCtx.fillRect(494, 0, 18, 512);
+
+        // קו מקווקו במרכז
+        rCtx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+        rCtx.fillRect(250, 40, 12, 180);
+        rCtx.fillRect(250, 300, 12, 180);
+
+        const roadTex = new THREE.CanvasTexture(roadCanvas);
+        roadTex.wrapS = roadTex.wrapT = THREE.RepeatWrapping;
+
+        const roadGeo = new THREE.BufferGeometry();
+        roadGeo.setAttribute('position', new THREE.Float32BufferAttribute(roadPositions, 3));
+        roadGeo.setAttribute('uv', new THREE.Float32BufferAttribute(roadUVs, 2));
+        roadGeo.setIndex(roadIndices);
+        roadGeo.computeVertexNormals();
+
+        const roadMesh = new THREE.Mesh(
+            roadGeo,
+            new THREE.MeshStandardMaterial({ map: roadTex, roughness: 0.45, metalness: 0.2 })
+        );
+        roadMesh.receiveShadow = true;
+        raceScene.add(roadMesh);
+
+        // שער זינוק/סיום מפואר
+        const startPt = trackCurve.getPointAt(0);
+        const startTan = trackCurve.getTangentAt(0);
+        const startGate = new THREE.Group();
+        startGate.position.copy(startPt);
+        startGate.lookAt(startPt.clone().add(startTan));
+
+        const pillarMat = new THREE.MeshStandardMaterial({ color: 0x1e1b4b, metalness: 0.8 });
+        const neonCyanMat = new THREE.MeshBasicMaterial({ color: 0x00f3ff });
+        const neonPinkMat = new THREE.MeshBasicMaterial({ color: 0xff0080 });
+
+        [-TRACK_WIDTH / 2 - 0.8, TRACK_WIDTH / 2 + 0.8].forEach(px => {
+            const pillar = new THREE.Mesh(new THREE.BoxGeometry(1.2, 9, 1.2), pillarMat);
+            pillar.position.set(px, 4.5, 0);
+            startGate.add(pillar);
+        });
+        const topBanner = new THREE.Mesh(new THREE.BoxGeometry(TRACK_WIDTH + 3, 1.6, 1.2), neonCyanMat);
+        topBanner.position.set(0, 8.5, 0);
+        startGate.add(topBanner);
+
+        // קו משבצות על הכביש בזינוק
+        const finishLine = new THREE.Mesh(
+            new THREE.PlaneGeometry(TRACK_WIDTH - 1, 3),
+            new THREE.MeshBasicMaterial({ color: 0xffffff })
+        );
+        finishLine.rotation.x = -Math.PI / 2;
+        finishLine.position.y = 0.04;
+        startGate.add(finishLine);
+        raceScene.add(startGate);
+
+        // קשתות ניאון לאורך המסלול + משטחי האצה (Boost Pads) + מטבעות
+        for (let i = 20; i < TRACK_SAMPLES; i += 25) {
+            const t = i / TRACK_SAMPLES;
+            const pt = trackCurve.getPointAt(t);
+            const tan = trackCurve.getTangentAt(t);
+            const norm = new THREE.Vector3(-tan.z, 0, tan.x);
+
+            // קשת ניאון מעל המסלול כל 50 דגימות
+            if (i % 50 === 0) {
+                const arch = new THREE.Mesh(
+                    new THREE.TorusGeometry(TRACK_WIDTH * 0.56, 0.25, 8, 28, Math.PI),
+                    i % 100 === 0 ? neonPinkMat : neonCyanMat
+                );
+                arch.position.copy(pt);
+                arch.lookAt(pt.clone().add(tan));
+                raceScene.add(arch);
+            }
+
+            // משטחי טורבו על המסלול
+            if (i % 75 === 0) {
+                const padGroup = new THREE.Group();
+                const offset = ((i / 75) % 2 === 0 ? -4.5 : 4.5);
+                const padPos = pt.clone().addScaledVector(norm, offset);
+                padGroup.position.set(padPos.x, 0.05, padPos.z);
+                padGroup.lookAt(padPos.clone().add(tan));
+
+                const padMesh = new THREE.Mesh(
+                    new THREE.PlaneGeometry(3.5, 6.5),
+                    new THREE.MeshBasicMaterial({ color: 0x00ffaa, side: THREE.DoubleSide })
+                );
+                padMesh.rotation.x = -Math.PI / 2;
+                padGroup.add(padMesh);
+                raceScene.add(padGroup);
+
+                raceData.boostPads.push({ pos: padPos, radius: 3.8 });
+            }
+
+            // מטבעות אנרגיה מסתובבים
+            for (let c = -1; c <= 1; c++) {
+                const coinPos = pt.clone().addScaledVector(norm, c * 4.2);
+                const coinMesh = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.85, 0.85, 0.22, 16),
+                    new THREE.MeshBasicMaterial({ color: 0xfacc15 })
+                );
+                coinMesh.rotation.z = Math.PI / 2;
+                coinMesh.position.set(coinPos.x, 1.1, coinPos.z);
+                raceScene.add(coinMesh);
+                raceData.coins.push({ mesh: coinMesh, active: true, respawnTimer: 0 });
+            }
+        }
+
+        // בנייני סייברפאנק ועצי דקל זוהרים מחוץ למסלול (תפאורה עשירה)
+        const buildingColors = [0x1e1b4b, 0x311042, 0x0f172a, 0x172554];
+        for (let b = 0; b < 95; b++) {
+            const angle = (b / 95) * Math.PI * 2;
+            const radius = 140 + (b % 5) * 42;
+            const bx = 95 + Math.cos(angle) * radius;
+            const bz = 10 + Math.sin(angle) * radius;
+
+            // וידוא שהבניין לא קרוב מדי למסלול
+            let tooClose = false;
+            for (let s = 0; s < sampledPoints.length; s += 8) {
+                if (sampledPoints[s].distanceToSquared(new THREE.Vector3(bx, 0, bz)) < 950) {
+                    tooClose = true;
+                    break;
+                }
+            }
+            if (tooClose) continue;
+
+            const h = 18 + (b % 7) * 12;
+            const w = 10 + (b % 4) * 4;
+            const bMesh = new THREE.Mesh(
+                new THREE.BoxGeometry(w, h, w),
+                new THREE.MeshStandardMaterial({
+                    color: buildingColors[b % buildingColors.length],
+                    roughness: 0.5,
+                    metalness: 0.6
+                })
+            );
+            bMesh.position.set(bx, h / 2, bz);
+            raceScene.add(bMesh);
+
+            // גג ניאון מואר
+            const roofTrim = new THREE.Mesh(
+                new THREE.BoxGeometry(w + 0.3, 0.6, w + 0.3),
+                b % 2 === 0 ? neonCyanMat : neonPinkMat
+            );
+            roofTrim.position.set(bx, h, bz);
+            raceScene.add(roofTrim);
+        }
+
+        // יצירת 3 רכבי AI מתחרים
+        const aiConfigs = [
+            { color: 0xf43f5e, accent: 0xfda4af, speed: 53, lane: -5.5, startT: 0.02 },
+            { color: 0xa855f7, accent: 0xe879f9, speed: 57, lane: 5.5, startT: 0.035 },
+            { color: 0x10b981, accent: 0x6ee7b7, speed: 61, lane: -2.5, startT: 0.05 }
+        ];
+
+        aiConfigs.forEach(cfg => {
+            const car = createSportsCar(cfg.color, cfg.accent);
+            raceScene.add(car.mesh);
+            raceData.aiCars.push({
+                obj: car,
+                t: cfg.startT,
+                baseSpeed: cfg.speed,
+                laneOffset: cfg.lane,
+                lap: 1
+            });
+        });
+    }
+
+    buildRaceWorld();
+
+    // אתחול / איפוס מצב מרוץ
+    function resetRaceState() {
+        raceData.lap = 1;
+        raceData.score = 0;
+        raceData.lastTrackIdx = 0;
+        raceData.checkpointPassed = false;
+
+        const startPt = trackCurve.getPointAt(0.99);
+        const nextPt = trackCurve.getPointAt(0.01);
+        playerPhysics.pos.set(startPt.x, 0, startPt.z);
+        playerPhysics.heading = Math.atan2(-(nextPt.x - startPt.x), -(nextPt.z - startPt.z));
+        playerPhysics.speed = 0;
+        playerPhysics.nitro = 100;
+        playerPhysics.boostTimer = 0;
+
+        raceData.aiCars.forEach((ai, idx) => {
+            ai.t = 0.015 + idx * 0.012;
+            ai.lap = 1;
+        });
+
+        raceData.coins.forEach(c => {
+            c.active = true;
+            c.mesh.visible = true;
+        });
+
+        document.getElementById('finish-modal').classList.add('hidden');
+        showRaceBanner('היכון... צא לדרך! 🏁');
+    }
+
+    let bannerTimeout = null;
+    function showRaceBanner(text) {
+        const banner = document.getElementById('race-banner');
+        const label = document.getElementById('race-banner-text');
+        label.textContent = text;
+        banner.classList.remove('hidden');
+        clearTimeout(bannerTimeout);
+        bannerTimeout = setTimeout(() => {
+            banner.classList.add('hidden');
+        }, 1800);
+    }
+
+    // ============================================================================
+    // חלק 3: מעברים בין חדר הגיימינג למשחק המכוניות ושליטה
+    // ============================================================================
+    function switchMode(targetMode) {
+        if (STATE.isTransitioning || STATE.mode === targetMode) return;
+        STATE.isTransitioning = true;
+        sound.init();
+        sound.resume();
+        sound.playTransition();
+
+        const overlay = document.getElementById('screen-transition');
+        overlay.style.opacity = '1';
+
+        setTimeout(() => {
+            STATE.mode = targetMode;
+
+            // שחרור נעילת עכבר כשיוצאים מחדר הגיימינג
+            if (targetMode !== 'ROOM' && document.pointerLockElement) {
+                document.exitPointerLock();
+            }
+
+            // עדכון ממשק המשתמש
+            document.getElementById('intro-overlay').classList.add('hidden');
+            document.getElementById('room-hud').classList.toggle('hidden', targetMode !== 'ROOM');
+            document.getElementById('race-hud').classList.toggle('hidden', targetMode !== 'RACE');
+            document.getElementById('crosshair').classList.toggle('hidden', targetMode !== 'ROOM');
+
+            const modeBadge = document.getElementById('mode-badge');
+            const switchBtn = document.getElementById('btn-mode-switch');
+
+            if (targetMode === 'ROOM') {
+                modeBadge.textContent = '🏠 מצב: חדר הגיימינג';
+                switchBtn.classList.add('hidden');
+                // מיקום השחקן מעט אחורה מהשולחן כדי שיראה את המחשב
+                if (playerRig.pos.z < -2.2) {
+                    playerRig.pos.set(0, 1.75, -1.6);
+                    playerRig.yaw = 0;
+                    playerRig.pitch = -0.05;
+                }
+            } else if (targetMode === 'RACE') {
+                modeBadge.textContent = '🏎️ מצב: מרוץ מכוניות 3D';
+                switchBtn.classList.remove('hidden');
+                resetRaceState();
+            }
+
+            overlay.style.opacity = '0';
+            STATE.isTransitioning = false;
+        }, 420);
+    }
+
+    // כפתורי התחלה ומעבר
+    document.getElementById('btn-start-room').addEventListener('click', () => {
+        switchMode('ROOM');
+    });
+
+    document.getElementById('btn-jump-race').addEventListener('click', () => {
+        switchMode('RACE');
+    });
+
+    document.getElementById('btn-sit-pc').addEventListener('click', () => {
+        if (STATE.mode === 'ROOM') switchMode('RACE');
+    });
+
+    document.getElementById('btn-quick-pc').addEventListener('click', () => {
+        if (STATE.mode === 'ROOM') {
+            playerRig.pos.set(0, 1.75, -2.1);
+            playerRig.yaw = 0;
+            setTimeout(() => switchMode('RACE'), 150);
+        }
+    });
+
+    document.getElementById('btn-mode-switch').addEventListener('click', () => {
+        if (STATE.mode === 'RACE') switchMode('ROOM');
+    });
+
+    document.getElementById('btn-restart-race').addEventListener('click', () => {
+        STATE.mode = 'RACE';
+        resetRaceState();
+    });
+
+    document.getElementById('btn-back-to-room').addEventListener('click', () => {
+        document.getElementById('finish-modal').classList.add('hidden');
+        switchMode('ROOM');
+    });
+
+    // כפתור השתקה / הפעלת סאונד
+    document.getElementById('btn-toggle-audio').addEventListener('click', () => {
+        sound.init();
+        STATE.audioEnabled = !STATE.audioEnabled;
+        document.getElementById('audio-icon').textContent = STATE.audioEnabled ? '🔊' : '🔇';
+        document.getElementById('audio-label').textContent = STATE.audioEnabled ? 'סאונד פעיל' : 'מושתק';
+    });
+
+    // מאזיני מקלדת
+    window.addEventListener('keydown', (e) => {
+        STATE.keys[e.code] = true;
+
+        // כניסה למחשב בחדר בלחיצה על E
+        if (e.code === 'KeyE' && STATE.mode === 'ROOM' && playerRig.nearPC) {
+            switchMode('RACE');
+        }
+
+        // יציאה מהמחשב חזרה לחדר בלחיצה על Escape
+        if (e.code === 'Escape' && STATE.mode === 'RACE') {
+            switchMode('ROOM');
+        }
+
+        // החלפת זווית מצלמה במרוץ
+        if (e.code === 'KeyC' && STATE.mode === 'RACE') {
+            raceData.cameraMode = (raceData.cameraMode + 1) % 2;
+        }
+    });
+
+    window.addEventListener('keyup', (e) => {
+        STATE.keys[e.code] = false;
+    });
+
+    // שליטת עכבר בחדר הגיימינג (Pointer Lock + גרירה כגיבוי)
+    let isDraggingMouse = false;
+    let lastMouseX = 0, lastMouseY = 0;
+
+    canvas.addEventListener('click', () => {
+        if (STATE.mode === 'ROOM') {
+            sound.init();
+            sound.resume();
+            if (canvas.requestPointerLock) {
+                canvas.requestPointerLock();
+            }
+        }
+    });
+
+    window.addEventListener('mousedown', (e) => {
+        if (STATE.mode === 'ROOM') {
+            isDraggingMouse = true;
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+        }
+    });
+
+    window.addEventListener('mouseup', () => {
+        isDraggingMouse = false;
+    });
+
+    window.addEventListener('mousemove', (e) => {
+        if (STATE.mode !== 'ROOM') return;
+
+        if (document.pointerLockElement === canvas) {
+            playerRig.yaw -= e.movementX * 0.0024;
+            playerRig.pitch -= e.movementY * 0.0022;
+        } else if (isDraggingMouse) {
+            const dx = e.clientX - lastMouseX;
+            const dy = e.clientY - lastMouseY;
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+            playerRig.yaw -= dx * 0.004;
+            playerRig.pitch -= dy * 0.004;
+        }
+        playerRig.pitch = Math.max(-0.85, Math.min(0.85, playerRig.pitch));
+    });
+
+    // תמיכה במגע (Touch) להסתכלות בחדר ולנהיגה במובייל
+    let touchLookId = null, touchLookX = 0, touchLookY = 0;
+    canvas.addEventListener('touchstart', (e) => {
+        if (STATE.mode === 'ROOM' && e.touches.length > 0) {
+            const t = e.touches[0];
+            touchLookId = t.identifier;
+            touchLookX = t.clientX;
+            touchLookY = t.clientY;
+        }
+    }, { passive: true });
+
+    canvas.addEventListener('touchmove', (e) => {
+        if (STATE.mode === 'ROOM') {
+            for (let i = 0; i < e.touches.length; i++) {
+                const t = e.touches[i];
+                if (t.identifier === touchLookId) {
+                    const dx = t.clientX - touchLookX;
+                    const dy = t.clientY - touchLookY;
+                    touchLookX = t.clientX;
+                    touchLookY = t.clientY;
+                    playerRig.yaw -= dx * 0.005;
+                    playerRig.pitch = Math.max(-0.8, Math.min(0.8, playerRig.pitch - dy * 0.005));
+                }
+            }
+        }
+    }, { passive: true });
+
+    // חיבור כפתורי המגע של המרוץ
+    function bindTouchButton(id, keyName) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const start = (e) => { e.preventDefault(); STATE.touch[keyName] = true; };
+        const end = (e) => { e.preventDefault(); STATE.touch[keyName] = false; };
+        el.addEventListener('touchstart', start, { passive: false });
+        el.addEventListener('touchend', end, { passive: false });
+        el.addEventListener('mousedown', start);
+        el.addEventListener('mouseup', end);
+        el.addEventListener('mouseleave', end);
+    }
+    bindTouchButton('touch-left', 'left');
+    bindTouchButton('touch-right', 'right');
+    bindTouchButton('touch-gas', 'gas');
+    bindTouchButton('touch-brake', 'brake');
+    bindTouchButton('touch-nitro', 'nitro');
+
+    // ============================================================================
+    // חלק 4: לוגיקת עדכון חדר הגיימינג ולוגיקת משחק המכוניות
+    // ============================================================================
+    function updateGamingRoom(dt, elapsed) {
+        // אנימציית מסך המחשב החי ותאורת RGB
+        updateMonitorPreview(elapsed);
+        if (floatingRing) {
+            floatingRing.rotation.z = elapsed * 2;
+            floatingRing.position.y = 2.45 + Math.sin(elapsed * 3) * 0.08;
+        }
+        if (rgbLight1 && rgbLight2) {
+            rgbLight1.intensity = 2.0 + Math.sin(elapsed * 2.5) * 0.5;
+            rgbLight2.intensity = 2.0 + Math.cos(elapsed * 2.5) * 0.5;
+        }
+
+        // תנועת השחקן בחדר
+        let forward = 0;
+        let right = 0;
+        if (STATE.keys['KeyW'] || STATE.keys['ArrowUp']) forward += 1;
+        if (STATE.keys['KeyS'] || STATE.keys['ArrowDown']) forward -= 1;
+        if (STATE.keys['KeyD'] || STATE.keys['ArrowRight']) right += 1;
+        if (STATE.keys['KeyA'] || STATE.keys['ArrowLeft']) right -= 1;
+
+        const moveDir = new THREE.Vector3();
+        if (forward !== 0 || right !== 0) {
+            const sinY = Math.sin(playerRig.yaw);
+            const cosY = Math.cos(playerRig.yaw);
+            // קדימה ביחס לכיוון המבט
+            moveDir.x = -sinY * forward + cosY * right;
+            moveDir.z = -cosY * forward - sinY * right;
+            moveDir.normalize();
+
+            playerRig.pos.x += moveDir.x * playerRig.speed * dt;
+            playerRig.pos.z += moveDir.z * playerRig.speed * dt;
+
+            // הגבלת גבולות החדר (התנגשות בקירות ובשולחן)
+            playerRig.pos.x = Math.max(-5.6, Math.min(5.6, playerRig.pos.x));
+            playerRig.pos.z = Math.max(-2.15, Math.min(5.6, playerRig.pos.z));
+
+            // אפקט הליכה עדין + צליל צעדים
+            playerRig.bobPhase += dt * 11;
+            playerRig.stepTimer += dt;
+            if (playerRig.stepTimer > 0.42) {
+                playerRig.stepTimer = 0;
+                sound.playStep();
+            }
+        } else {
+            playerRig.bobPhase = 0;
+        }
+
+        // עדכון מיקום וזווית המצלמה בחדר
+        roomCamera.position.set(
+            playerRig.pos.x,
+            playerRig.pos.y + Math.sin(playerRig.bobPhase) * 0.045,
+            playerRig.pos.z
+        );
+        const euler = new THREE.Euler(playerRig.pitch, playerRig.yaw, 0, 'YXZ');
+        roomCamera.quaternion.setFromEuler(euler);
+
+        // בדיקת קרבה לעמדת המחשב המרכזית (0, 0, -3.2)
+        const pcTarget = new THREE.Vector3(0, 1.4, -3.2);
+        const distToPC = playerRig.pos.distanceTo(pcTarget);
+        const isNear = distToPC < 2.8;
+
+        if (isNear !== playerRig.nearPC) {
+            playerRig.nearPC = isNear;
+            document.getElementById('pc-prompt').classList.toggle('hidden', !isNear);
+            document.getElementById('crosshair').classList.toggle('active', isNear);
+        }
+    }
+
+    // ציור מפת המסלול הקטנה (Minimap)
+    const minimapCanvas = document.getElementById('minimap-canvas');
+    const miniCtx = minimapCanvas ? minimapCanvas.getContext('2d') : null;
+
+    function drawMinimap() {
+        if (!miniCtx) return;
+        const w = minimapCanvas.width;
+        const h = minimapCanvas.height;
+        miniCtx.clearRect(0, 0, w, h);
+
+        const toMapX = (x) => ((x + 60) / 310) * (w - 24) + 12;
+        const toMapY = (z) => ((z + 205) / 430) * (h - 24) + 12;
+
+        // קו המסלול
+        miniCtx.strokeStyle = 'rgba(0, 243, 255, 0.55)';
+        miniCtx.lineWidth = 4;
+        miniCtx.beginPath();
+        sampledPoints.forEach((pt, idx) => {
+            const mx = toMapX(pt.x);
+            const my = toMapY(pt.z);
+            if (idx === 0) miniCtx.moveTo(mx, my);
+            else miniCtx.lineTo(mx, my);
+        });
+        miniCtx.closePath();
+        miniCtx.stroke();
+
+        // מתחרים
+        raceData.aiCars.forEach(ai => {
+            miniCtx.fillStyle = '#ff0080';
+            miniCtx.beginPath();
+            miniCtx.arc(toMapX(ai.obj.mesh.position.x), toMapY(ai.obj.mesh.position.z), 3, 0, Math.PI * 2);
+            miniCtx.fill();
+        });
+
+        // רכב השחקן
+        miniCtx.fillStyle = '#facc15';
+        miniCtx.beginPath();
+        miniCtx.arc(toMapX(playerPhysics.pos.x), toMapY(playerPhysics.pos.z), 4.5, 0, Math.PI * 2);
+        miniCtx.fill();
+    }
+
+    function updateRacingGame(dt, elapsed) {
+        const gas = STATE.keys['KeyW'] || STATE.keys['ArrowUp'] || STATE.touch.gas;
+        const brake = STATE.keys['KeyS'] || STATE.keys['ArrowDown'] || STATE.touch.brake;
+        const left = STATE.keys['KeyA'] || STATE.keys['ArrowLeft'] || STATE.touch.left;
+        const right = STATE.keys['KeyD'] || STATE.keys['ArrowRight'] || STATE.touch.right;
+        const drift = STATE.keys['Space'];
+        const wantNitro = STATE.keys['ShiftLeft'] || STATE.keys['ShiftRight'] || STATE.touch.nitro;
+
+        // ניהול ניטרו ובוסט
+        if (playerPhysics.boostTimer > 0) {
+            playerPhysics.boostTimer -= dt;
+        }
+
+        if (wantNitro && playerPhysics.nitro > 2 && gas) {
+            playerPhysics.isNitro = true;
+            playerPhysics.nitro = Math.max(0, playerPhysics.nitro - 28 * dt);
+        } else {
+            playerPhysics.isNitro = false;
+            playerPhysics.nitro = Math.min(100, playerPhysics.nitro + 9 * dt);
+        }
+
+        const activeBoost = playerPhysics.isNitro || playerPhysics.boostTimer > 0;
+        const currentMaxSpeed = activeBoost ? playerPhysics.nitroMaxSpeed : playerPhysics.maxSpeed;
+
+        // תאוצה ובלימה
+        if (gas) {
+            const accelPower = activeBoost ? playerPhysics.accel * 1.65 : playerPhysics.accel;
+            playerPhysics.speed += accelPower * dt;
+        } else if (brake) {
+            playerPhysics.speed -= playerPhysics.brakeDecel * dt;
+        } else {
+            // האטה טבעית
+            if (Math.abs(playerPhysics.speed) < 0.4) {
+                playerPhysics.speed = 0;
+            } else {
+                playerPhysics.speed -= Math.sign(playerPhysics.speed) * playerPhysics.friction * dt;
+            }
+        }
+
+        // הגבלת מהירות מקסימלית ורוורס
+        playerPhysics.speed = Math.max(-24, Math.min(currentMaxSpeed, playerPhysics.speed));
+
+        // היגוי ודריפט
+        const steerInput = (left ? 1 : 0) - (right ? 1 : 0);
+        const targetSteer = steerInput * (drift ? 0.55 : 0.38);
+        playerPhysics.steerAngle += (targetSteer - playerPhysics.steerAngle) * Math.min(1, dt * 10);
+
+        if (Math.abs(playerPhysics.speed) > 1.2) {
+            const turnFactor = (drift ? 2.65 : 1.95) * (playerPhysics.speed > 0 ? 1 : -1);
+            playerPhysics.heading += playerPhysics.steerAngle * turnFactor * dt;
+        }
+
+        // עדכון מיקום הרכב במרחב
+        const vx = -Math.sin(playerPhysics.heading) * playerPhysics.speed;
+        const vz = -Math.cos(playerPhysics.heading) * playerPhysics.speed;
+        playerPhysics.pos.x += vx * dt;
+        playerPhysics.pos.z += vz * dt;
+
+        // בדיקת מרחק ממרכז המסלול והחזרה רכה מהשוליים (מניעת יציאה מהעולם)
+        let nearestIdx = 0;
+        let minDistSq = Infinity;
+        for (let i = 0; i < sampledPoints.length; i++) {
+            const dSq = sampledPoints[i].distanceToSquared(playerPhysics.pos);
+            if (dSq < minDistSq) {
+                minDistSq = dSq;
+                nearestIdx = i;
+            }
+        }
+
+        const distFromCenter = Math.sqrt(minDistSq);
+        const maxAllowedDist = TRACK_WIDTH * 0.52;
+        if (distFromCenter > maxAllowedDist) {
+            const centerPt = sampledPoints[nearestIdx];
+            const pullDir = centerPt.clone().sub(playerPhysics.pos).normalize();
+            playerPhysics.pos.addScaledVector(pullDir, distFromCenter - maxAllowedDist);
+            playerPhysics.speed *= 0.96; // חיכוך קל במעקה
+        }
+
+        // מעקב הקפות (Checkpoints)
+        if (nearestIdx > TRACK_SAMPLES * 0.45 && nearestIdx < TRACK_SAMPLES * 0.65) {
+            raceData.checkpointPassed = true;
+        }
+        if (raceData.checkpointPassed && nearestIdx < 18 && raceData.lastTrackIdx > TRACK_SAMPLES - 25) {
+            raceData.checkpointPassed = false;
+            raceData.lap++;
+            raceData.score += 500;
+            sound.playBoostPad();
+
+            if (raceData.lap > raceData.maxLaps) {
+                STATE.mode = 'FINISHED';
+                document.getElementById('finish-summary').textContent =
+                    `סיימת את כל 3 ההקפות בהצלחה וצברת ${raceData.score.toLocaleString()} נקודות!`;
+                document.getElementById('finish-modal').classList.remove('hidden');
+            } else {
+                showRaceBanner(`הקפה ${raceData.lap} מתוך ${raceData.maxLaps}! 🔥`);
+            }
+        }
+        raceData.lastTrackIdx = nearestIdx;
+
+        // עדכון מודל הרכב, גלגלים, אורות בלם ולהבות ניטרו
+        playerCarObj.mesh.position.copy(playerPhysics.pos);
+        playerCarObj.mesh.rotation.y = playerPhysics.heading;
+
+        playerCarObj.wheels.forEach((w, idx) => {
+            w.children[0].rotation.x -= playerPhysics.speed * dt * 1.8;
+            if (idx < 2) {
+                w.rotation.y = playerPhysics.steerAngle * 0.8;
+            }
+        });
+
+        playerCarObj.flames.forEach(f => {
+            f.visible = activeBoost;
+            if (activeBoost) {
+                f.scale.set(1, 0.8 + Math.random() * 0.6, 1);
+            }
+        });
+        playerCarObj.tailLightMat.color.setHex(brake ? 0xff0000 : 0x880022);
+
+        // איסוף מטבעות
+        raceData.coins.forEach(coin => {
+            if (!coin.active) {
+                coin.respawnTimer -= dt;
+                if (coin.respawnTimer <= 0) {
+                    coin.active = true;
+                    coin.mesh.visible = true;
+                }
+                return;
+            }
+            coin.mesh.rotation.y += dt * 3.5;
+            if (coin.mesh.position.distanceToSquared(playerPhysics.pos) < 7.5) {
+                coin.active = false;
+                coin.mesh.visible = false;
+                coin.respawnTimer = 8;
+                raceData.score += 100;
+                playerPhysics.nitro = Math.min(100, playerPhysics.nitro + 12);
+                sound.playCoin();
+            }
+        });
+
+        // בדיקת משטחי טורבו
+        raceData.boostPads.forEach(pad => {
+            if (pad.pos.distanceToSquared(playerPhysics.pos) < pad.radius * pad.radius) {
+                if (playerPhysics.boostTimer <= 0.2) {
+                    sound.playBoostPad();
+                }
+                playerPhysics.boostTimer = 1.4;
+                playerPhysics.speed = Math.max(playerPhysics.speed, 82);
+            }
+        });
+
+        // עדכון רכבי AI מתחרים
+        let playerRank = 1;
+        const playerProgress = (raceData.lap - 1) + (nearestIdx / TRACK_SAMPLES);
+
+        raceData.aiCars.forEach(ai => {
+            const prevT = ai.t;
+            ai.t = (ai.t + (ai.baseSpeed / 780) * dt) % 1;
+            if (ai.t < prevT) ai.lap++;
+
+            const pt = trackCurve.getPointAt(ai.t);
+            const tan = trackCurve.getTangentAt(ai.t).normalize();
+            const norm = new THREE.Vector3(-tan.z, 0, tan.x);
+
+            const targetPos = pt.clone().addScaledVector(norm, ai.laneOffset);
+            ai.obj.mesh.position.copy(targetPos);
+            ai.obj.mesh.lookAt(targetPos.clone().add(tan));
+            ai.obj.mesh.rotateY(Math.PI); // התאמת כיוון המודל
+
+            ai.obj.wheels.forEach(w => {
+                w.children[0].rotation.x -= ai.baseSpeed * dt * 1.5;
+            });
+
+            // התנגשות קלה עם מתחרים
+            if (targetPos.distanceToSquared(playerPhysics.pos) < 8.5) {
+                const push = playerPhysics.pos.clone().sub(targetPos).normalize();
+                playerPhysics.pos.addScaledVector(push, 0.45);
+                playerPhysics.speed *= 0.9;
+            }
+
+            const aiProgress = (ai.lap - 1) + ai.t;
+            if (aiProgress > playerProgress) playerRank++;
+        });
+
+        // עדכון מצלמת המרוץ
+        if (raceData.cameraMode === 0) {
+            // מצלמת מרדף חלקה מאחורי הרכב
+            const camDist = activeBoost ? 9.8 : 8.5;
+            const camHeight = 3.8;
+            const idealOffset = new THREE.Vector3(
+                Math.sin(playerPhysics.heading) * camDist,
+                camHeight,
+                Math.cos(playerPhysics.heading) * camDist
+            );
+            const idealCamPos = playerPhysics.pos.clone().add(idealOffset);
+            raceCamera.position.lerp(idealCamPos, Math.min(1, dt * 8.5));
+
+            const lookTarget = playerPhysics.pos.clone().add(
+                new THREE.Vector3(-Math.sin(playerPhysics.heading) * 10, 1.4, -Math.cos(playerPhysics.heading) * 10)
+            );
+            raceCamera.lookAt(lookTarget);
+            raceCamera.fov += ((activeBoost ? 78 : 65) - raceCamera.fov) * dt * 6;
+            raceCamera.updateProjectionMatrix();
+        } else {
+            // מצלמת מכסה מנוע (גוף ראשון)
+            const hoodPos = playerPhysics.pos.clone().add(
+                new THREE.Vector3(-Math.sin(playerPhysics.heading) * 0.3, 1.38, -Math.cos(playerPhysics.heading) * 0.3)
+            );
+            raceCamera.position.copy(hoodPos);
+            const lookTarget = playerPhysics.pos.clone().add(
+                new THREE.Vector3(-Math.sin(playerPhysics.heading) * 25, 1.2, -Math.cos(playerPhysics.heading) * 25)
+            );
+            raceCamera.lookAt(lookTarget);
+        }
+
+        // עדכון סאונד מנוע
+        sound.updateEngine(playerPhysics.speed / playerPhysics.maxSpeed, activeBoost, true);
+
+        // עדכון נתוני HUD
+        const kmh = Math.round(Math.abs(playerPhysics.speed) * 3.1);
+        document.getElementById('hud-speed').textContent = kmh;
+        document.getElementById('hud-speed-mobile').textContent = kmh;
+        document.getElementById('hud-lap').textContent = `${Math.min(raceData.lap, raceData.maxLaps)} / ${raceData.maxLaps}`;
+        document.getElementById('hud-score').textContent = raceData.score.toLocaleString();
+        document.getElementById('hud-pos').textContent = `${playerRank} / 4`;
+
+        const nitroRounded = Math.round(playerPhysics.nitro);
+        document.getElementById('hud-nitro-pct').textContent = `${nitroRounded}%`;
+        document.getElementById('hud-nitro-bar').style.width = `${nitroRounded}%`;
+
+        drawMinimap();
+    }
+
+    // ============================================================================
+    // חלק 5: לולאת הרינדור הראשית והתאמה לגודל מסך
+    // ============================================================================
+    const clock = new THREE.Clock();
+
+    function animate() {
+        requestAnimationFrame(animate);
+
+        const dt = Math.min(clock.getDelta(), 0.05);
+        const elapsed = clock.getElapsedTime();
+
+        if (STATE.mode === 'INTRO') {
+            // תצוגה מקדימה מסתובבת של חדר הגיימינג ברקע מסך הפתיחה
+            updateMonitorPreview(elapsed);
+            roomCamera.position.set(Math.sin(elapsed * 0.35) * 2.5, 2.2, 2.8);
+            roomCamera.lookAt(0, 1.4, -3.5);
+            renderer.render(roomScene, roomCamera);
+            sound.updateEngine(0, false, false);
+        } else if (STATE.mode === 'ROOM') {
+            updateGamingRoom(dt, elapsed);
+            renderer.render(roomScene, roomCamera);
+            sound.updateEngine(0, false, false);
+        } else if (STATE.mode === 'RACE') {
+            updateRacingGame(dt, elapsed);
+            renderer.render(raceScene, raceCamera);
+        } else if (STATE.mode === 'FINISHED') {
+            // סיבוב מצלמה חגיגי סביב הרכב בסיום
+            raceCamera.position.set(
+                playerPhysics.pos.x + Math.cos(elapsed) * 9,
+                4.2,
+                playerPhysics.pos.z + Math.sin(elapsed) * 9
+            );
+            raceCamera.lookAt(playerPhysics.pos);
+            renderer.render(raceScene, raceCamera);
+            sound.updateEngine(0, false, false);
+        }
+    }
+
+    window.addEventListener('resize', () => {
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        roomCamera.aspect = w / h;
+        roomCamera.updateProjectionMatrix();
+        raceCamera.aspect = w / h;
+        raceCamera.updateProjectionMatrix();
+        renderer.setSize(w, h);
+    });
+
+    window.onload = function () {
+        animate();
+    };
+    </script>
+
+<a id="club-back" href="../index.html#products-shelf" style="position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#fff;color:#1d2433;border:2px solid #cfe0f0;border-radius:999px;padding:8px 18px;font:600 15px/1.2 Arial,sans-serif;text-decoration:none;direction:rtl;box-shadow:0 3px 0 #cfe0f0">→ חזרה לאתר החוג</a>
+<script>if (window.top !== window) document.getElementById("club-back").remove();</script>
+</body>
+</html>

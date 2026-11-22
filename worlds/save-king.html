@@ -1,0 +1,2073 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>הצלת המלך: 10 דקות לגורל הממלכה | עולם תלת-מימדי</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js r128 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Google Fonts: Frank Ruhl Libre & Rubik -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@500;700;900&family=Rubik:wght@300;400;500;700&display=swap" rel="stylesheet">
+
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #08070b;
+            font-family: 'Rubik', sans-serif;
+            color: #f4ebd9;
+        }
+        .font-royal {
+            font-family: 'Frank Ruhl Libre', serif;
+        }
+        #canvas-container {
+            position: fixed;
+            inset: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Reticle / Crosshair */
+        #crosshair {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            width: 20px;
+            height: 20px;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 20;
+            transition: transform 0.15s ease;
+        }
+        #crosshair::before, #crosshair::after {
+            content: '';
+            position: absolute;
+            background: rgba(254, 243, 199, 0.78);
+            border-radius: 2px;
+            transition: all 0.15s ease;
+        }
+        #crosshair::before { top: 9px; left: 0; width: 20px; height: 2px; }
+        #crosshair::after { top: 0; left: 9px; width: 2px; height: 20px; }
+        #crosshair.interactive {
+            transform: translate(-50%, -50%) scale(1.45);
+        }
+        #crosshair.interactive::before, #crosshair.interactive::after {
+            background: #f59e0b;
+            box-shadow: 0 0 12px #fbbf24;
+        }
+
+        /* Heartbeat low-time screen vignette */
+        #danger-vignette {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 12;
+            background: radial-gradient(circle at center, transparent 52%, rgba(185, 28, 28, 0.45) 100%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        @keyframes heartbeatPulse {
+            0%, 100% { transform: scale(1); }
+            15% { transform: scale(1.07); }
+            30% { transform: scale(1); }
+            45% { transform: scale(1.05); }
+        }
+        .timer-urgent {
+            animation: heartbeatPulse 1s infinite ease-in-out;
+            color: #f87171 !important;
+            text-shadow: 0 0 16px rgba(239, 68, 68, 0.85);
+        }
+
+        @keyframes royalGlow {
+            0%, 100% { box-shadow: 0 0 18px rgba(217, 119, 6, 0.4); }
+            50% { box-shadow: 0 0 32px rgba(245, 158, 11, 0.85); }
+        }
+        .glow-royal {
+            animation: royalGlow 2.6s infinite ease-in-out;
+        }
+
+        .parchment-sheet {
+            background: linear-gradient(145deg, #f6e7c6 0%, #e4cc9c 55%, #cfa96e 100%);
+            color: #27180a;
+            box-shadow: inset 0 0 45px rgba(92, 54, 18, 0.5), 0 25px 60px rgba(0, 0, 0, 0.85);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 3D Castle Viewport -->
+    <div id="canvas-container"></div>
+
+    <!-- Low Time Danger Vignette -->
+    <div id="danger-vignette"></div>
+
+    <!-- Central Crosshair & Object Hover Label -->
+    <div id="crosshair" class="hidden"></div>
+    <div id="hover-label" class="fixed top-1/2 left-1/2 -translate-x-1/2 translate-y-6 z-20 pointer-events-none hidden">
+        <div class="bg-stone-950/90 border border-amber-500/70 text-amber-200 px-4 py-1.5 rounded-full text-sm font-medium shadow-xl backdrop-blur-md flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping"></span>
+            <span id="hover-text">בדוק חפץ</span>
+        </div>
+    </div>
+
+    <!-- Floating Toast Notifications -->
+    <div id="toast-container" class="fixed top-24 left-1/2 -translate-x-1/2 z-40 pointer-events-none flex flex-col items-center gap-2 w-full max-w-lg px-4"></div>
+
+    <!-- TOP HUD: 10-Minute Countdown, Objective Tracker & Controls -->
+    <header id="hud-top" class="fixed top-0 inset-x-0 z-30 p-3 sm:p-4 flex flex-wrap items-center justify-between gap-2 pointer-events-none hidden">
+        <!-- Right (RTL Start): Countdown Timer + Current Quest Objective -->
+        <div class="flex items-center gap-2.5 pointer-events-auto">
+            <div id="timer-box" class="bg-stone-950/85 border-2 border-amber-600/60 backdrop-blur-md px-4 py-2 rounded-2xl shadow-2xl flex items-center gap-3">
+                <div class="text-2xl">⏳</div>
+                <div>
+                    <div class="text-[10px] sm:text-[11px] text-amber-300/80 font-medium leading-none">הזמן שנותר למלך</div>
+                    <div id="timer-display" class="text-xl sm:text-2xl font-black font-mono text-amber-300 tracking-wider" dir="ltr">10:00</div>
+                </div>
+            </div>
+
+            <div class="hidden lg:flex bg-stone-950/80 border border-amber-800/50 backdrop-blur-md px-4 py-2 rounded-2xl shadow-xl items-center gap-2.5 max-w-md">
+                <span class="text-amber-400 text-lg">👑</span>
+                <div>
+                    <div class="text-[10px] text-stone-400 leading-none mb-0.5">המשימה הנוכחית</div>
+                    <div id="objective-text" class="text-xs sm:text-sm font-medium text-amber-100">קרא את מגילת הרופא המלכותי שעל המעמד</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Left (RTL End): Hint, Pointer Lock, Audio -->
+        <div class="flex items-center gap-2 pointer-events-auto">
+            <button id="btn-hint" class="bg-amber-950/90 hover:bg-amber-900 border border-amber-500/60 text-amber-200 px-3.5 py-2 rounded-2xl shadow-lg backdrop-blur-md transition flex items-center gap-1.5 text-xs sm:text-sm font-medium active:scale-95">
+                <span>💡</span>
+                <span>רמז</span>
+            </button>
+
+            <button id="btn-lock-mode" title="נעילת סמן למבט חופשי" class="hidden sm:flex bg-stone-900/90 hover:bg-stone-800 border border-stone-600/70 text-stone-200 px-3.5 py-2 rounded-2xl shadow-lg backdrop-blur-md transition items-center gap-1.5 text-xs sm:text-sm active:scale-95">
+                <span>🎯</span>
+                <span id="lock-mode-text">מבט חופשי</span>
+            </button>
+
+            <button id="btn-sound" title="השתק / הפעל שמע" class="bg-stone-900/90 hover:bg-stone-800 border border-stone-600/70 text-stone-200 p-2.5 rounded-2xl shadow-lg backdrop-blur-md transition active:scale-95">
+                <span id="sound-icon">🔊</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Mobile Touch Controls -->
+    <div id="mobile-controls" class="fixed bottom-28 inset-x-4 z-20 flex justify-between items-end pointer-events-none sm:hidden hidden">
+        <div id="touch-move-zone" class="w-28 h-28 rounded-full bg-stone-900/55 border border-amber-500/40 backdrop-blur-sm pointer-events-auto relative flex items-center justify-center">
+            <div id="touch-stick" class="w-10 h-10 rounded-full bg-amber-400/75 shadow-lg pointer-events-none"></div>
+        </div>
+        <div class="bg-stone-950/80 border border-stone-700 px-3 py-1.5 rounded-xl text-xs text-stone-300">
+            החלק על המסך להביט סביב
+        </div>
+    </div>
+
+    <!-- BOTTOM HUD: Inventory & Ingredients Tracker -->
+    <footer id="hud-bottom" class="fixed bottom-3 inset-x-0 z-30 flex flex-col items-center pointer-events-none px-3 hidden">
+        <!-- Ingredients checklist pill -->
+        <div class="mb-2 bg-stone-950/85 border border-amber-700/40 backdrop-blur-md px-4 py-1.5 rounded-full shadow-lg flex items-center gap-3 text-xs pointer-events-auto">
+            <span class="text-stone-400 font-medium">מרכיבי השיקוי:</span>
+            <span id="ing-moon" class="text-stone-500 transition">💧 דמעות הירח</span>
+            <span class="text-stone-700">|</span>
+            <span id="ing-phoenix" class="text-stone-500 transition">🔥 אפר עוף החול</span>
+            <span class="text-stone-700">|</span>
+            <span id="ing-dragon" class="text-stone-500 transition">🌿 שורש הדרקון</span>
+        </div>
+
+        <div id="active-item-banner" class="mb-1.5 px-4 py-1 rounded-full bg-amber-900/95 border border-amber-400/70 text-amber-100 text-xs font-medium shadow-lg hidden">
+            פריט נבחר ביד: <span id="active-item-name" class="font-bold text-white"></span>
+        </div>
+
+        <div id="inventory-bar" class="pointer-events-auto bg-stone-950/90 border border-amber-700/50 backdrop-blur-md p-2 rounded-2xl shadow-2xl flex items-center gap-2 sm:gap-2.5 min-h-[64px] max-w-full overflow-x-auto">
+            <div class="px-4 text-xs sm:text-sm text-stone-400">התרמיל המלכותי ריק — חקור את אולם הטירה</div>
+        </div>
+    </footer>
+
+    <!-- CINEMATIC START SCREEN -->
+    <div id="start-modal" class="fixed inset-0 z-50 bg-stone-950/92 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="max-w-2xl w-full bg-gradient-to-b from-stone-900 via-stone-950 to-black border-2 border-amber-600/60 rounded-3xl p-6 sm:p-9 shadow-2xl text-center relative overflow-hidden">
+            <div class="absolute -top-28 -right-28 w-56 h-56 bg-amber-500/15 rounded-full blur-3xl pointer-events-none"></div>
+            <div class="absolute -bottom-28 -left-28 w-56 h-56 bg-red-600/15 rounded-full blur-3xl pointer-events-none"></div>
+
+            <div class="inline-flex items-center gap-2 px-4 py-1 rounded-full bg-red-950/70 border border-red-500/40 text-red-300 text-xs font-bold mb-4">
+                <span>⏳</span>
+                <span>מצב חירום בממלכה • 10:00 דקות להצלת המלך</span>
+            </div>
+
+            <h1 class="font-royal text-3xl sm:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-l from-amber-200 via-amber-400 to-yellow-600 mb-4 leading-tight">
+                הצלת המלך:<br>10 דקות לגורל הממלכה
+            </h1>
+
+            <p class="text-stone-300 text-sm sm:text-base leading-relaxed mb-6">
+                המלך הורעל במסתורין ושוכב חסר אונים על מיטת האפיריון המלכותית באולם הטירה!
+                לרשותך עומדות <b class="text-amber-300">10 דקות בלבד</b> לחקור את היכל הטירה, לפתור את צפני השומרים,
+                לאסוף את שלושת המרכיבים הנדירים, לרקוח בקדירה את <b class="text-emerald-300">"שיקוי השחר הנצחי"</b> ולהשקות את המלך לפני שליבו יידום.
+            </p>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-right mb-7 text-xs">
+                <div class="bg-stone-900/90 border border-stone-800 p-3.5 rounded-2xl">
+                    <div class="text-amber-400 font-bold mb-1">🏰 סיור בטירה</div>
+                    <div class="text-stone-400">השתמש במקשי <b>WASD</b> או <b>החצים</b> כדי לנוע באולם הטירה.</div>
+                </div>
+                <div class="bg-stone-900/90 border border-stone-800 p-3.5 rounded-2xl">
+                    <div class="text-amber-400 font-bold mb-1">🔍 חקירה ורמזים</div>
+                    <div class="text-stone-400">גרור את העכבר או הפעל <b>מבט חופשי</b>, ולחץ על חפצים מוארים.</div>
+                </div>
+                <div class="bg-stone-900/90 border border-stone-800 p-3.5 rounded-2xl">
+                    <div class="text-amber-400 font-bold mb-1">⚗️ רקיחה והצלה</div>
+                    <div class="text-stone-400">אסוף 3 מרכיבים, רקח בקדירה ורוץ אל מיטת המלך!</div>
+                </div>
+            </div>
+
+            <button id="btn-start-game" class="w-full sm:w-auto px-10 py-4 rounded-2xl bg-gradient-to-l from-amber-600 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 text-stone-950 font-black text-lg shadow-2xl transition transform hover:scale-105 active:scale-95 glow-royal">
+                התחל במשימה והצל את המלך ⚔️
+            </button>
+        </div>
+    </div>
+
+    <!-- INTERACTIVE PUZZLE / INSPECTION MODAL -->
+    <div id="puzzle-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+        <div class="max-w-lg w-full bg-stone-900 border-2 border-amber-600/60 rounded-3xl p-6 shadow-2xl relative">
+            <button id="btn-close-modal" class="absolute top-4 left-4 w-9 h-9 rounded-full bg-stone-800 hover:bg-stone-700 text-stone-300 flex items-center justify-center transition">
+                ✕
+            </button>
+            <div id="puzzle-content"></div>
+        </div>
+    </div>
+
+    <!-- VICTORY MODAL -->
+    <div id="victory-modal" class="fixed inset-0 z-50 bg-stone-950/92 backdrop-blur-md flex items-center justify-center p-4 hidden">
+        <div class="max-w-lg w-full bg-gradient-to-b from-amber-950/95 to-stone-950 border-2 border-amber-400 rounded-3xl p-8 shadow-2xl text-center">
+            <div class="text-6xl mb-4 animate-bounce">👑</div>
+            <h2 class="font-royal text-3xl sm:text-4xl font-black text-amber-300 mb-3">
+                המלך ניצל! הממלכה ניצלה!
+            </h2>
+            <p class="text-stone-200 text-base mb-6 leading-relaxed">
+                השקית את המלך בשיקוי השחר הנצחי ממש בזמן! צבע חזר לפניו, והחצוצרות ברחבי הטירה מבשרות על ניצחונך ההירואי.
+            </p>
+            <div class="grid grid-cols-2 gap-3 mb-6">
+                <div class="bg-stone-900/90 border border-amber-500/40 rounded-2xl p-3.5">
+                    <div class="text-xs text-stone-400 mb-1">זמן שנותר בשעון</div>
+                    <div id="win-remaining-time" class="text-2xl font-mono font-bold text-emerald-400" dir="ltr">00:00</div>
+                </div>
+                <div class="bg-stone-900/90 border border-amber-500/40 rounded-2xl p-3.5">
+                    <div class="text-xs text-stone-400 mb-1">זמן ביצוע המשימה</div>
+                    <div id="win-elapsed-time" class="text-2xl font-mono font-bold text-amber-400" dir="ltr">00:00</div>
+                </div>
+            </div>
+            <button onclick="window.location.reload()" class="px-8 py-3.5 rounded-2xl bg-gradient-to-l from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-stone-950 font-bold text-base shadow-xl transition transform hover:scale-105">
+                שחק שוב 🔄
+            </button>
+        </div>
+    </div>
+
+    <!-- DEFEAT / GAME OVER MODAL -->
+    <div id="defeat-modal" class="fixed inset-0 z-50 bg-black/95 backdrop-blur-md flex items-center justify-center p-4 hidden">
+        <div class="max-w-lg w-full bg-gradient-to-b from-red-950/90 to-stone-950 border-2 border-red-600 rounded-3xl p-8 shadow-2xl text-center">
+            <div class="text-6xl mb-4">🕯️</div>
+            <h2 class="font-royal text-3xl sm:text-4xl font-black text-red-400 mb-3">
+                אזל הזמן... המלך עצם את עיניו
+            </h2>
+            <p class="text-stone-300 text-base mb-6 leading-relaxed">
+                עשר הדקות חלפו, והרעל הכריע את המלך לפני שהספקת להשקות אותו בשיקוי המרפא. אל תוותר — נסה שוב להציל את הממלכה!
+            </p>
+            <button onclick="window.location.reload()" class="px-8 py-3.5 rounded-2xl bg-gradient-to-l from-red-600 to-amber-600 hover:from-red-500 hover:to-amber-500 text-white font-bold text-base shadow-xl transition transform hover:scale-105">
+                נסה שוב להציל את המלך ⚔️
+            </button>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * ============================================================================
+         * 1. PROCEDURAL CASTLE SOUND ENGINE (Web Audio API - No external files)
+         * ============================================================================
+         */
+        class CastleAudio {
+            constructor() {
+                this.ctx = null;
+                this.muted = false;
+                this.ambientGain = null;
+            }
+
+            init() {
+                if (this.ctx) return;
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                this.ctx = new AudioCtx();
+                this.startCastleAmbience();
+            }
+
+            toggleMute() {
+                this.muted = !this.muted;
+                if (this.ambientGain && this.ctx) {
+                    this.ambientGain.gain.setTargetAtTime(this.muted ? 0 : 0.04, this.ctx.currentTime, 0.2);
+                }
+                return this.muted;
+            }
+
+            startCastleAmbience() {
+                if (!this.ctx || this.ambientGain) return;
+                try {
+                    const oscLow = this.ctx.createOscillator();
+                    const oscFifth = this.ctx.createOscillator();
+                    const filter = this.ctx.createBiquadFilter();
+                    const gain = this.ctx.createGain();
+
+                    oscLow.type = 'sine';
+                    oscLow.frequency.value = 55.0; // A1 deep castle hall resonance
+                    oscFifth.type = 'triangle';
+                    oscFifth.frequency.value = 82.41; // E2
+
+                    filter.type = 'lowpass';
+                    filter.frequency.value = 150;
+                    gain.gain.value = this.muted ? 0 : 0.04;
+
+                    oscLow.connect(filter);
+                    oscFifth.connect(filter);
+                    filter.connect(gain);
+                    gain.connect(this.ctx.destination);
+
+                    oscLow.start();
+                    oscFifth.start();
+                    this.ambientGain = gain;
+                } catch (e) {}
+            }
+
+            playTone(freq, type = 'sine', duration = 0.25, volume = 0.14, slideTo = null) {
+                if (this.muted || !this.ctx) return;
+                if (this.ctx.state === 'suspended') this.ctx.resume();
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, now);
+                if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, now + duration);
+                gain.gain.setValueAtTime(volume, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now);
+                osc.stop(now + duration);
+            }
+
+            playClick() {
+                this.playTone(460, 'triangle', 0.09, 0.12, 280);
+            }
+
+            playPickup() {
+                this.playTone(523.25, 'sine', 0.16, 0.15);
+                setTimeout(() => this.playTone(783.99, 'sine', 0.28, 0.15), 95);
+            }
+
+            playError() {
+                this.playTone(145, 'sawtooth', 0.3, 0.14, 95);
+            }
+
+            playUnlock() {
+                [392.00, 493.88, 587.33, 783.99].forEach((f, idx) => {
+                    setTimeout(() => this.playTone(f, 'triangle', 0.35, 0.16), idx * 105);
+                });
+            }
+
+            playBrew() {
+                [330, 440, 554.37, 659.25, 880, 1108.73].forEach((f, idx) => {
+                    setTimeout(() => this.playTone(f, 'sine', 0.4, 0.16), idx * 110);
+                });
+            }
+
+            playHeartbeat() {
+                this.playTone(68, 'sine', 0.14, 0.24, 42);
+                setTimeout(() => this.playTone(62, 'sine', 0.18, 0.2, 38), 160);
+            }
+
+            playVictory() {
+                const fanfare = [523.25, 659.25, 783.99, 1046.50, 987.77, 1046.50];
+                fanfare.forEach((f, i) => {
+                    setTimeout(() => this.playTone(f, 'triangle', 0.48, 0.2), i * 165);
+                });
+            }
+
+            playGong() {
+                this.playTone(82.41, 'sawtooth', 1.6, 0.25, 45);
+                this.playTone(110.0, 'sine', 1.8, 0.22, 55);
+            }
+        }
+
+        const audio = new CastleAudio();
+
+        /**
+         * ============================================================================
+         * 2. PROCEDURAL MEDIEVAL TEXTURES (Stone, Tapestries, Stained Glass, Crest)
+         * ============================================================================
+         */
+        function createCastleStoneTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#1f1d24';
+            ctx.fillRect(0, 0, 512, 512);
+
+            const rows = 8;
+            const cols = 4;
+            const bh = 512 / rows;
+            const bw = 512 / cols;
+
+            for (let r = 0; r < rows; r++) {
+                const offset = (r % 2) * (bw / 2);
+                for (let c = -1; c <= cols; c++) {
+                    const base = 36 + Math.floor(Math.random() * 20);
+                    ctx.fillStyle = `rgb(${base + 4}, ${base + 2}, ${base + 8})`;
+                    ctx.fillRect(c * bw + offset + 3, r * bh + 3, bw - 6, bh - 6);
+                }
+            }
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+            tex.repeat.set(4, 2);
+            return tex;
+        }
+
+        function createWoodTexture(base = '#3e2414', dark = '#221208') {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = base;
+            ctx.fillRect(0, 0, 512, 512);
+
+            ctx.strokeStyle = dark;
+            for (let i = 0; i < 85; i++) {
+                ctx.lineWidth = 1.5 + Math.random() * 3;
+                ctx.globalAlpha = 0.3;
+                ctx.beginPath();
+                const y = Math.random() * 512;
+                ctx.moveTo(0, y);
+                ctx.bezierCurveTo(170, y + (Math.random() - 0.5) * 24, 340, y + (Math.random() - 0.5) * 24, 512, y);
+                ctx.stroke();
+            }
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+            return tex;
+        }
+
+        function createBannerTexture(symbolEmoji, titleText, bgHex = '#58111a') {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = bgHex;
+            ctx.fillRect(0, 0, 256, 512);
+
+            // Gold trim
+            ctx.strokeStyle = '#d97706';
+            ctx.lineWidth = 14;
+            ctx.strokeRect(14, 14, 228, 484);
+
+            // Inner heraldic crest circle
+            ctx.fillStyle = 'rgba(0,0,0,0.35)';
+            ctx.beginPath();
+            ctx.arc(128, 220, 76, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.lineWidth = 5;
+            ctx.strokeStyle = '#fbbf24';
+            ctx.stroke();
+
+            ctx.font = '82px serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(symbolEmoji, 128, 225);
+
+            ctx.fillStyle = '#fde68a';
+            ctx.font = 'bold 28px "Frank Ruhl Libre", serif';
+            ctx.fillText(titleText, 128, 365);
+
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        function createStainedGlassTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 768;
+            const ctx = canvas.getContext('2d');
+
+            // Radiant Sunburst stained glass
+            const grad = ctx.createRadialGradient(256, 300, 30, 256, 300, 340);
+            grad.addColorStop(0, '#fef08a');
+            grad.addColorStop(0.35, '#f59e0b');
+            grad.addColorStop(0.7, '#b91c1c');
+            grad.addColorStop(1, '#1e3a8a');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, 512, 768);
+
+            // Lead grid lines
+            ctx.strokeStyle = '#0f172a';
+            ctx.lineWidth = 8;
+            for (let i = 0; i < 12; i++) {
+                const angle = (i * Math.PI) / 6;
+                ctx.beginPath();
+                ctx.moveTo(256, 300);
+                ctx.lineTo(256 + Math.cos(angle) * 450, 300 + Math.sin(angle) * 450);
+                ctx.stroke();
+            }
+            [90, 170, 250].forEach(r => {
+                ctx.beginPath();
+                ctx.arc(256, 300, r, 0, Math.PI * 2);
+                ctx.stroke();
+            });
+
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        function createFireplaceCrestTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 384;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = '#1c1917';
+            ctx.fillRect(0, 0, 512, 384);
+
+            ctx.strokeStyle = '#b45309';
+            ctx.lineWidth = 12;
+            ctx.strokeRect(18, 18, 476, 348);
+
+            // Royal Shield
+            ctx.fillStyle = '#7f1d1d';
+            ctx.beginPath();
+            ctx.moveTo(166, 65);
+            ctx.lineTo(346, 65);
+            ctx.lineTo(346, 195);
+            ctx.quadraticCurveTo(346, 285, 256, 320);
+            ctx.quadraticCurveTo(166, 285, 166, 195);
+            ctx.closePath();
+            ctx.fill();
+            ctx.lineWidth = 8;
+            ctx.strokeStyle = '#fbbf24';
+            ctx.stroke();
+
+            // Roman Numerals for Chest Combination: IV - VII - II (4 - 7 - 2)
+            ctx.fillStyle = '#fef08a';
+            ctx.font = 'bold 42px "Frank Ruhl Libre", serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('IV  •  VII  •  II', 256, 185);
+
+            ctx.font = 'bold 20px "Rubik", sans-serif';
+            ctx.fillStyle = '#fcd34d';
+            ctx.fillText('סמל בית המלוכה', 256, 240);
+
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        /**
+         * ============================================================================
+         * 3. GAME STATE & PUZZLE PROGRESSION (10:00 = 600 SECONDS)
+         * ============================================================================
+         */
+        const TOTAL_TIME_SECONDS = 600; // 10 minutes strictly
+
+        const gameState = {
+            started: false,
+            ended: false,
+            remainingSeconds: TOTAL_TIME_SECONDS,
+            timerInterval: null,
+            modalOpen: false,
+
+            // Progression flags
+            readScroll: false,
+            bookshelfSolved: false,
+            bookSequence: [],
+            chestSolved: false,
+            prismPlaced: false,
+            dragonrootCollected: false,
+            elixirBrewed: false,
+            kingSaved: false,
+
+            // Inventory
+            inventory: [],
+            selectedItemId: null
+        };
+
+        const ITEMS = {
+            royalScroll: {
+                id: 'royalScroll',
+                name: 'מגילת הרופא המלכותי',
+                icon: '📜',
+                desc: 'מתכון שיקוי השחר הנצחי להצלת המלך.'
+            },
+            moonlightTears: {
+                id: 'moonlightTears',
+                name: 'דמעות הירח',
+                icon: '💧',
+                desc: 'מרכיב ראשון: בקבוקון כסוף שנמצא בספרייה הסודית.'
+            },
+            rustyKey: {
+                id: 'rustyKey',
+                name: 'מפתח ברזל עתיק',
+                icon: '🗝️',
+                desc: 'מפתח כבד שנמצא מאחורי ספרי המלך.'
+            },
+            phoenixAsh: {
+                id: 'phoenixAsh',
+                name: 'אפר עוף החול',
+                icon: '🔥',
+                desc: 'מרכיב שני: אפר זוהר מתוך תיבת האוצר המלכותית.'
+            },
+            sunPrism: {
+                id: 'sunPrism',
+                name: 'מנסרת השמש',
+                icon: '🔮',
+                desc: 'עדשת בדולח הממקדת את קרני הוויטראז׳.'
+            },
+            dragonRoot: {
+                id: 'dragonRoot',
+                name: 'שורש הדרקון',
+                icon: '🌿',
+                desc: 'מרכיב שלישי: שורש עתיק שנחשף באור השמש.'
+            },
+            cureElixir: {
+                id: 'cureElixir',
+                name: 'שיקוי השחר הנצחי',
+                icon: '🧪',
+                desc: 'התרופה המושלמת! רוץ למיטת המלך והשקה אותו!'
+            }
+        };
+
+        const HINTS = [
+            'גש אל מעמד הקריאה (הסטנד) שליד מיטת המלך וקרא את מגילת הרופא המלכותי.',
+            'הבט על שלושת דגלי הממלכה התלויים על הקירות משמאל לימין: 1. כתר (I), 2. דרקון (II), 3. שמש (III). לחץ על הספרייה המלכותית ובחר בספרים לפי הסדר הזה!',
+            'השתמש במפתח הברזל שמצאת, והבט מעל האח הבוערת כדי לראות את הספרות הרומיות (IV - VII - II = 472) לפתיחת תיבת האוצר.',
+            'בחר ב"מנסרת השמש" מתוך התרמיל למטה ולחץ על כן האסטרולב המוזהב שבמרכז האולם כדי למקד את קרן האור!',
+            'יש ברשותך את כל 3 המרכיבים! גש אל קדירת הרקיחה המבעבעת ורקח את שיקוי השחר הנצחי.',
+            'בחר ב"שיקוי השחר הנצחי" מתוך התרמיל למטה ולחץ על המלך השוכב במיטת האפיריון כדי להציל את חייו!'
+        ];
+
+        /**
+         * ============================================================================
+         * 4. THREE.JS CASTLE ROYAL CHAMBER SETUP
+         * ============================================================================
+         */
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0b0910);
+        scene.fog = new THREE.FogExp2(0x0b0910, 0.032);
+
+        const camera = new THREE.PerspectiveCamera(68, window.innerWidth / window.innerHeight, 0.1, 70);
+        camera.position.set(0, 1.75, 4.8);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.18;
+        container.appendChild(renderer.domElement);
+
+        // Textures
+        const stoneTex = createCastleStoneTexture();
+        const woodTex = createWoodTexture('#452715', '#211107');
+        const darkWoodTex = createWoodTexture('#28160b', '#120904');
+        const stainedGlassTex = createStainedGlassTexture();
+        const crestTex = createFireplaceCrestTexture();
+
+        // Interactive Raycast Registry
+        const interactiveObjects = [];
+        function registerInteractive(mesh, id, label, onInteract) {
+            mesh.userData = { interactiveId: id, label, onInteract };
+            interactiveObjects.push(mesh);
+        }
+
+        // Hall Dimensions: 12m wide x 5.4m high x 13m deep
+        const HALL_W = 12;
+        const HALL_H = 5.4;
+        const HALL_D = 13;
+
+        // Stone Tile Floor
+        const floorTex = createCastleStoneTexture();
+        floorTex.repeat.set(5, 5);
+        const floor = new THREE.Mesh(
+            new THREE.PlaneGeometry(HALL_W, HALL_D),
+            new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.72, metalness: 0.1 })
+        );
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        // Royal Red Carpet Runner leading to King's Bed
+        const carpet = new THREE.Mesh(
+            new THREE.PlaneGeometry(2.6, 10.5),
+            new THREE.MeshStandardMaterial({ color: 0x6b111d, roughness: 0.88 })
+        );
+        carpet.rotation.x = -Math.PI / 2;
+        carpet.position.set(0, 0.015, -0.5);
+        carpet.receiveShadow = true;
+        scene.add(carpet);
+
+        const carpetGoldTrim = new THREE.Mesh(
+            new THREE.PlaneGeometry(2.85, 10.7),
+            new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.5 })
+        );
+        carpetGoldTrim.rotation.x = -Math.PI / 2;
+        carpetGoldTrim.position.set(0, 0.01, -0.5);
+        scene.add(carpetGoldTrim);
+
+        // Timber Vaulted Ceiling & Beams
+        const ceiling = new THREE.Mesh(
+            new THREE.PlaneGeometry(HALL_W, HALL_D),
+            new THREE.MeshStandardMaterial({ map: darkWoodTex, roughness: 0.85 })
+        );
+        ceiling.rotation.x = Math.PI / 2;
+        ceiling.position.y = HALL_H;
+        scene.add(ceiling);
+
+        for (let z = -4.5; z <= 4.5; z += 3) {
+            const beam = new THREE.Mesh(
+                new THREE.BoxGeometry(HALL_W, 0.32, 0.35),
+                new THREE.MeshStandardMaterial({ map: darkWoodTex, roughness: 0.75 })
+            );
+            beam.position.set(0, HALL_H - 0.16, z);
+            scene.add(beam);
+        }
+
+        // Castle Stone Walls
+        const wallMat = new THREE.MeshStandardMaterial({ map: stoneTex, roughness: 0.85 });
+
+        const backWall = new THREE.Mesh(new THREE.PlaneGeometry(HALL_W, HALL_H), wallMat);
+        backWall.position.set(0, HALL_H / 2, -HALL_D / 2);
+        backWall.receiveShadow = true;
+        scene.add(backWall);
+
+        const frontWall = new THREE.Mesh(new THREE.PlaneGeometry(HALL_W, HALL_H), wallMat);
+        frontWall.position.set(0, HALL_H / 2, HALL_D / 2);
+        frontWall.rotation.y = Math.PI;
+        frontWall.receiveShadow = true;
+        scene.add(frontWall);
+
+        const leftWall = new THREE.Mesh(new THREE.PlaneGeometry(HALL_D, HALL_H), wallMat);
+        leftWall.position.set(-HALL_W / 2, HALL_H / 2, 0);
+        leftWall.rotation.y = Math.PI / 2;
+        leftWall.receiveShadow = true;
+        scene.add(leftWall);
+
+        const rightWall = new THREE.Mesh(new THREE.PlaneGeometry(HALL_D, HALL_H), wallMat);
+        rightWall.position.set(HALL_W / 2, HALL_H / 2, 0);
+        rightWall.rotation.y = -Math.PI / 2;
+        rightWall.receiveShadow = true;
+        scene.add(rightWall);
+
+        /**
+         * ============================================================================
+         * 5. ROYAL CHAMBERS PROPS & INTERACTIVE STATIONS
+         * ============================================================================
+         */
+
+        // --- A. THE DYING KING'S CANOPY BED (Back Center z = -4.8) ---
+        const bedGroup = new THREE.Group();
+        bedGroup.position.set(0, 0, -4.7);
+        scene.add(bedGroup);
+
+        // Raised Royal Dais Platform
+        const dais = new THREE.Mesh(
+            new THREE.BoxGeometry(4.2, 0.22, 3.4),
+            new THREE.MeshStandardMaterial({ map: darkWoodTex, roughness: 0.6 })
+        );
+        dais.position.y = 0.11;
+        dais.receiveShadow = true;
+        bedGroup.add(dais);
+
+        // Bed Frame & Mattress
+        const bedFrame = new THREE.Mesh(
+            new THREE.BoxGeometry(2.5, 0.45, 2.8),
+            new THREE.MeshStandardMaterial({ map: woodTex, roughness: 0.5 })
+        );
+        bedFrame.position.y = 0.44;
+        bedFrame.castShadow = true;
+        bedGroup.add(bedFrame);
+
+        const mattress = new THREE.Mesh(
+            new THREE.BoxGeometry(2.3, 0.25, 2.6),
+            new THREE.MeshStandardMaterial({ color: 0xfef3c7, roughness: 0.8 })
+        );
+        mattress.position.y = 0.76;
+        bedGroup.add(mattress);
+
+        // Royal Velvet Blanket
+        const blanket = new THREE.Mesh(
+            new THREE.BoxGeometry(2.34, 0.28, 1.75),
+            new THREE.MeshStandardMaterial({ color: 0x7f1d1d, roughness: 0.75 })
+        );
+        blanket.position.set(0, 0.78, 0.42);
+        bedGroup.add(blanket);
+
+        // 4 Canopy Pillars & Roof
+        const postGeo = new THREE.CylinderGeometry(0.08, 0.09, 2.7, 16);
+        const postMat = new THREE.MeshStandardMaterial({ color: 0xb45309, metalness: 0.5, roughness: 0.35 });
+        [[-1.18, -1.32], [1.18, -1.32], [-1.18, 1.32], [1.18, 1.32]].forEach(([px, pz]) => {
+            const post = new THREE.Mesh(postGeo, postMat);
+            post.position.set(px, 1.55, pz);
+            post.castShadow = true;
+            bedGroup.add(post);
+        });
+
+        const canopyRoof = new THREE.Mesh(
+            new THREE.BoxGeometry(2.6, 0.18, 2.9),
+            new THREE.MeshStandardMaterial({ color: 0x58111a, roughness: 0.7 })
+        );
+        canopyRoof.position.y = 2.92;
+        bedGroup.add(canopyRoof);
+
+        // The Dying King Figure (Head, Crown, Breathing Chest)
+        const kingGroup = new THREE.Group();
+        kingGroup.position.set(0, 0.95, -0.35);
+        bedGroup.add(kingGroup);
+
+        const kingPillow = new THREE.Mesh(
+            new THREE.BoxGeometry(1.1, 0.18, 0.55),
+            new THREE.MeshStandardMaterial({ color: 0xfde68a, roughness: 0.8 })
+        );
+        kingPillow.position.set(0, 0.02, -0.35);
+        kingGroup.add(kingPillow);
+
+        const kingHead = new THREE.Mesh(
+            new THREE.SphereGeometry(0.22, 24, 24),
+            new THREE.MeshStandardMaterial({ color: 0xd6d3d1, roughness: 0.65 }) // Pale sickly tone
+        );
+        kingHead.position.set(0, 0.22, -0.32);
+        kingGroup.add(kingHead);
+
+        // Golden Crown on King's Head
+        const kingCrown = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.18, 0.15, 0.14, 16),
+            new THREE.MeshStandardMaterial({ color: 0xfbbf24, metalness: 0.85, roughness: 0.2 })
+        );
+        kingCrown.position.set(0, 0.39, -0.38);
+        kingCrown.rotation.x = -0.25;
+        kingGroup.add(kingCrown);
+
+        // King's Chest (animates breathing)
+        const kingChest = new THREE.Mesh(
+            new THREE.BoxGeometry(0.75, 0.26, 0.85),
+            new THREE.MeshStandardMaterial({ color: 0x991b1b, roughness: 0.7 })
+        );
+        kingChest.position.set(0, 0.12, 0.25);
+        kingGroup.add(kingChest);
+
+        registerInteractive(kingChest, 'dying_king', 'המלך הגוסס — הענק שיקוי מרפא', () => handleKingInteraction());
+        registerInteractive(kingHead, 'dying_king_head', 'בדוק את מצב המלך', () => handleKingInteraction());
+        registerInteractive(blanket, 'dying_king_bed', 'מיטת המלך — הענק שיקוי מרפא', () => handleKingInteraction());
+
+        // --- B. LECTERN WITH ROYAL SCROLL (Clue 1, next to King's Bed) ---
+        const lecternGroup = new THREE.Group();
+        lecternGroup.position.set(2.35, 0, -3.4);
+        lecternGroup.rotation.y = -0.45;
+        scene.add(lecternGroup);
+
+        const lecternStand = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.12, 0.28, 1.15, 16),
+            new THREE.MeshStandardMaterial({ map: darkWoodTex, roughness: 0.6 })
+        );
+        lecternStand.position.y = 0.575;
+        lecternStand.castShadow = true;
+        lecternGroup.add(lecternStand);
+
+        const lecternBoard = new THREE.Mesh(
+            new THREE.BoxGeometry(0.75, 0.08, 0.55),
+            new THREE.MeshStandardMaterial({ map: woodTex, roughness: 0.5 })
+        );
+        lecternBoard.position.y = 1.18;
+        lecternBoard.rotation.x = 0.32;
+        lecternGroup.add(lecternBoard);
+
+        const scrollMesh = new THREE.Mesh(
+            new THREE.BoxGeometry(0.56, 0.03, 0.42),
+            new THREE.MeshStandardMaterial({
+                color: 0xfef3c7,
+                emissive: 0xf59e0b,
+                emissiveIntensity: 0.35
+            })
+        );
+        scrollMesh.position.set(0, 1.23, 0.01);
+        scrollMesh.rotation.x = 0.32;
+        lecternGroup.add(scrollMesh);
+
+        registerInteractive(scrollMesh, 'royal_scroll', 'קרא את מגילת הרופא המלכותי', () => openRoyalScrollModal());
+        registerInteractive(lecternBoard, 'lectern_board', 'קרא את מגילת הרופא המלכותי', () => openRoyalScrollModal());
+
+        // --- C. THREE HERALDIC ROYAL BANNERS (Hint for Bookshelf Order: Crown -> Dragon -> Sun) ---
+        const bannerConfigs = [
+            { emoji: '👑', label: 'I. הכתר', x: -5.92, y: 3.1, z: -2.8, rotY: Math.PI / 2, color: '#58111a' },
+            { emoji: '🐉', label: 'II. הדרקון', x: -5.92, y: 3.1, z: 2.8, rotY: Math.PI / 2, color: '#143d29' },
+            { emoji: '☀️', label: 'III. השמש', x: 5.92, y: 3.1, z: -2.8, rotY: -Math.PI / 2, color: '#78350f' }
+        ];
+
+        bannerConfigs.forEach((b, idx) => {
+            const bannerMesh = new THREE.Mesh(
+                new THREE.PlaneGeometry(1.15, 2.3),
+                new THREE.MeshStandardMaterial({
+                    map: createBannerTexture(b.emoji, b.label, b.color),
+                    side: THREE.DoubleSide,
+                    roughness: 0.75
+                })
+            );
+            bannerMesh.position.set(b.x, b.y, b.z);
+            bannerMesh.rotation.y = b.rotY;
+            scene.add(bannerMesh);
+            registerInteractive(bannerMesh, `banner_${idx}`, `דגל מלכותי: ${b.label}`, () => {
+                showToast(`דגל מלכותי עתיק: ${b.label} (${b.emoji}) — שים לב למספר הרומי שעל הדגל!`, 'info');
+            });
+        });
+
+        // --- D. ROYAL BOOKSHELF (Left Wall z = 0 - Puzzle 1) ---
+        const shelfGroup = new THREE.Group();
+        shelfGroup.position.set(-5.55, 0, 0);
+        shelfGroup.rotation.y = Math.PI / 2;
+        scene.add(shelfGroup);
+
+        const shelfBody = new THREE.Mesh(
+            new THREE.BoxGeometry(2.4, 3.4, 0.65),
+            new THREE.MeshStandardMaterial({ map: darkWoodTex, roughness: 0.65 })
+        );
+        shelfBody.position.y = 1.7;
+        shelfBody.castShadow = true;
+        shelfBody.receiveShadow = true;
+        shelfGroup.add(shelfBody);
+
+        // Decorative books rows
+        const bookColors = [0x7f1d1d, 0x1e3a8a, 0x14532d, 0x78350f, 0x581c87, 0x92400e];
+        for (let r = 0; r < 4; r++) {
+            const y = 0.65 + r * 0.72;
+            for (let b = 0; b < 11; b++) {
+                const book = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.14, 0.46 + (b % 3) * 0.04, 0.38),
+                    new THREE.MeshStandardMaterial({ color: bookColors[(r + b) % bookColors.length], roughness: 0.75 })
+                );
+                book.position.set(-0.95 + b * 0.19, y, 0.16);
+                shelfGroup.add(book);
+            }
+        }
+
+        registerInteractive(shelfBody, 'royal_bookshelf', 'חקור את ספריית המלך העתיקה', () => openBookshelfModal());
+
+        // --- E. STONE FIREPLACE WITH CREST (Right Wall z = 0 - Clue for Chest) ---
+        const fireplaceGroup = new THREE.Group();
+        fireplaceGroup.position.set(5.6, 0, 0);
+        fireplaceGroup.rotation.y = -Math.PI / 2;
+        scene.add(fireplaceGroup);
+
+        const hearthStone = new THREE.Mesh(
+            new THREE.BoxGeometry(2.6, 2.3, 0.8),
+            new THREE.MeshStandardMaterial({ map: stoneTex, roughness: 0.85 })
+        );
+        hearthStone.position.y = 1.15;
+        hearthStone.castShadow = true;
+        fireplaceGroup.add(hearthStone);
+
+        const fireCore = new THREE.Mesh(
+            new THREE.BoxGeometry(1.3, 0.9, 0.45),
+            new THREE.MeshBasicMaterial({ color: 0xff5500 })
+        );
+        fireCore.position.set(0, 0.55, 0.22);
+        fireplaceGroup.add(fireCore);
+
+        // Royal Crest Plaque above Fireplace (shows IV • VII • II = 472)
+        const crestPlaque = new THREE.Mesh(
+            new THREE.BoxGeometry(1.65, 1.2, 0.12),
+            new THREE.MeshStandardMaterial({ map: crestTex, roughness: 0.5 })
+        );
+        crestPlaque.position.set(0, 2.95, 0.25);
+        fireplaceGroup.add(crestPlaque);
+
+        registerInteractive(crestPlaque, 'fireplace_crest', 'התבונן בסמל בית המלוכה מעל האח', () => {
+            openModal(`
+                <div class="text-center py-3">
+                    <div class="text-4xl mb-2">🛡️</div>
+                    <h3 class="font-royal text-2xl font-bold text-amber-300 mb-3">סמל בית המלוכה</h3>
+                    <p class="text-stone-300 text-sm mb-4">
+                        חרטות זהב עתיקות חקוקות במרכז המגן המלכותי שמעל האח:
+                    </p>
+                    <div class="bg-stone-950 border-2 border-amber-500/60 rounded-2xl py-4 px-6 font-royal text-3xl font-black text-amber-300 tracking-widest mb-3" dir="ltr">
+                        IV &nbsp;•&nbsp; VII &nbsp;•&nbsp; II
+                    </div>
+                    <p class="text-xs text-stone-400">
+                        רמז: המר את הספרות הרומיות למספרים רגילים (IV = 4, VII = 7, II = 2).
+                    </p>
+                </div>
+            `);
+        });
+
+        // --- F. LOCKED ROYAL CHEST (Right-Front Corner - Puzzle 2) ---
+        const chestGroup = new THREE.Group();
+        chestGroup.position.set(4.5, 0, 3.6);
+        chestGroup.rotation.y = -Math.PI * 0.75;
+        scene.add(chestGroup);
+
+        const chestBase = new THREE.Mesh(
+            new THREE.BoxGeometry(1.3, 0.65, 0.8),
+            new THREE.MeshStandardMaterial({ map: woodTex, roughness: 0.5 })
+        );
+        chestBase.position.y = 0.325;
+        chestBase.castShadow = true;
+        chestGroup.add(chestBase);
+
+        const chestLid = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.4, 0.4, 1.3, 18, 1, false, 0, Math.PI),
+            new THREE.MeshStandardMaterial({ map: darkWoodTex, roughness: 0.45 })
+        );
+        chestLid.rotation.z = Math.PI / 2;
+        chestLid.rotation.y = Math.PI / 2;
+        chestLid.position.set(0, 0.65, 0);
+        chestGroup.add(chestLid);
+
+        const chestGoldLock = new THREE.Mesh(
+            new THREE.BoxGeometry(0.18, 0.22, 0.08),
+            new THREE.MeshStandardMaterial({ color: 0xfbbf24, metalness: 0.85, roughness: 0.2 })
+        );
+        chestGoldLock.position.set(0, 0.62, 0.41);
+        chestGroup.add(chestGoldLock);
+
+        registerInteractive(chestBase, 'royal_chest', 'פתח את תיבת האוצר המלכותית', () => openChestModal());
+        registerInteractive(chestLid, 'royal_chest_lid', 'פתח את תיבת האוצר המלכותית', () => openChestModal());
+
+        // --- G. STAINED GLASS WINDOW & SUN ASTROLABE PEDESTAL (Puzzle 3) ---
+        // Stained glass on Right-Back wall
+        const stainedWindow = new THREE.Mesh(
+            new THREE.PlaneGeometry(2.2, 3.2),
+            new THREE.MeshBasicMaterial({ map: stainedGlassTex })
+        );
+        stainedWindow.position.set(5.94, 3.1, 2.5);
+        stainedWindow.rotation.y = -Math.PI / 2;
+        scene.add(stainedWindow);
+
+        // Sun Astrolabe Pedestal in center-right of hall
+        const pedestalGroup = new THREE.Group();
+        pedestalGroup.position.set(1.8, 0, 1.2);
+        scene.add(pedestalGroup);
+
+        const pedestalColumn = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.28, 0.38, 1.15, 20),
+            new THREE.MeshStandardMaterial({ map: stoneTex, roughness: 0.7 })
+        );
+        pedestalColumn.position.y = 0.575;
+        pedestalColumn.castShadow = true;
+        pedestalGroup.add(pedestalColumn);
+
+        const astrolabeRing = new THREE.Mesh(
+            new THREE.TorusGeometry(0.32, 0.03, 12, 32),
+            new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.85, roughness: 0.2 })
+        );
+        astrolabeRing.position.y = 1.45;
+        astrolabeRing.rotation.x = 0.5;
+        pedestalGroup.add(astrolabeRing);
+
+        // Glowing Sun Prism (Hidden until placed)
+        const placedPrismMesh = new THREE.Mesh(
+            new THREE.OctahedronGeometry(0.18, 0),
+            new THREE.MeshStandardMaterial({
+                color: 0xfef08a,
+                emissive: 0xf59e0b,
+                emissiveIntensity: 0.9,
+                transparent: true,
+                opacity: 0.92
+            })
+        );
+        placedPrismMesh.position.y = 1.45;
+        placedPrismMesh.visible = false;
+        pedestalGroup.add(placedPrismMesh);
+
+        // Sunbeam laser cylinder (appears when prism is placed)
+        const sunBeamMesh = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.05, 0.22, 4.6, 16, 1, true),
+            new THREE.MeshBasicMaterial({
+                color: 0xfde047,
+                transparent: true,
+                opacity: 0.35,
+                side: THREE.DoubleSide
+            })
+        );
+        sunBeamMesh.position.set(-1.8, 1.35, 1.1);
+        sunBeamMesh.rotation.z = Math.PI / 2.2;
+        sunBeamMesh.rotation.y = -0.5;
+        sunBeamMesh.visible = false;
+        pedestalGroup.add(sunBeamMesh);
+
+        registerInteractive(pedestalColumn, 'sun_pedestal', 'כן האסטרולב המלכותי', () => handlePedestalInteraction());
+        registerInteractive(astrolabeRing, 'sun_astrolabe', 'מקם עדשה באסטרולב', () => handlePedestalInteraction());
+
+        // Secret Stone Niche on Left-Front Wall (Reveals Dragonroot when hit by Sunbeam)
+        const nicheGroup = new THREE.Group();
+        nicheGroup.position.set(-4.6, 0, 3.6);
+        nicheGroup.rotation.y = Math.PI * 0.75;
+        scene.add(nicheGroup);
+
+        const nicheAltar = new THREE.Mesh(
+            new THREE.BoxGeometry(1.0, 1.0, 1.0),
+            new THREE.MeshStandardMaterial({ map: stoneTex, roughness: 0.8 })
+        );
+        nicheAltar.position.y = 0.5;
+        nicheGroup.add(nicheAltar);
+
+        const crystalCage = new THREE.Mesh(
+            new THREE.BoxGeometry(0.55, 0.55, 0.55),
+            new THREE.MeshStandardMaterial({
+                color: 0x38bdf8,
+                transparent: true,
+                opacity: 0.55,
+                roughness: 0.1
+            })
+        );
+        crystalCage.position.y = 1.28;
+        nicheGroup.add(crystalCage);
+
+        const dragonRootMesh = new THREE.Mesh(
+            new THREE.DodecahedronGeometry(0.18, 0),
+            new THREE.MeshStandardMaterial({
+                color: 0x22c55e,
+                emissive: 0x16a34a,
+                emissiveIntensity: 0.7
+            })
+        );
+        dragonRootMesh.position.y = 1.25;
+        nicheGroup.add(dragonRootMesh);
+
+        registerInteractive(crystalCage, 'dragonroot_altar', 'מזבח הקרח — שורש הדרקון', () => handleDragonRootInteraction());
+        registerInteractive(dragonRootMesh, 'dragonroot_herb', 'קח את שורש הדרקון', () => handleDragonRootInteraction());
+
+        // --- H. ALCHEMICAL BREWING CAULDRON (Center-Left z = -1.6 - Final Brewing) ---
+        const cauldronGroup = new THREE.Group();
+        cauldronGroup.position.set(-2.2, 0, -1.8);
+        scene.add(cauldronGroup);
+
+        const cauldronBody = new THREE.Mesh(
+            new THREE.SphereGeometry(0.55, 24, 24),
+            new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.8, roughness: 0.35 })
+        );
+        cauldronBody.position.y = 0.55;
+        cauldronBody.castShadow = true;
+        cauldronGroup.add(cauldronBody);
+
+        const cauldronRim = new THREE.Mesh(
+            new THREE.TorusGeometry(0.44, 0.06, 12, 24),
+            new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.85, roughness: 0.25 })
+        );
+        cauldronRim.rotation.x = Math.PI / 2;
+        cauldronRim.position.y = 0.96;
+        cauldronGroup.add(cauldronRim);
+
+        const potionLiquidMat = new THREE.MeshStandardMaterial({
+            color: 0x3b82f6,
+            emissive: 0x1d4ed8,
+            emissiveIntensity: 0.85,
+            roughness: 0.2
+        });
+        const potionLiquid = new THREE.Mesh(new THREE.CircleGeometry(0.42, 24), potionLiquidMat);
+        potionLiquid.rotation.x = -Math.PI / 2;
+        potionLiquid.position.y = 0.95;
+        cauldronGroup.add(potionLiquid);
+
+        registerInteractive(cauldronBody, 'alchemy_cauldron', 'קדירת הרקיחה המלכותית', () => handleCauldronInteraction());
+        registerInteractive(potionLiquid, 'alchemy_cauldron_liquid', 'רקח את שיקוי המרפא בקדירה', () => handleCauldronInteraction());
+
+        /**
+         * ============================================================================
+         * 6. CASTLE TORCHES, LIGHTING & FLOATING EMBERS
+         * ============================================================================
+         */
+        const hemiLight = new THREE.HemisphereLight(0xffedd5, 0x1e1b4b, 0.52);
+        scene.add(hemiLight);
+
+        // Warm Royal Chandelier Light
+        const mainHallLight = new THREE.PointLight(0xffaa44, 1.55, 22, 1.3);
+        mainHallLight.position.set(0, 4.4, -1.5);
+        mainHallLight.castShadow = true;
+        mainHallLight.shadow.mapSize.width = 1024;
+        mainHallLight.shadow.mapSize.height = 1024;
+        scene.add(mainHallLight);
+
+        // Fireplace Orange Glow
+        const fireLight = new THREE.PointLight(0xff6611, 1.6, 9);
+        fireLight.position.set(4.8, 1.1, 0);
+        scene.add(fireLight);
+
+        // Cauldron Glow
+        const cauldronLight = new THREE.PointLight(0x3b82f6, 1.1, 6);
+        cauldronLight.position.set(-2.2, 1.35, -1.8);
+        scene.add(cauldronLight);
+
+        // Wall Torches with Flames
+        const torchFlames = [];
+        const torchPositions = [
+            [-5.75, 2.7, -4.5, 1],
+            [5.75, 2.7, -4.5, -1],
+            [-5.75, 2.7, 4.5, 1],
+            [5.75, 2.7, 4.5, -1]
+        ];
+        torchPositions.forEach(([tx, ty, tz, dir]) => {
+            const bracket = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.04, 0.03, 0.55, 8),
+                new THREE.MeshStandardMaterial({ color: 0x292524, metalness: 0.8 })
+            );
+            bracket.position.set(tx, ty, tz);
+            bracket.rotation.z = -dir * 0.35;
+            scene.add(bracket);
+
+            const flame = new THREE.Mesh(
+                new THREE.ConeGeometry(0.09, 0.24, 12),
+                new THREE.MeshBasicMaterial({ color: 0xff9900 })
+            );
+            flame.position.set(tx + dir * 0.1, ty + 0.32, tz);
+            scene.add(flame);
+            torchFlames.push(flame);
+        });
+
+        // Floating Golden Embers / Dust Motes
+        const emberCount = 240;
+        const emberGeo = new THREE.BufferGeometry();
+        const emberPos = new Float32Array(emberCount * 3);
+        for (let i = 0; i < emberCount * 3; i += 3) {
+            emberPos[i] = (Math.random() - 0.5) * 11;
+            emberPos[i + 1] = 0.2 + Math.random() * 4.8;
+            emberPos[i + 2] = (Math.random() - 0.5) * 12;
+        }
+        emberGeo.setAttribute('position', new THREE.BufferAttribute(emberPos, 3));
+        const emberMat = new THREE.PointsMaterial({
+            color: 0xfbbf24,
+            size: 0.05,
+            transparent: true,
+            opacity: 0.65
+        });
+        const emberParticles = new THREE.Points(emberGeo, emberMat);
+        scene.add(emberParticles);
+
+        /**
+         * ============================================================================
+         * 7. FIRST-PERSON CONTROLS (WASD / Arrows + Mouse Drag / PointerLock + Touch)
+         * ============================================================================
+         */
+        let yaw = 0;
+        let pitch = 0;
+        let isDragging = false;
+        let prevMouseX = 0;
+        let prevMouseY = 0;
+        let dragDistance = 0;
+
+        const keys = { w: false, a: false, s: false, d: false, ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
+        let touchMoveVec = { x: 0, y: 0 };
+
+        function updateCameraRotation() {
+            const maxPitch = Math.PI / 2 - 0.08;
+            pitch = Math.max(-maxPitch, Math.min(maxPitch, pitch));
+            camera.quaternion.setFromEuler(new THREE.Euler(pitch, yaw, 0, 'YXZ'));
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (gameState.modalOpen) {
+                if (e.key === 'Escape') closeModal();
+                return;
+            }
+            if (keys.hasOwnProperty(e.key) || keys.hasOwnProperty(e.key.toLowerCase())) {
+                keys[e.key] = true;
+                keys[e.key.toLowerCase()] = true;
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (keys.hasOwnProperty(e.key) || keys.hasOwnProperty(e.key.toLowerCase())) {
+                keys[e.key] = false;
+                keys[e.key.toLowerCase()] = false;
+            }
+        });
+
+        renderer.domElement.addEventListener('mousedown', (e) => {
+            if (!gameState.started || gameState.modalOpen || gameState.ended) return;
+            isDragging = true;
+            dragDistance = 0;
+            prevMouseX = e.clientX;
+            prevMouseY = e.clientY;
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!gameState.started || gameState.modalOpen || gameState.ended) return;
+            if (document.pointerLockElement === renderer.domElement) {
+                yaw -= e.movementX * 0.0022;
+                pitch -= e.movementY * 0.0022;
+                updateCameraRotation();
+            } else if (isDragging) {
+                const dx = e.clientX - prevMouseX;
+                const dy = e.clientY - prevMouseY;
+                dragDistance += Math.hypot(dx, dy);
+                yaw -= dx * 0.0032;
+                pitch -= dy * 0.0032;
+                prevMouseX = e.clientX;
+                prevMouseY = e.clientY;
+                updateCameraRotation();
+            }
+        });
+
+        window.addEventListener('mouseup', () => {
+            if (!gameState.started || gameState.modalOpen || gameState.ended) return;
+            if (isDragging && dragDistance < 6) {
+                triggerRayInteraction();
+            }
+            isDragging = false;
+        });
+
+        const btnLockMode = document.getElementById('btn-lock-mode');
+        const lockModeText = document.getElementById('lock-mode-text');
+        btnLockMode.addEventListener('click', () => {
+            if (document.pointerLockElement === renderer.domElement) {
+                document.exitPointerLock();
+            } else {
+                renderer.domElement.requestPointerLock();
+            }
+        });
+        document.addEventListener('pointerlockchange', () => {
+            const locked = document.pointerLockElement === renderer.domElement;
+            lockModeText.textContent = locked ? 'שחרר סמן (ESC)' : 'מבט חופשי';
+        });
+
+        // Mobile Touch Controls
+        let lookTouchId = null;
+        let lastTouchX = 0;
+        let lastTouchY = 0;
+        let touchMoved = false;
+
+        renderer.domElement.addEventListener('touchstart', (e) => {
+            if (!gameState.started || gameState.modalOpen || gameState.ended) return;
+            if (e.touches.length === 1) {
+                lookTouchId = e.touches[0].identifier;
+                lastTouchX = e.touches[0].clientX;
+                lastTouchY = e.touches[0].clientY;
+                touchMoved = false;
+            }
+        }, { passive: true });
+
+        renderer.domElement.addEventListener('touchmove', (e) => {
+            if (!gameState.started || gameState.modalOpen || gameState.ended) return;
+            for (let t of e.touches) {
+                if (t.identifier === lookTouchId) {
+                    const dx = t.clientX - lastTouchX;
+                    const dy = t.clientY - lastTouchY;
+                    if (Math.hypot(dx, dy) > 4) touchMoved = true;
+                    yaw -= dx * 0.004;
+                    pitch -= dy * 0.004;
+                    lastTouchX = t.clientX;
+                    lastTouchY = t.clientY;
+                    updateCameraRotation();
+                }
+            }
+        }, { passive: true });
+
+        renderer.domElement.addEventListener('touchend', () => {
+            if (!gameState.started || gameState.modalOpen || gameState.ended) return;
+            if (!touchMoved) triggerRayInteraction();
+            lookTouchId = null;
+        });
+
+        const moveZone = document.getElementById('touch-move-zone');
+        const stick = document.getElementById('touch-stick');
+        moveZone.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            const rect = moveZone.getBoundingClientRect();
+            const t = e.touches[0];
+            const cx = rect.left + rect.width / 2;
+            const cy = rect.top + rect.height / 2;
+            let dx = (t.clientX - cx) / (rect.width / 2);
+            let dy = (t.clientY - cy) / (rect.height / 2);
+            const len = Math.hypot(dx, dy);
+            if (len > 1) { dx /= len; dy /= len; }
+            touchMoveVec = { x: dx, y: dy };
+            stick.style.transform = `translate(${dx * 28}px, ${dy * 28}px)`;
+        }, { passive: false });
+
+        moveZone.addEventListener('touchend', () => {
+            touchMoveVec = { x: 0, y: 0 };
+            stick.style.transform = 'translate(0px, 0px)';
+        });
+
+        /**
+         * ============================================================================
+         * 8. RAYCASTING & INTERACTION SYSTEM
+         * ============================================================================
+         */
+        const raycaster = new THREE.Raycaster();
+        const centerCoords = new THREE.Vector2(0, 0);
+        const crosshairEl = document.getElementById('crosshair');
+        const hoverLabelEl = document.getElementById('hover-label');
+        const hoverTextEl = document.getElementById('hover-text');
+        let currentHovered = null;
+
+        function updateRaycaster() {
+            if (!gameState.started || gameState.modalOpen || gameState.ended) {
+                hoverLabelEl.classList.add('hidden');
+                crosshairEl.classList.remove('interactive');
+                currentHovered = null;
+                return;
+            }
+            raycaster.setFromCamera(centerCoords, camera);
+            const hits = raycaster.intersectObjects(interactiveObjects, false);
+
+            if (hits.length > 0 && hits[0].distance <= 5.2) {
+                currentHovered = hits[0].object;
+                crosshairEl.classList.add('interactive');
+                hoverTextEl.textContent = currentHovered.userData.label;
+                hoverLabelEl.classList.remove('hidden');
+            } else {
+                currentHovered = null;
+                crosshairEl.classList.remove('interactive');
+                hoverLabelEl.classList.add('hidden');
+            }
+        }
+
+        function triggerRayInteraction() {
+            if (currentHovered && currentHovered.userData.onInteract) {
+                audio.playClick();
+                currentHovered.userData.onInteract();
+            }
+        }
+
+        /**
+         * ============================================================================
+         * 9. PUZZLES & STORY INTERACTIONS (HEBREW RTL)
+         * ============================================================================
+         */
+        const puzzleModal = document.getElementById('puzzle-modal');
+        const puzzleContent = document.getElementById('puzzle-content');
+
+        function openModal(html) {
+            gameState.modalOpen = true;
+            if (document.pointerLockElement === renderer.domElement) {
+                document.exitPointerLock();
+            }
+            puzzleContent.innerHTML = html;
+            puzzleModal.classList.remove('hidden');
+        }
+
+        function closeModal() {
+            gameState.modalOpen = false;
+            puzzleModal.classList.add('hidden');
+        }
+
+        document.getElementById('btn-close-modal').addEventListener('click', () => {
+            audio.playClick();
+            closeModal();
+        });
+
+        function showToast(msg, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const styles = {
+                info: 'bg-stone-900/95 border-amber-500/70 text-amber-200',
+                success: 'bg-emerald-950/95 border-emerald-400 text-emerald-200',
+                error: 'bg-red-950/95 border-red-400 text-red-200'
+            };
+            toast.className = `px-5 py-2.5 rounded-2xl border shadow-2xl text-xs sm:text-sm font-medium backdrop-blur-md transition-all duration-300 text-center ${styles[type] || styles.info}`;
+            toast.textContent = msg;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.classList.add('opacity-0', '-translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3600);
+        }
+
+        function updateObjectiveBanner() {
+            const objEl = document.getElementById('objective-text');
+            if (!gameState.readScroll) {
+                objEl.textContent = 'קרא את מגילת הרופא המלכותי שעל המעמד ליד המלך';
+            } else if (!gameState.bookshelfSolved) {
+                objEl.textContent = 'פענח את סדר דגלי הממלכה ופתח את הספרייה הסודית';
+            } else if (!gameState.chestSolved) {
+                objEl.textContent = 'פתח את תיבת האוצר בעזרת המפתח והספרות שמעל האח';
+            } else if (!gameState.dragonrootCollected) {
+                objEl.textContent = 'מקם את מנסרת השמש באסטרולב והמס את הקרח מעל שורש הדרקון';
+            } else if (!gameState.elixirBrewed) {
+                objEl.textContent = 'גש לקדירת הרקיחה ורקח את שיקוי השחר הנצחי!';
+            } else {
+                objEl.textContent = 'רוץ אל מיטת המלך והשקה אותו בשיקוי המרפא!';
+            }
+
+            // Update ingredient status pills
+            if (gameState.inventory.some(i => i.id === 'moonlightTears')) {
+                document.getElementById('ing-moon').className = 'text-sky-300 font-bold';
+            }
+            if (gameState.inventory.some(i => i.id === 'phoenixAsh')) {
+                document.getElementById('ing-phoenix').className = 'text-amber-400 font-bold';
+            }
+            if (gameState.inventory.some(i => i.id === 'dragonRoot')) {
+                document.getElementById('ing-dragon').className = 'text-emerald-400 font-bold';
+            }
+        }
+
+        function addItem(itemKey) {
+            if (gameState.inventory.some(i => i.id === itemKey)) return;
+            const item = ITEMS[itemKey];
+            gameState.inventory.push(item);
+            audio.playPickup();
+            showToast(`נאסף לתרמיל: ${item.icon} ${item.name}`, 'success');
+            renderInventory();
+            updateObjectiveBanner();
+        }
+
+        function renderInventory() {
+            const bar = document.getElementById('inventory-bar');
+            const banner = document.getElementById('active-item-banner');
+            const activeName = document.getElementById('active-item-name');
+
+            if (gameState.inventory.length === 0) {
+                bar.innerHTML = `<div class="px-4 text-xs sm:text-sm text-stone-400">התרמיל המלכותי ריק — חקור את אולם הטירה</div>`;
+                banner.classList.add('hidden');
+                return;
+            }
+
+            bar.innerHTML = '';
+            gameState.inventory.forEach(item => {
+                const isSelected = gameState.selectedItemId === item.id;
+                const btn = document.createElement('button');
+                btn.className = `px-3 py-2 rounded-xl border transition flex items-center gap-2 text-xs sm:text-sm font-medium shrink-0 ${
+                    isSelected
+                        ? 'bg-amber-500/30 border-amber-400 text-amber-100 shadow-lg scale-105'
+                        : 'bg-stone-900/95 border-stone-700 hover:border-amber-600/60 text-stone-200'
+                }`;
+                btn.innerHTML = `<span class="text-lg sm:text-xl">${item.icon}</span><span>${item.name}</span>`;
+                btn.onclick = () => {
+                    audio.playClick();
+                    if (item.id === 'royalScroll') {
+                        openRoyalScrollModal();
+                        return;
+                    }
+                    gameState.selectedItemId = (gameState.selectedItemId === item.id) ? null : item.id;
+                    if (gameState.selectedItemId) {
+                        showToast(`החזקת ביד: ${item.name}. כעת לחץ על היעד המתאים בחדר.`, 'info');
+                    }
+                    renderInventory();
+                };
+                bar.appendChild(btn);
+            });
+
+            if (gameState.selectedItemId) {
+                const sel = ITEMS[gameState.selectedItemId];
+                activeName.textContent = `${sel.icon} ${sel.name}`;
+                banner.classList.remove('hidden');
+            } else {
+                banner.classList.add('hidden');
+            }
+        }
+
+        // --- CLUE 1: ROYAL PHYSICIAN'S SCROLL ---
+        function openRoyalScrollModal() {
+            if (!gameState.readScroll) {
+                gameState.readScroll = true;
+                addItem('royalScroll');
+            }
+            openModal(`
+                <div class="parchment-sheet rounded-2xl p-6 text-right border-2 border-amber-800/50">
+                    <div class="text-xs font-bold text-amber-900 mb-1">צו הרופא המלכותי • דחוף ביותר</div>
+                    <h3 class="font-royal text-2xl font-black text-stone-950 mb-3 border-b border-amber-900/30 pb-2">
+                        📜 מתכון שיקוי השחר הנצחי
+                    </h3>
+                    <p class="font-royal text-base leading-relaxed text-stone-900 mb-3">
+                        הרעל זורם בעורקי המלך! כדי להצילו יש לרקוח בקדירה <b>שלושה מרכיבים קדושים</b>:
+                    </p>
+                    <ul class="space-y-2 text-sm font-medium text-stone-900 bg-amber-950/10 p-3.5 rounded-xl border border-amber-900/25 mb-4">
+                        <li>💧 <b>דמעות הירח:</b> חבויות מאחורי ספרי המלך. משוך בספרים לפי סדר דגלי הממלכה שעל הקירות (I, II, III).</li>
+                        <li>🔥 <b>אפר עוף החול:</b> נעול בתיבת האוצר. קוד המנעול חקוק בספרות רומיות מעל האח הבוערת.</li>
+                        <li>🌿 <b>שורש הדרקון:</b> קפוא במזבח הקרח. מקד עליו את אור השמש בעזרת האסטרולב!</li>
+                    </ul>
+                    <p class="text-xs text-stone-700 font-medium">
+                        לאחר איסוף שלושתם, רקח את השיקוי בקדירה ורוץ להשקות את המלך!
+                    </p>
+                </div>
+            `);
+        }
+
+        // --- PUZZLE 1: ROYAL BOOKSHELF (Order: Crown 👑 -> Dragon 🐉 -> Sun ☀️) ---
+        function openBookshelfModal() {
+            if (gameState.bookshelfSolved) {
+                openModal(`
+                    <div class="text-center py-4">
+                        <div class="text-4xl mb-2">📚</div>
+                        <h3 class="font-royal text-2xl font-bold text-amber-300 mb-2">התא הסודי בספרייה פתוח</h3>
+                        <p class="text-stone-300 text-sm">כבר אספת מתוכו את <b>דמעות הירח</b> ואת <b>מפתח הברזל העתיק</b>.</p>
+                    </div>
+                `);
+                return;
+            }
+
+            const books = [
+                { id: 'sun', label: 'ספר השמש הנצחית', icon: '☀️', color: 'from-amber-700 to-yellow-800' },
+                { id: 'crown', label: 'תולדות הכתר המלכותי', icon: '👑', color: 'from-red-800 to-rose-950' },
+                { id: 'sword', label: 'אגדות אבירי השולחן', icon: '⚔️', color: 'from-slate-700 to-slate-900' },
+                { id: 'dragon', label: 'סודות הדרקון הקדמון', icon: '🐉', color: 'from-emerald-800 to-teal-950' }
+            ];
+
+            const renderBooksUI = () => {
+                openModal(`
+                    <div class="text-center">
+                        <div class="text-amber-400 text-xs font-bold mb-1">ספריית המלך העתיקה</div>
+                        <h3 class="font-royal text-2xl font-bold text-amber-100 mb-2">משוך 3 ספרים לפי סדר הדגלים</h3>
+                        <p class="text-stone-400 text-xs mb-4">הבט בדגלי הטירה (I, II, III) ולחץ על הכרכים המתאימים לפי הסדר</p>
+
+                        <div class="flex justify-center gap-2 mb-5">
+                            ${[0, 1, 2].map(idx => {
+                                const picked = gameState.bookSequence[idx];
+                                const found = books.find(b => b.id === picked);
+                                return `<div class="w-14 h-14 rounded-2xl bg-stone-950 border-2 ${found ? 'border-amber-400 text-2xl' : 'border-stone-700 text-stone-600 text-sm'} flex items-center justify-center font-bold">
+                                    ${found ? found.icon : (idx + 1)}
+                                </div>`;
+                            }).join('')}
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mb-3">
+                            ${books.map(b => `
+                                <button data-book="${b.id}" class="book-pick-btn p-3.5 rounded-2xl bg-gradient-to-l ${b.color} border border-amber-500/40 hover:border-amber-300 text-amber-100 font-bold text-sm flex items-center gap-3 shadow-lg transition active:scale-95">
+                                    <span class="text-2xl">${b.icon}</span>
+                                    <span>${b.label}</span>
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+                `);
+
+                document.querySelectorAll('.book-pick-btn').forEach(btn => {
+                    btn.onclick = () => {
+                        const chosen = btn.getAttribute('data-book');
+                        audio.playClick();
+                        gameState.bookSequence.push(chosen);
+
+                        if (gameState.bookSequence.length === 3) {
+                            const [b1, b2, b3] = gameState.bookSequence;
+                            if (b1 === 'crown' && b2 === 'dragon' && b3 === 'sun') {
+                                gameState.bookshelfSolved = true;
+                                audio.playUnlock();
+                                shelfBody.position.x = -0.35; // Slide bookshelf slightly in 3D
+                                closeModal();
+                                showToast('✨ המדף זז הצידה! מצאת את דמעות הירח ומפתח ברזל עתיק!', 'success');
+                                addItem('moonlightTears');
+                                addItem('rustyKey');
+                            } else {
+                                audio.playError();
+                                showToast('❌ הספרים חזרו למקומם! הסדר שגוי — בדוק את 3 הדגלים על קירות האולם.', 'error');
+                                gameState.bookSequence = [];
+                                renderBooksUI();
+                            }
+                        } else {
+                            renderBooksUI();
+                        }
+                    };
+                });
+            };
+
+            renderBooksUI();
+        }
+
+        // --- PUZZLE 2: LOCKED ROYAL CHEST (Rusty Key + Code 472 from Fireplace IV • VII • II) ---
+        function openChestModal() {
+            if (gameState.chestSolved) {
+                showToast('תיבת האוצר כבר פתוחה וריקה.', 'info');
+                return;
+            }
+
+            const hasKey = gameState.inventory.some(i => i.id === 'rustyKey');
+            if (!hasKey) {
+                audio.playError();
+                showToast('🔒 התיבה נעולה במנעול ברזל כבד ובקוד בן 3 ספרות. מצא תחילה את המפתח!', 'error');
+                return;
+            }
+
+            let digits = [0, 0, 0];
+
+            const renderChestLock = () => {
+                openModal(`
+                    <div class="text-center">
+                        <div class="text-amber-400 text-xs font-bold mb-1">תיבת האוצר המלכותית</div>
+                        <h3 class="font-royal text-2xl font-bold text-amber-100 mb-2">הזן את צופן המגן המלכותי</h3>
+                        <p class="text-stone-400 text-xs mb-5">מפתח הברזל הוכנס למנעול! כעת סובב את 3 הגלגלים לפי הספרות הרומיות שמעל האח.</p>
+
+                        <div class="flex justify-center gap-4 mb-6" dir="ltr">
+                            ${digits.map((val, idx) => `
+                                <div class="bg-stone-950 border-2 border-amber-600/60 rounded-2xl p-3 flex flex-col items-center gap-2 w-20">
+                                    <button data-idx="${idx}" data-dir="1" class="dial-btn w-full py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-amber-300 font-bold">▲</button>
+                                    <div class="font-mono text-3xl font-black text-amber-400">${val}</div>
+                                    <button data-idx="${idx}" data-dir="-1" class="dial-btn w-full py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-amber-300 font-bold">▼</button>
+                                </div>
+                            `).join('')}
+                        </div>
+
+                        <button id="btn-unlock-chest" class="w-full py-3.5 rounded-2xl bg-gradient-to-l from-amber-600 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 text-stone-950 font-bold text-base shadow-lg transition">
+                            פתח את תיבת האוצר 🔓
+                        </button>
+                    </div>
+                `);
+
+                document.querySelectorAll('.dial-btn').forEach(btn => {
+                    btn.onclick = () => {
+                        audio.playClick();
+                        const i = parseInt(btn.getAttribute('data-idx'));
+                        const d = parseInt(btn.getAttribute('data-dir'));
+                        digits[i] = (digits[i] + d + 10) % 10;
+                        renderChestLock();
+                    };
+                });
+
+                document.getElementById('btn-unlock-chest').onclick = () => {
+                    if (digits.join('') === '472') {
+                        gameState.chestSolved = true;
+                        gameState.selectedItemId = null;
+                        audio.playUnlock();
+
+                        // Animate chest opening in 3D
+                        chestLid.rotation.x = -0.8;
+                        chestLid.position.y = 0.85;
+                        chestLid.position.z = -0.25;
+                        chestGoldLock.visible = false;
+
+                        closeModal();
+                        showToast('🎉 תיבת האוצר נפתחה! השגת את אפר עוף החול ומנסרת השמש!', 'success');
+                        addItem('phoenixAsh');
+                        addItem('sunPrism');
+                    } else {
+                        audio.playError();
+                        showToast('❌ הצופן שגוי! הבט בספרות הרומיות שעל המגן מעל האח (IV • VII • II).', 'error');
+                    }
+                };
+            };
+
+            renderChestLock();
+        }
+
+        // --- PUZZLE 3: SUN ASTROLABE PEDESTAL & DRAGONROOT ---
+        function handlePedestalInteraction() {
+            if (gameState.prismPlaced) {
+                showToast('☀️ מנסרת השמש כבר ממקדת את קרן האור אל מזבח הקרח!', 'info');
+                return;
+            }
+
+            const hasPrism = gameState.inventory.some(i => i.id === 'sunPrism');
+            if (!hasPrism) {
+                audio.playError();
+                showToast('כן האסטרולב חסר עדשת בדולח שתרכז את אור הוויטראז׳.', 'error');
+                return;
+            }
+
+            if (gameState.selectedItemId !== 'sunPrism') {
+                showToast('🔮 בחר ב"מנסרת השמש" מתוך התרמיל למטה ולחץ שוב על האסטרולב!', 'info');
+                return;
+            }
+
+            gameState.prismPlaced = true;
+            gameState.selectedItemId = null;
+            audio.playUnlock();
+
+            // Reveal prism & sunbeam melting the ice cage in 3D
+            placedPrismMesh.visible = true;
+            sunBeamMesh.visible = true;
+            crystalCage.visible = false;
+
+            renderInventory();
+            updateObjectiveBanner();
+            showToast('☀️ קרן השמש מיקדה חום אדיר והמיסה את הקרח מעל שורש הדרקון!', 'success');
+        }
+
+        function handleDragonRootInteraction() {
+            if (gameState.dragonrootCollected) {
+                showToast('כבר אספת את שורש הדרקון.', 'info');
+                return;
+            }
+
+            if (!gameState.prismPlaced) {
+                audio.playError();
+                showToast('❄️ שורש הדרקון כלוא בתוך גוש קרח קסום! עליך להמיס אותו בעזרת אור השמש.', 'error');
+                return;
+            }
+
+            gameState.dragonrootCollected = true;
+            dragonRootMesh.visible = false;
+            addItem('dragonRoot');
+        }
+
+        // --- FINAL BREWING: ALCHEMICAL CAULDRON ---
+        function handleCauldronInteraction() {
+            if (gameState.elixirBrewed) {
+                showToast('🧪 שיקוי השחר הנצחי כבר מוכן בתרמיל שלך! רוץ למיטת המלך!', 'info');
+                return;
+            }
+
+            const hasMoon = gameState.inventory.some(i => i.id === 'moonlightTears');
+            const hasPhoenix = gameState.inventory.some(i => i.id === 'phoenixAsh');
+            const hasDragon = gameState.inventory.some(i => i.id === 'dragonRoot');
+
+            if (hasMoon && hasPhoenix && hasDragon) {
+                gameState.elixirBrewed = true;
+                audio.playBrew();
+
+                // Turn cauldron liquid golden
+                potionLiquidMat.color.setHex(0xfbbf24);
+                potionLiquidMat.emissive.setHex(0xf59e0b);
+                cauldronLight.color.setHex(0xfbbf24);
+
+                addItem('cureElixir');
+                // Auto-select the elixir for convenience!
+                gameState.selectedItemId = 'cureElixir';
+                renderInventory();
+
+                openModal(`
+                    <div class="text-center py-3">
+                        <div class="text-5xl mb-3 animate-bounce">🧪</div>
+                        <h3 class="font-royal text-2xl font-black text-amber-300 mb-2">
+                            שיקוי השחר הנצחי נרקח בהצלחה!
+                        </h3>
+                        <p class="text-stone-200 text-sm leading-relaxed mb-4">
+                            הקדירה זוהרת באור זהב טהור! השיקוי מוכן בידך — <b>מהר אל מיטת האפיריון</b> ולחץ על המלך כדי להשקות אותו לפני שיחלוף הזמן!
+                        </p>
+                        <button onclick="document.getElementById('btn-close-modal').click()" class="px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-sm">
+                            רוץ אל המלך! 🏃‍♂️
+                        </button>
+                    </div>
+                `);
+            } else {
+                audio.playError();
+                const missing = [];
+                if (!hasMoon) missing.push('דמעות הירח');
+                if (!hasPhoenix) missing.push('אפר עוף החול');
+                if (!hasDragon) missing.push('שורש הדרקון');
+                showToast(`⚗️ חסרים מרכיבים לרקיחה: ${missing.join(', ')}`, 'error');
+            }
+        }
+
+        // --- SAVING THE DYING KING ---
+        function handleKingInteraction() {
+            if (gameState.kingSaved || gameState.ended) return;
+
+            if (gameState.elixirBrewed) {
+                if (gameState.selectedItemId !== 'cureElixir') {
+                    showToast('🧪 בחר ב"שיקוי השחר הנצחי" מתוך התרמיל למטה ולחץ שוב על המלך!', 'info');
+                    return;
+                }
+
+                gameState.kingSaved = true;
+                gameState.ended = true;
+                clearInterval(gameState.timerInterval);
+
+                // Restore healthy color to King
+                kingHead.material.color.setHex(0xfed7aa);
+                audio.playVictory();
+
+                if (document.pointerLockElement === renderer.domElement) {
+                    document.exitPointerLock();
+                }
+
+                const elapsed = TOTAL_TIME_SECONDS - gameState.remainingSeconds;
+                document.getElementById('win-remaining-time').textContent = formatTime(gameState.remainingSeconds);
+                document.getElementById('win-elapsed-time').textContent = formatTime(elapsed);
+                document.getElementById('victory-modal').classList.remove('hidden');
+            } else {
+                audio.playHeartbeat();
+                showToast('👑 המלך נושם בכבדות... עליך לרקוח עבורו את "שיקוי השחר הנצחי" במהירות!', 'error');
+            }
+        }
+
+        /**
+         * ============================================================================
+         * 10. 10-MINUTE COUNTDOWN TIMER & HUD CONTROLS
+         * ============================================================================
+         */
+        function formatTime(sec) {
+            const m = String(Math.floor(sec / 60)).padStart(2, '0');
+            const s = String(sec % 60).padStart(2, '0');
+            return `${m}:${s}`;
+        }
+
+        function triggerDefeat() {
+            if (gameState.ended) return;
+            gameState.ended = true;
+            clearInterval(gameState.timerInterval);
+            closeModal();
+            audio.playGong();
+
+            if (document.pointerLockElement === renderer.domElement) {
+                document.exitPointerLock();
+            }
+            document.getElementById('defeat-modal').classList.remove('hidden');
+        }
+
+        document.getElementById('btn-start-game').addEventListener('click', () => {
+            audio.init();
+            audio.playClick();
+            gameState.started = true;
+
+            document.getElementById('start-modal').classList.add('hidden');
+            document.getElementById('hud-top').classList.remove('hidden');
+            document.getElementById('hud-bottom').classList.remove('hidden');
+            document.getElementById('crosshair').classList.remove('hidden');
+
+            if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+                document.getElementById('mobile-controls').classList.remove('hidden');
+            }
+
+            const timerDisplay = document.getElementById('timer-display');
+            const dangerVignette = document.getElementById('danger-vignette');
+
+            gameState.timerInterval = setInterval(() => {
+                if (gameState.ended) return;
+                gameState.remainingSeconds--;
+
+                if (gameState.remainingSeconds <= 0) {
+                    timerDisplay.textContent = '00:00';
+                    triggerDefeat();
+                    return;
+                }
+
+                timerDisplay.textContent = formatTime(gameState.remainingSeconds);
+
+                // Last 90 seconds urgency & heartbeat audio
+                if (gameState.remainingSeconds <= 90) {
+                    timerDisplay.classList.add('timer-urgent');
+                    dangerVignette.style.opacity = gameState.remainingSeconds % 2 === 0 ? '0.85' : '0.35';
+                    if (gameState.remainingSeconds % 2 === 0) audio.playHeartbeat();
+                }
+            }, 1000);
+
+            showToast('⏳ המרוץ נגד הזמן החל! קרא תחילה את המגילה שעל המעמד ליד המלך.', 'info');
+        });
+
+        document.getElementById('btn-hint').addEventListener('click', () => {
+            audio.playClick();
+            let step = 0;
+            if (!gameState.readScroll) step = 0;
+            else if (!gameState.bookshelfSolved) step = 1;
+            else if (!gameState.chestSolved) step = 2;
+            else if (!gameState.prismPlaced || !gameState.dragonrootCollected) step = 3;
+            else if (!gameState.elixirBrewed) step = 4;
+            else step = 5;
+
+            openModal(`
+                <div class="text-center py-2">
+                    <div class="text-4xl mb-2">💡</div>
+                    <h3 class="font-royal text-2xl font-bold text-amber-300 mb-3">עצת חכמי הטירה</h3>
+                    <p class="text-stone-200 text-base leading-relaxed bg-stone-800/85 border border-amber-500/35 p-4 rounded-2xl">
+                        ${HINTS[step]}
+                    </p>
+                </div>
+            `);
+        });
+
+        document.getElementById('btn-sound').addEventListener('click', () => {
+            audio.init();
+            const isMuted = audio.toggleMute();
+            document.getElementById('sound-icon').textContent = isMuted ? '🔇' : '🔊';
+        });
+
+        /**
+         * ============================================================================
+         * 11. ANIMATION LOOP, MOVEMENT COLLISIONS & RESPONSIVE RESIZE
+         * ============================================================================
+         */
+        const clock = new THREE.Clock();
+        const forwardVec = new THREE.Vector3();
+        const rightVec = new THREE.Vector3();
+
+        function updateMovement(delta) {
+            if (!gameState.started || gameState.modalOpen || gameState.ended) return;
+
+            const speed = 3.8 * delta;
+            camera.getWorldDirection(forwardVec);
+            forwardVec.y = 0;
+            forwardVec.normalize();
+            rightVec.crossVectors(forwardVec, camera.up).normalize();
+
+            let moveForward = 0;
+            let moveRight = 0;
+
+            if (keys.w || keys.ArrowUp) moveForward += 1;
+            if (keys.s || keys.ArrowDown) moveForward -= 1;
+            if (keys.d || keys.ArrowRight) moveRight += 1;
+            if (keys.a || keys.ArrowLeft) moveRight -= 1;
+
+            moveForward -= touchMoveVec.y;
+            moveRight += touchMoveVec.x;
+
+            if (moveForward !== 0 || moveRight !== 0) {
+                const nextX = camera.position.x + (forwardVec.x * moveForward + rightVec.x * moveRight) * speed;
+                const nextZ = camera.position.z + (forwardVec.z * moveForward + rightVec.z * moveRight) * speed;
+
+                // Keep player inside Castle Royal Hall boundaries & outside King's bed dais
+                const limitX = 5.0;
+                const limitZ = 5.6;
+                const blockedByBed = (Math.abs(nextX) < 2.25 && nextZ < -2.85);
+
+                if (Math.abs(nextX) < limitX && Math.abs(nextZ) < limitZ && !blockedByBed) {
+                    camera.position.x = nextX;
+                    camera.position.z = nextZ;
+                }
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = Math.min(clock.getDelta(), 0.1);
+            const elapsed = clock.getElapsedTime();
+
+            updateMovement(delta);
+            updateRaycaster();
+
+            // Torch & Fireplace flickering
+            fireLight.intensity = 1.5 + Math.sin(elapsed * 15) * 0.2 + Math.cos(elapsed * 24) * 0.1;
+            mainHallLight.intensity = 1.5 + Math.sin(elapsed * 6) * 0.08;
+            torchFlames.forEach((f, idx) => {
+                f.scale.setScalar(0.92 + Math.sin(elapsed * 17 + idx) * 0.15);
+            });
+
+            // Dying King heavy breathing animation (smooth steady breathing once saved)
+            if (!gameState.kingSaved) {
+                kingChest.scale.y = 1 + Math.sin(elapsed * 4.2) * 0.12;
+            } else {
+                kingChest.scale.y = 1 + Math.sin(elapsed * 2.0) * 0.05;
+            }
+
+            // Astrolabe & Prism gentle rotation
+            astrolabeRing.rotation.z = elapsed * 0.4;
+            if (placedPrismMesh.visible) {
+                placedPrismMesh.rotation.y = elapsed * 1.5;
+            }
+
+            // Cauldron bubbling glow & floating embers
+            potionLiquidMat.emissiveIntensity = 0.75 + Math.sin(elapsed * 4) * 0.25;
+            emberParticles.rotation.y = elapsed * 0.025;
+
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        window.onload = function () {
+            animate();
+        };
+    </script>
+
+<a id="club-back" href="../index.html#products-shelf" style="position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#fff;color:#1d2433;border:2px solid #cfe0f0;border-radius:999px;padding:8px 18px;font:600 15px/1.2 Arial,sans-serif;text-decoration:none;direction:rtl;box-shadow:0 3px 0 #cfe0f0">→ חזרה לאתר החוג</a>
+<script>if (window.top !== window) document.getElementById("club-back").remove();</script>
+</body>
+</html>

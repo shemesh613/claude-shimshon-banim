@@ -1,0 +1,1623 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>הוגוורטס 3D - עולם הקסמים</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js r128 & OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@500;700;900&family=Rubik:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #050814;
+            font-family: 'Rubik', sans-serif;
+            user-select: none;
+        }
+        .magical-title {
+            font-family: 'Frank Ruhl Libre', serif;
+            text-shadow: 0 0 15px rgba(245, 197, 66, 0.7), 0 2px 4px rgba(0, 0, 0, 0.9);
+        }
+        .glass-panel {
+            background: rgba(12, 18, 38, 0.65);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(245, 197, 66, 0.25);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        }
+        .spell-btn {
+            transition: all 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+            position: relative;
+            overflow: hidden;
+        }
+        .spell-btn:hover {
+            transform: translateY(-3px) scale(1.03);
+            border-color: rgba(245, 197, 66, 0.8);
+            box-shadow: 0 0 20px rgba(245, 197, 66, 0.35);
+        }
+        .spell-btn:active {
+            transform: translateY(0) scale(0.98);
+        }
+        .spell-active {
+            background: linear-gradient(135deg, rgba(245, 197, 66, 0.3), rgba(56, 189, 248, 0.25));
+            border-color: #f5c542;
+            box-shadow: 0 0 22px rgba(245, 197, 66, 0.5);
+        }
+        #canvas-container {
+            position: fixed;
+            inset: 0;
+            z-index: 1;
+        }
+        #ui-layer {
+            position: fixed;
+            inset: 0;
+            z-index: 10;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 1rem;
+        }
+        .interactive {
+            pointer-events: auto;
+        }
+        /* Custom subtle animations */
+        @keyframes pulseGlow {
+            0%, 100% { box-shadow: 0 0 12px rgba(245, 197, 66, 0.3); }
+            50% { box-shadow: 0 0 24px rgba(245, 197, 66, 0.7); }
+        }
+        .snitch-badge {
+            animation: pulseGlow 2.5s infinite ease-in-out;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 3D Viewport Container -->
+    <div id="canvas-container"></div>
+
+    <!-- Floating Toast Notification -->
+    <div id="toast-box" class="fixed top-24 left-1/2 -translate-x-1/2 z-50 pointer-events-none opacity-0 transition-all duration-300 transform -translate-y-4">
+        <div class="glass-panel px-6 py-3 rounded-full text-amber-200 font-medium text-sm md:text-base flex items-center gap-2 border-amber-400/50">
+            <span id="toast-icon">✨</span>
+            <span id="toast-text">הודעה קסומה</span>
+        </div>
+    </div>
+
+    <!-- HUD Overlay -->
+    <div id="ui-layer">
+        <!-- Top Header Bar -->
+        <div class="flex flex-wrap items-start justify-between gap-3">
+            <!-- Title & Snitch Counter -->
+            <div class="glass-panel rounded-2xl px-5 py-3 interactive flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-5">
+                <div>
+                    <h1 class="magical-title text-2xl md:text-3xl font-black text-amber-300 tracking-wide">
+                        הוגוורטס 3D
+                    </h1>
+                    <p class="text-xs text-slate-300">עולם הקסמים האינטראקטיבי</p>
+                </div>
+                <div class="h-8 w-px bg-amber-400/20 hidden sm:block"></div>
+                <div class="flex items-center gap-3">
+                    <div class="snitch-badge bg-amber-500/20 border border-amber-400/50 rounded-xl px-3 py-1.5 flex items-center gap-2">
+                        <span class="text-lg">🟡</span>
+                        <div>
+                            <div class="text-[11px] text-amber-200/80 leading-none">סניץ' מוזהב נתפס</div>
+                            <div id="snitch-score" class="text-base font-bold text-amber-300 leading-tight">0</div>
+                        </div>
+                    </div>
+                    <button id="audio-toggle" class="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-600/50 text-amber-300 transition" title="הפעל/כבה מוזיקה וצלילי קסם">
+                        🔇
+                    </button>
+                </div>
+            </div>
+
+            <!-- Camera & Flight Mode Switcher + Locations -->
+            <div class="flex flex-wrap items-center gap-2 interactive">
+                <div class="glass-panel rounded-2xl p-1.5 flex items-center gap-1">
+                    <button id="mode-orbit-btn" class="px-3.5 py-2 rounded-xl text-xs md:text-sm font-medium transition bg-amber-500/30 text-amber-200 border border-amber-400/50">
+                        🔭 מצב סיור חופשי
+                    </button>
+                    <button id="mode-broom-btn" class="px-3.5 py-2 rounded-xl text-xs md:text-sm font-medium transition text-slate-300 hover:text-white">
+                        🧹 טיסה על מטאטא
+                    </button>
+                </div>
+
+                <!-- Quick Teleport Locations -->
+                <div class="glass-panel rounded-2xl p-1.5 hidden lg:flex items-center gap-1 text-xs">
+                    <button onclick="teleportTo('castle')" class="px-3 py-2 rounded-xl hover:bg-white/10 text-slate-200 transition">🏰 הטירה</button>
+                    <button onclick="teleportTo('quidditch')" class="px-3 py-2 rounded-xl hover:bg-white/10 text-slate-200 transition">🏆 קווידיץ'</button>
+                    <button onclick="teleportTo('hagrid')" class="px-3 py-2 rounded-xl hover:bg-white/10 text-slate-200 transition">🛖 הבקתה</button>
+                    <button onclick="teleportTo('lake')" class="px-3 py-2 rounded-xl hover:bg-white/10 text-slate-200 transition">🌊 האגם</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Center Broomstick Crosshair (Visible only in Broom Flight Mode) -->
+        <div id="broom-hud" class="hidden flex-col items-center justify-center pointer-events-none my-auto">
+            <div class="w-12 h-12 rounded-full border-2 border-amber-400/40 flex items-center justify-center">
+                <div class="w-1.5 h-1.5 rounded-full bg-amber-300 shadow-[0_0_8px_#f5c542]"></div>
+            </div>
+            <div class="mt-3 glass-panel px-4 py-1.5 rounded-full text-xs text-amber-100/90 text-center">
+                חיצים / WASD לטיסה • רווח לעלייה • Shift לירידה • עכבר לכיוון • התקרב לסניץ' לתפיסה!
+            </div>
+        </div>
+
+        <!-- Mobile Flight Controls (Shown on touch / broom mode) -->
+        <div id="mobile-flight-controls" class="hidden justify-between items-end w-full px-2 mb-2 pointer-events-none">
+            <div class="grid grid-cols-3 gap-1.5 pointer-events-auto">
+                <div></div>
+                <button data-key="KeyW" class="touch-key glass-panel w-12 h-12 rounded-xl flex items-center justify-center text-white text-lg active:bg-amber-500/40">▲</button>
+                <div></div>
+                <button data-key="KeyA" class="touch-key glass-panel w-12 h-12 rounded-xl flex items-center justify-center text-white text-lg active:bg-amber-500/40">◀</button>
+                <button data-key="KeyS" class="touch-key glass-panel w-12 h-12 rounded-xl flex items-center justify-center text-white text-lg active:bg-amber-500/40">▼</button>
+                <button data-key="KeyD" class="touch-key glass-panel w-12 h-12 rounded-xl flex items-center justify-center text-white text-lg active:bg-amber-500/40">▶</button>
+            </div>
+            <div class="flex flex-col gap-2 pointer-events-auto">
+                <button data-key="Space" class="touch-key glass-panel px-4 py-3 rounded-xl text-xs font-bold text-amber-200 active:bg-amber-500/40">למעלה ⬆</button>
+                <button data-key="ShiftLeft" class="touch-key glass-panel px-4 py-3 rounded-xl text-xs font-bold text-amber-200 active:bg-amber-500/40">למטה ⬇</button>
+            </div>
+        </div>
+
+        <!-- Bottom Magic Spells Bar -->
+        <div class="flex flex-col items-center gap-2">
+            <div class="glass-panel rounded-2xl p-2 md:p-2.5 interactive max-w-full overflow-x-auto">
+                <div class="flex items-center gap-2 md:gap-3">
+                    <button id="spell-lumos" onclick="castSpell('lumos')" class="spell-btn rounded-xl px-3.5 py-2.5 bg-slate-900/70 border border-slate-700/80 text-right min-w-[115px]">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-lg">🪄</span>
+                            <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono">1</span>
+                        </div>
+                        <div class="text-sm font-bold text-amber-200 mt-0.5">לומוס</div>
+                        <div class="text-[10px] text-slate-400">Lumos • אור</div>
+                    </button>
+
+                    <button id="spell-patronum" onclick="castSpell('patronum')" class="spell-btn rounded-xl px-3.5 py-2.5 bg-slate-900/70 border border-slate-700/80 text-right min-w-[125px]">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-lg">🦌</span>
+                            <span class="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 font-mono">2</span>
+                        </div>
+                        <div class="text-sm font-bold text-sky-200 mt-0.5">אקספקטו פטרונום</div>
+                        <div class="text-[10px] text-slate-400">Patronus • מגן אור</div>
+                    </button>
+
+                    <button id="spell-leviosa" onclick="castSpell('leviosa')" class="spell-btn rounded-xl px-3.5 py-2.5 bg-slate-900/70 border border-slate-700/80 text-right min-w-[125px]">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-lg">🪶</span>
+                            <span class="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 font-mono">3</span>
+                        </div>
+                        <div class="text-sm font-bold text-purple-200 mt-0.5">וינגארדיום לביוסה</div>
+                        <div class="text-[10px] text-slate-400">Leviosa • ריחוף</div>
+                    </button>
+
+                    <button id="spell-fireworks" onclick="castSpell('fireworks')" class="spell-btn rounded-xl px-3.5 py-2.5 bg-slate-900/70 border border-slate-700/80 text-right min-w-[115px]">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-lg">🎆</span>
+                            <span class="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 font-mono">4</span>
+                        </div>
+                        <div class="text-sm font-bold text-rose-200 mt-0.5">זיקוקי וויזלי</div>
+                        <div class="text-[10px] text-slate-400">Spark • חגיגה</div>
+                    </button>
+                </div>
+            </div>
+            <div id="controls-hint" class="text-[11px] text-slate-400/90 text-center hidden sm:block">
+                גרור עם העכבר לסיבוב המצלמה • גלגל לזום • לחץ על מקשים 1-4 להטלת לחשים
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * ============================================================================
+         * HOGWARTS 3D MAGICAL WORLD - THREE.JS IMPLEMENTATION
+         * ============================================================================
+         * Includes:
+         * - Procedural Terrain with Cliff, Black Lake, Quidditch Valley & Forbidden Forest
+         * - Detailed Hogwarts Castle with Great Hall, Astronomy Tower, Turrets,
+         *   Glowing Windows, Stone Bridge & Boathouse
+         * - Quidditch Pitch with 6 Golden Hoops, Spectator Towers & Animated Snitch
+         * - Hagrid's Hut with Glowing Windows, Pumpkin Patch & Rising Chimney Smoke
+         * - Forbidden Forest with Pine Trees & Glowing Magical Wisps
+         * - Floating Candles over the Lake & Castle Courtyard
+         * - Dual Camera Modes: Orbit Inspection & Interactive Flying Broomstick
+         * - Interactive Spells: Lumos, Expecto Patronum, Wingardium Leviosa, Fireworks
+         * - Procedural Web Audio API Magical Ambience & Spell Sound Effects
+         */
+
+        // --- Global Scene Variables ---
+        let scene, camera, renderer, controls;
+        let clock = new THREE.Clock();
+        let isBroomMode = false;
+        let snitchCaughtCount = 0;
+
+        // Interactive & Animated Entities
+        let waterMesh, moonMesh, moonGlow;
+        let snitchGroup, snitchLeftWing, snitchRightWing;
+        let broomGroup, wandTipLight, wandTipMesh;
+        let floatingCandles = [];
+        let forestWisps = [];
+        let smokeParticles = [];
+        let levitatingObjects = [];
+        let patronusParticles = [];
+        let fireworkParticles = [];
+        let starField;
+
+        // Spell States
+        let lumosActive = false;
+        let leviosaActive = false;
+        let patronusWave = { active: false, radius: 0, origin: new THREE.Vector3() };
+
+        // Broomstick Flight Physics State
+        const broomState = {
+            position: new THREE.Vector3(0, 42, 115),
+            yaw: 0,
+            pitch: -0.1,
+            roll: 0,
+            speed: 0,
+            maxSpeed: 55
+        };
+        const keysPressed = {};
+
+        // --- Procedural Web Audio Synthesizer ---
+        const MagicAudio = {
+            ctx: null,
+            enabled: false,
+            ambientGain: null,
+
+            init() {
+                if (this.ctx) return;
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                this.ctx = new AudioContext();
+                this.startAmbience();
+            },
+
+            toggle() {
+                if (!this.ctx) {
+                    this.init();
+                    this.enabled = true;
+                } else {
+                    this.enabled = !this.enabled;
+                    if (this.ctx.state === 'suspended' && this.enabled) {
+                        this.ctx.resume();
+                    }
+                }
+                if (this.ambientGain) {
+                    this.ambientGain.gain.setTargetAtTime(this.enabled ? 0.08 : 0, this.ctx.currentTime, 0.3);
+                }
+                return this.enabled;
+            },
+
+            startAmbience() {
+                if (!this.ctx) return;
+                this.ambientGain = this.ctx.createGain();
+                this.ambientGain.gain.value = 0.08;
+                this.ambientGain.connect(this.ctx.destination);
+
+                // Ethereal celesta-like pad chord (E minor / Dorian mystical vibe)
+                const freqs = [164.81, 196.00, 246.94, 329.63, 493.88];
+                freqs.forEach((f, idx) => {
+                    const osc = this.ctx.createOscillator();
+                    const oscGain = this.ctx.createGain();
+                    osc.type = idx % 2 === 0 ? 'sine' : 'triangle';
+                    osc.frequency.value = f;
+
+                    // Subtle LFO shimmer
+                    const lfo = this.ctx.createOscillator();
+                    const lfoGain = this.ctx.createGain();
+                    lfo.frequency.value = 0.15 + idx * 0.07;
+                    lfoGain.gain.value = 0.015;
+                    lfo.connect(lfoGain);
+                    lfoGain.connect(oscGain.gain);
+
+                    oscGain.gain.value = 0.03;
+                    osc.connect(oscGain);
+                    oscGain.connect(this.ambientGain);
+
+                    osc.start();
+                    lfo.start();
+                });
+            },
+
+            playSpell(type) {
+                if (!this.enabled || !this.ctx) return;
+                const now = this.ctx.currentTime;
+
+                if (type === 'lumos') {
+                    // Bright chime
+                    [587.33, 880, 1174.66].forEach((freq, i) => {
+                        const osc = this.ctx.createOscillator();
+                        const g = this.ctx.createGain();
+                        osc.type = 'sine';
+                        osc.frequency.setValueAtTime(freq, now + i * 0.06);
+                        g.gain.setValueAtTime(0.12, now + i * 0.06);
+                        g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.06 + 0.8);
+                        osc.connect(g);
+                        g.connect(this.ctx.destination);
+                        osc.start(now + i * 0.06);
+                        osc.stop(now + i * 0.06 + 0.85);
+                    });
+                } else if (type === 'patronum') {
+                    // Deep shimmering ethereal sweep
+                    const osc = this.ctx.createOscillator();
+                    const g = this.ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(220, now);
+                    osc.frequency.exponentialRampToValueAtTime(660, now + 1.4);
+                    g.gain.setValueAtTime(0.01, now);
+                    g.gain.linearRampToValueAtTime(0.18, now + 0.4);
+                    g.gain.exponentialRampToValueAtTime(0.001, now + 1.8);
+                    osc.connect(g);
+                    g.connect(this.ctx.destination);
+                    osc.start(now);
+                    osc.stop(now + 1.85);
+                } else if (type === 'leviosa') {
+                    // Floating upward arpeggio
+                    [329.63, 392.00, 493.88, 659.25].forEach((freq, i) => {
+                        const osc = this.ctx.createOscillator();
+                        const g = this.ctx.createGain();
+                        osc.type = 'triangle';
+                        osc.frequency.setValueAtTime(freq, now + i * 0.1);
+                        g.gain.setValueAtTime(0.1, now + i * 0.1);
+                        g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.1 + 0.6);
+                        osc.connect(g);
+                        g.connect(this.ctx.destination);
+                        osc.start(now + i * 0.1);
+                        osc.stop(now + i * 0.1 + 0.65);
+                    });
+                } else if (type === 'fireworks' || type === 'snitch') {
+                    // Sparkle burst
+                    [523.25, 659.25, 783.99, 1046.50, 1318.5].forEach((freq, i) => {
+                        const osc = this.ctx.createOscillator();
+                        const g = this.ctx.createGain();
+                        osc.type = 'sine';
+                        osc.frequency.setValueAtTime(freq, now + i * 0.04);
+                        g.gain.setValueAtTime(0.1, now + i * 0.04);
+                        g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.04 + 0.5);
+                        osc.connect(g);
+                        g.connect(this.ctx.destination);
+                        osc.start(now + i * 0.04);
+                        osc.stop(now + i * 0.04 + 0.55);
+                    });
+                }
+            }
+        };
+
+        // --- UI Toast Helper ---
+        let toastTimeout;
+        function showToast(text, icon = '✨') {
+            const box = document.getElementById('toast-box');
+            document.getElementById('toast-text').textContent = text;
+            document.getElementById('toast-icon').textContent = icon;
+            box.classList.remove('opacity-0', '-translate-y-4');
+            box.classList.add('opacity-100', 'translate-y-0');
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                box.classList.remove('opacity-100', 'translate-y-0');
+                box.classList.add('opacity-0', '-translate-y-4');
+            }, 2600);
+        }
+
+        // --- Main Initialization ---
+        function init() {
+            const container = document.getElementById('canvas-container');
+
+            // 1. Scene & Atmospheric Fog
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x060b19);
+            scene.fog = new THREE.FogExp2(0x091126, 0.0024);
+
+            // 2. Camera
+            camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.5, 1200);
+            camera.position.set(15, 48, 130);
+
+            // 3. Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.15;
+            container.appendChild(renderer.domElement);
+
+            // 4. OrbitControls
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.06;
+            controls.maxPolarAngle = Math.PI * 0.485; // Prevent going under water
+            controls.minDistance = 12;
+            controls.maxDistance = 320;
+            controls.target.set(0, 26, -15);
+
+            // 5. Build World Elements
+            setupLighting();
+            createSkyAndMoon();
+            createTerrainAndLake();
+            createHogwartsCastle();
+            createQuidditchPitch();
+            createHagridsHut();
+            createForbiddenForest();
+            createFloatingCandles();
+            createBroomstick();
+            initParticleSystems();
+
+            // 6. Event Listeners
+            setupEventListeners();
+        }
+
+        // --- Lighting Setup ---
+        function setupLighting() {
+            // Cool night ambient light
+            const ambientLight = new THREE.AmbientLight(0x283b66, 0.75);
+            scene.add(ambientLight);
+
+            // Hemisphere sky/ground bounce
+            const hemiLight = new THREE.HemisphereLight(0x4b6cb7, 0x101820, 0.55);
+            scene.add(hemiLight);
+
+            // Moonlight directional light casting soft shadows
+            const moonLight = new THREE.DirectionalLight(0xa5c8ff, 1.35);
+            moonLight.position.set(-120, 160, -140);
+            moonLight.castShadow = true;
+            moonLight.shadow.mapSize.width = 2048;
+            moonLight.shadow.mapSize.height = 2048;
+            moonLight.shadow.camera.near = 20;
+            moonLight.shadow.camera.far = 450;
+            const d = 140;
+            moonLight.shadow.camera.left = -d;
+            moonLight.shadow.camera.right = d;
+            moonLight.shadow.camera.top = d;
+            moonLight.shadow.camera.bottom = -d;
+            moonLight.shadow.bias = -0.0005;
+            scene.add(moonLight);
+
+            // Warm golden glow emanating from Hogwarts Castle
+            const castleWarmLight = new THREE.PointLight(0xffaa33, 2.2, 130);
+            castleWarmLight.position.set(0, 38, -25);
+            scene.add(castleWarmLight);
+
+            // Warm glow at Hagrid's Hut
+            const hutLight = new THREE.PointLight(0xff8822, 1.8, 45);
+            hutLight.position.set(78, 10, 38);
+            scene.add(hutLight);
+        }
+
+        // --- Starry Sky & Luminous Full Moon ---
+        function createSkyAndMoon() {
+            // Starfield
+            const starGeo = new THREE.BufferGeometry();
+            const starCount = 3000;
+            const starPos = new Float32Array(starCount * 3);
+            const starColors = new Float32Array(starCount * 3);
+
+            for (let i = 0; i < starCount; i++) {
+                const r = 380 + Math.random() * 250;
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(Math.random() * 0.92); // Upper hemisphere
+
+                starPos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+                starPos[i * 3 + 1] = r * Math.cos(phi) + 10;
+                starPos[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+
+                const tint = Math.random();
+                if (tint > 0.8) {
+                    starColors[i * 3] = 1.0; starColors[i * 3 + 1] = 0.9; starColors[i * 3 + 2] = 0.7;
+                } else if (tint > 0.5) {
+                    starColors[i * 3] = 0.75; starColors[i * 3 + 1] = 0.88; starColors[i * 3 + 2] = 1.0;
+                } else {
+                    starColors[i * 3] = 0.95; starColors[i * 3 + 1] = 0.97; starColors[i * 3 + 2] = 1.0;
+                }
+            }
+            starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+            starGeo.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
+
+            const starMat = new THREE.PointsMaterial({
+                size: 1.6,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.9
+            });
+            starField = new THREE.Points(starGeo, starMat);
+            scene.add(starField);
+
+            // Full Moon
+            const moonGeo = new THREE.SphereGeometry(22, 32, 32);
+            const moonMat = new THREE.MeshBasicMaterial({ color: 0xf4f7ff });
+            moonMesh = new THREE.Mesh(moonGeo, moonMat);
+            moonMesh.position.set(-140, 175, -240);
+            scene.add(moonMesh);
+
+            // Moon Halo Glow
+            const haloGeo = new THREE.SphereGeometry(34, 32, 32);
+            const haloMat = new THREE.MeshBasicMaterial({
+                color: 0x7aa7ff,
+                transparent: true,
+                opacity: 0.16,
+                side: THREE.BackSide
+            });
+            moonGlow = new THREE.Mesh(haloGeo, haloMat);
+            moonMesh.add(moonGlow);
+        }
+
+        // --- Terrain, Castle Cliff & The Black Lake ---
+        function createTerrainAndLake() {
+            // Terrain Mesh
+            const terrainGeo = new THREE.PlaneGeometry(650, 650, 120, 120);
+            terrainGeo.rotateX(-Math.PI / 2);
+
+            const posAttr = terrainGeo.attributes.position;
+            const colors = [];
+
+            const colorGrass = new THREE.Color(0x13241c);
+            const colorRock = new THREE.Color(0x282d38);
+            const colorLakeBed = new THREE.Color(0x07101c);
+            const colorQuidditch = new THREE.Color(0x183324);
+
+            for (let i = 0; i < posAttr.count; i++) {
+                const x = posAttr.getX(i);
+                const z = posAttr.getZ(i);
+
+                // Distance from Castle Cliff Center (0, -35)
+                const dxCastle = x;
+                const dzCastle = z + 35;
+                const distCastle = Math.sqrt(dxCastle * dxCastle + dzCastle * dzCastle);
+
+                // Distance from Black Lake Center (-10, 55)
+                const dxLake = (x + 10) * 0.85;
+                const dzLake = z - 58;
+                const distLake = Math.sqrt(dxLake * dxLake + dzLake * dzLake);
+
+                // Distance from Quidditch Pitch (-85, -10)
+                const dxQuid = x + 88;
+                const dzQuid = z + 10;
+                const distQuid = Math.sqrt(dxQuid * dxQuid + dzQuid * dzQuid);
+
+                let y = 0;
+                let vertexColor = colorGrass.clone();
+
+                // 1. Rocky Cliff for Hogwarts Castle
+                if (distCastle < 52) {
+                    const cliffFactor = Math.cos((distCastle / 52) * (Math.PI / 2));
+                    y += Math.pow(cliffFactor, 0.75) * 24;
+                    if (y > 6) vertexColor.lerp(colorRock, Math.min(1, (y - 6) / 12));
+                }
+
+                // 2. Black Lake Basin
+                if (distLake < 68) {
+                    const lakeFactor = Math.cos((distLake / 68) * (Math.PI / 2));
+                    y -= lakeFactor * 9.5;
+                    vertexColor.lerp(colorLakeBed, lakeFactor);
+                }
+
+                // 3. Flat Quidditch Valley
+                if (distQuid < 48) {
+                    const qFactor = Math.cos((distQuid / 48) * (Math.PI / 2));
+                    y = y * (1 - qFactor) + 1.2 * qFactor;
+                    vertexColor.lerp(colorQuidditch, qFactor * 0.8);
+                }
+
+                // 4. Rolling hills in the background & forest
+                const hillNoise = Math.sin(x * 0.025) * Math.cos(z * 0.025) * 5.5 +
+                                  Math.sin(x * 0.06 + z * 0.04) * 2.0;
+                if (z < -75) {
+                    y += Math.abs(z + 75) * 0.22 + hillNoise;
+                    vertexColor.lerp(colorRock, 0.45);
+                } else if (distLake > 65 && distQuid > 45 && distCastle > 50) {
+                    y += Math.max(0, hillNoise);
+                }
+
+                posAttr.setY(i, y);
+                colors.push(vertexColor.r, vertexColor.g, vertexColor.b);
+            }
+
+            terrainGeo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+            terrainGeo.computeVertexNormals();
+
+            const terrainMat = new THREE.MeshStandardMaterial({
+                vertexColors: true,
+                roughness: 0.9,
+                metalness: 0.05
+            });
+            const terrain = new THREE.Mesh(terrainGeo, terrainMat);
+            terrain.receiveShadow = true;
+            scene.add(terrain);
+
+            // The Black Lake Water Surface
+            const waterGeo = new THREE.PlaneGeometry(340, 340, 64, 64);
+            waterGeo.rotateX(-Math.PI / 2);
+            const waterMat = new THREE.MeshStandardMaterial({
+                color: 0x091a32,
+                emissive: 0x040c1a,
+                roughness: 0.12,
+                metalness: 0.85,
+                transparent: true,
+                opacity: 0.92
+            });
+            waterMesh = new THREE.Mesh(waterGeo, waterMat);
+            waterMesh.position.set(0, -1.2, 45);
+            waterMesh.receiveShadow = true;
+            scene.add(waterMesh);
+        }
+
+        // --- Hogwarts Castle Construction ---
+        function createHogwartsCastle() {
+            const castleGroup = new THREE.Group();
+            castleGroup.position.set(0, 21, -35);
+
+            // Materials
+            const stoneMat = new THREE.MeshStandardMaterial({
+                color: 0x4b5162,
+                roughness: 0.82,
+                metalness: 0.1
+            });
+            const darkStoneMat = new THREE.MeshStandardMaterial({
+                color: 0x343946,
+                roughness: 0.85
+            });
+            const roofMat = new THREE.MeshStandardMaterial({
+                color: 0x1c283d,
+                roughness: 0.55,
+                metalness: 0.25
+            });
+            const windowMat = new THREE.MeshBasicMaterial({
+                color: 0xffcf56
+            });
+
+            // Helper to create a turret with conical roof and glowing windows
+            function createTower(x, y, z, radius, height, roofHeight, windowRows = 3) {
+                const tower = new THREE.Group();
+                tower.position.set(x, y, z);
+
+                // Cylinder body
+                const bodyGeo = new THREE.CylinderGeometry(radius * 0.95, radius, height, 16);
+                const body = new THREE.Mesh(bodyGeo, stoneMat);
+                body.position.y = height / 2;
+                body.castShadow = true;
+                body.receiveShadow = true;
+                tower.add(body);
+
+                // Stone ring trim
+                const trimGeo = new THREE.CylinderGeometry(radius * 1.06, radius * 1.06, 0.8, 16);
+                const trim = new THREE.Mesh(trimGeo, darkStoneMat);
+                trim.position.y = height;
+                tower.add(trim);
+
+                // Pointed Cone Roof
+                const roofGeo = new THREE.ConeGeometry(radius * 1.15, roofHeight, 16);
+                const roof = new THREE.Mesh(roofGeo, roofMat);
+                roof.position.y = height + roofHeight / 2;
+                roof.castShadow = true;
+                tower.add(roof);
+
+                // Golden spire tip
+                const spireGeo = new THREE.ConeGeometry(0.18, 2.2, 8);
+                const spireMat = new THREE.MeshStandardMaterial({ color: 0xf5c542, metalness: 0.8, roughness: 0.2 });
+                const spire = new THREE.Mesh(spireGeo, spireMat);
+                spire.position.y = height + roofHeight + 1;
+                tower.add(spire);
+
+                // Glowing Gothic Windows
+                const winGeo = new THREE.BoxGeometry(0.55, 1.3, 0.2);
+                for (let r = 0; r < windowRows; r++) {
+                    const wy = (height * 0.25) + r * (height * 0.65 / Math.max(1, windowRows));
+                    const cols = 6;
+                    for (let c = 0; c < cols; c++) {
+                        if (Math.random() > 0.22) { // Some windows unlit for realism
+                            const angle = (c / cols) * Math.PI * 2 + r * 0.3;
+                            const win = new THREE.Mesh(winGeo, windowMat);
+                            win.position.set(
+                                Math.cos(angle) * (radius * 0.97),
+                                wy,
+                                Math.sin(angle) * (radius * 0.97)
+                            );
+                            win.rotation.y = -angle + Math.PI / 2;
+                            tower.add(win);
+                        }
+                    }
+                }
+                return tower;
+            }
+
+            // 1. The Great Hall (Main Iconic Hall with tall arched windows)
+            const greatHallGroup = new THREE.Group();
+            greatHallGroup.position.set(-8, 0, 8);
+
+            const hallBody = new THREE.Mesh(new THREE.BoxGeometry(14, 13, 28), stoneMat);
+            hallBody.position.y = 6.5;
+            hallBody.castShadow = true;
+            hallBody.receiveShadow = true;
+            greatHallGroup.add(hallBody);
+
+            // Pitched Roof of Great Hall
+            const hallRoofGeo = new THREE.ConeGeometry(10.5, 28, 4);
+            hallRoofGeo.rotateX(Math.PI / 2);
+            hallRoofGeo.rotateZ(Math.PI / 4);
+            const hallRoof = new THREE.Mesh(hallRoofGeo, roofMat);
+            hallRoof.scale.set(1, 0.65, 1);
+            hallRoof.position.y = 15.8;
+            hallRoof.castShadow = true;
+            greatHallGroup.add(hallRoof);
+
+            // Tall glowing stained-glass windows along both sides of the Great Hall
+            const tallWinGeo = new THREE.BoxGeometry(0.3, 6.5, 1.3);
+            for (let zOff = -10; zOff <= 10; zOff += 3.3) {
+                const winL = new THREE.Mesh(tallWinGeo, windowMat);
+                winL.position.set(-7.05, 6.5, zOff);
+                greatHallGroup.add(winL);
+
+                const winR = new THREE.Mesh(tallWinGeo, windowMat);
+                winR.position.set(7.05, 6.5, zOff);
+                greatHallGroup.add(winR);
+            }
+            // Front grand window
+            const frontWin = new THREE.Mesh(new THREE.BoxGeometry(4.5, 7.5, 0.3), windowMat);
+            frontWin.position.set(0, 6.8, 14.05);
+            greatHallGroup.add(frontWin);
+
+            castleGroup.add(greatHallGroup);
+
+            // 2. Grand Staircase & Dumbledore's Office Tower (Tallest Central Keep)
+            castleGroup.add(createTower(2, 0, -2, 6.5, 32, 16, 5));
+            // Cluster of smaller turrets around the main tower
+            castleGroup.add(createTower(7.5, 10, 2, 2.3, 20, 9, 3));
+            castleGroup.add(createTower(-3.5, 12, -5, 2.1, 19, 8.5, 3));
+            castleGroup.add(createTower(4, 14, -7.5, 1.9, 17, 8, 2));
+
+            // 3. Astronomy Tower (Tall slender spire on the right)
+            castleGroup.add(createTower(18, 2, -6, 3.8, 36, 18, 6));
+            castleGroup.add(createTower(22, 0, 2, 2.6, 22, 10, 4));
+
+            // 4. Clock Tower & Courtyard Wing (Left)
+            castleGroup.add(createTower(-21, 0, 2, 4.2, 24, 11, 4));
+            castleGroup.add(createTower(-15, 0, -10, 3.5, 26, 12, 4));
+
+            // Connecting Stone Wings & Battlements
+            const wing1 = new THREE.Mesh(new THREE.BoxGeometry(26, 12, 10), darkStoneMat);
+            wing1.position.set(4, 6, -5);
+            wing1.castShadow = true;
+            castleGroup.add(wing1);
+
+            const wing2 = new THREE.Mesh(new THREE.BoxGeometry(18, 10, 9), stoneMat);
+            wing2.position.set(-14, 5, 0);
+            wing2.castShadow = true;
+            castleGroup.add(wing2);
+
+            // 5. Viaduct Stone Bridge spanning across the cliff gorge
+            const bridgeGroup = new THREE.Group();
+            bridgeGroup.position.set(14, -4, 16);
+            bridgeGroup.rotation.y = -0.45;
+
+            const bridgeDeck = new THREE.Mesh(new THREE.BoxGeometry(4.5, 1.4, 34), darkStoneMat);
+            bridgeDeck.position.y = 8;
+            bridgeDeck.castShadow = true;
+            bridgeGroup.add(bridgeDeck);
+
+            // Bridge Arches/Pillars
+            for (let bz = -12; bz <= 12; bz += 8) {
+                const pillar = new THREE.Mesh(new THREE.BoxGeometry(4, 14, 2.2), stoneMat);
+                pillar.position.set(0, 1, bz);
+                bridgeGroup.add(pillar);
+            }
+            castleGroup.add(bridgeGroup);
+
+            // 6. Boathouse down at the water's edge
+            const boathouse = new THREE.Group();
+            boathouse.position.set(-6, -21.5, 56);
+            const bhBase = new THREE.Mesh(new THREE.BoxGeometry(8, 4.5, 11), darkStoneMat);
+            bhBase.position.y = 2.2;
+            boathouse.add(bhBase);
+
+            const bhRoof = new THREE.Mesh(new THREE.ConeGeometry(6.5, 11, 4), roofMat);
+            bhRoof.rotation.x = Math.PI / 2;
+            bhRoof.rotation.z = Math.PI / 4;
+            bhRoof.scale.set(1, 0.6, 1);
+            bhRoof.position.y = 6.2;
+            boathouse.add(bhRoof);
+
+            const bhLantern = new THREE.Mesh(new THREE.SphereGeometry(0.45, 8, 8), windowMat);
+            bhLantern.position.set(0, 3.2, 5.7);
+            boathouse.add(bhLantern);
+
+            castleGroup.add(boathouse);
+
+            scene.add(castleGroup);
+        }
+
+        // --- Quidditch Pitch & Animated Golden Snitch ---
+        function createQuidditchPitch() {
+            const pitchGroup = new THREE.Group();
+            pitchGroup.position.set(-88, 1.3, -10);
+
+            // Pitch Ground Markings (White glowing chalk lines)
+            const ringGeo = new THREE.RingGeometry(18, 18.6, 48);
+            ringGeo.rotateX(-Math.PI / 2);
+            const lineMat = new THREE.MeshBasicMaterial({
+                color: 0xdbeafe,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.45
+            });
+            const centerRing = new THREE.Mesh(ringGeo, lineMat);
+            centerRing.position.y = 0.05;
+            pitchGroup.add(centerRing);
+
+            // Outer oval boundary
+            const outerRingGeo = new THREE.RingGeometry(36, 36.8, 64);
+            outerRingGeo.rotateX(-Math.PI / 2);
+            const outerRing = new THREE.Mesh(outerRingGeo, lineMat);
+            outerRing.scale.set(0.75, 1, 1.25);
+            outerRing.position.y = 0.05;
+            pitchGroup.add(outerRing);
+
+            // Gold Material for Hoops
+            const goldMat = new THREE.MeshStandardMaterial({
+                color: 0xf5c542,
+                emissive: 0x553b00,
+                metalness: 0.85,
+                roughness: 0.2
+            });
+
+            // Helper to build 3 Quidditch Hoops at each end
+            function createGoalSet(zPos) {
+                const set = new THREE.Group();
+                set.position.set(0, 0, zPos);
+
+                const configs = [
+                    { x: -6.5, h: 15, r: 2.1 },
+                    { x: 0, h: 20, r: 2.4 },
+                    { x: 6.5, h: 15, r: 2.1 }
+                ];
+
+                configs.forEach(cfg => {
+                    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.28, cfg.h, 10), goldMat);
+                    pole.position.set(cfg.x, cfg.h / 2, 0);
+                    pole.castShadow = true;
+                    set.add(pole);
+
+                    const hoop = new THREE.Mesh(new THREE.TorusGeometry(cfg.r, 0.24, 12, 32), goldMat);
+                    hoop.position.set(cfg.x, cfg.h + cfg.r, 0);
+                    set.add(hoop);
+                });
+                return set;
+            }
+
+            pitchGroup.add(createGoalSet(-38));
+            pitchGroup.add(createGoalSet(38));
+
+            // House Spectator Towers around the Pitch (Gryffindor, Slytherin, Ravenclaw, Hufflepuff)
+            const houseColors = [0x991b1b, 0x166534, 0x1e40af, 0xca8a04];
+            const towerPositions = [
+                [-26, -24], [26, -24], [-28, 0], [28, 0], [-26, 24], [26, 24]
+            ];
+
+            towerPositions.forEach((pos, idx) => {
+                const stand = new THREE.Group();
+                stand.position.set(pos[0], 0, pos[1]);
+
+                const base = new THREE.Mesh(
+                    new THREE.CylinderGeometry(3.2, 3.6, 16, 12),
+                    new THREE.MeshStandardMaterial({ color: 0x47382b, roughness: 0.9 })
+                );
+                base.position.y = 8;
+                base.castShadow = true;
+                stand.add(base);
+
+                // Colored House Banner Drape
+                const bannerMat = new THREE.MeshStandardMaterial({
+                    color: houseColors[idx % houseColors.length],
+                    roughness: 0.7
+                });
+                const banner = new THREE.Mesh(new THREE.CylinderGeometry(3.45, 3.45, 7, 12, 1, true), bannerMat);
+                banner.position.y = 11;
+                stand.add(banner);
+
+                // Pointed Canopy
+                const top = new THREE.Mesh(new THREE.ConeGeometry(4, 5.5, 12), bannerMat);
+                top.position.y = 18.7;
+                stand.add(top);
+
+                pitchGroup.add(stand);
+            });
+
+            scene.add(pitchGroup);
+
+            // --- Create the Golden Snitch (Interactive Target!) ---
+            snitchGroup = new THREE.Group();
+            snitchGroup.position.set(-88, 16, -10);
+
+            const snitchBody = new THREE.Mesh(
+                new THREE.SphereGeometry(0.85, 16, 16),
+                new THREE.MeshStandardMaterial({
+                    color: 0xffe066,
+                    emissive: 0xffaa00,
+                    emissiveIntensity: 0.7,
+                    metalness: 0.9,
+                    roughness: 0.1
+                })
+            );
+            snitchGroup.add(snitchBody);
+
+            // Snitch Point Light
+            const snitchLight = new THREE.PointLight(0xffd700, 1.8, 22);
+            snitchGroup.add(snitchLight);
+
+            // Delicate Translucent Wings
+            const wingGeo = new THREE.PlaneGeometry(2.6, 0.7);
+            wingGeo.translate(1.3, 0, 0);
+            const wingMat = new THREE.MeshBasicMaterial({
+                color: 0xffffff,
+                transparent: true,
+                opacity: 0.75,
+                side: THREE.DoubleSide
+            });
+
+            snitchLeftWing = new THREE.Mesh(wingGeo, wingMat);
+            snitchRightWing = new THREE.Mesh(wingGeo, wingMat);
+            snitchRightWing.scale.x = -1;
+
+            snitchGroup.add(snitchLeftWing);
+            snitchGroup.add(snitchRightWing);
+
+            scene.add(snitchGroup);
+        }
+
+        // --- Hagrid's Hut & Pumpkin Patch ---
+        function createHagridsHut() {
+            const hutGroup = new THREE.Group();
+            hutGroup.position.set(78, 1.5, 38);
+
+            const stoneMat = new THREE.MeshStandardMaterial({ color: 0x4b4642, roughness: 0.9 });
+            const roofMat = new THREE.MeshStandardMaterial({ color: 0x26211d, roughness: 0.85 });
+            const winMat = new THREE.MeshBasicMaterial({ color: 0xff9d2e });
+
+            // Main Round Stone Cottage
+            const mainHut = new THREE.Mesh(new THREE.CylinderGeometry(5.5, 6, 6.5, 12), stoneMat);
+            mainHut.position.y = 3.25;
+            mainHut.castShadow = true;
+            mainHut.receiveShadow = true;
+            hutGroup.add(mainHut);
+
+            const mainRoof = new THREE.Mesh(new THREE.ConeGeometry(6.8, 5.5, 12), roofMat);
+            mainRoof.position.y = 9.2;
+            mainRoof.castShadow = true;
+            hutGroup.add(mainRoof);
+
+            // Smaller Attached Side Room
+            const sideHut = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 3.6, 4.8, 10), stoneMat);
+            sideHut.position.set(5.5, 2.4, 2);
+            sideHut.castShadow = true;
+            hutGroup.add(sideHut);
+
+            const sideRoof = new THREE.Mesh(new THREE.ConeGeometry(4.2, 3.8, 10), roofMat);
+            sideRoof.position.set(5.5, 6.7, 2);
+            hutGroup.add(sideRoof);
+
+            // Stone Chimney
+            const chimney = new THREE.Mesh(new THREE.BoxGeometry(1.4, 6, 1.4), stoneMat);
+            chimney.position.set(-3.2, 8.5, -2.5);
+            hutGroup.add(chimney);
+
+            // Warm Glowing Windows & Wooden Door
+            const door = new THREE.Mesh(
+                new THREE.BoxGeometry(1.8, 3.4, 0.4),
+                new THREE.MeshStandardMaterial({ color: 0x3b2313 })
+            );
+            door.position.set(0, 1.7, 5.8);
+            hutGroup.add(door);
+
+            const win1 = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.4, 0.3), winMat);
+            win1.position.set(-3.8, 3.5, 4.3);
+            win1.rotation.y = -0.65;
+            hutGroup.add(win1);
+
+            const win2 = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.4, 0.3), winMat);
+            win2.position.set(3.8, 3.5, 4.3);
+            win2.rotation.y = 0.65;
+            hutGroup.add(win2);
+
+            // Pumpkin Patch (Also interactive for Wingardium Leviosa!)
+            const pumpkinMat = new THREE.MeshStandardMaterial({
+                color: 0xd96b14,
+                roughness: 0.6
+            });
+            for (let i = 0; i < 14; i++) {
+                const pRadius = 0.55 + Math.random() * 0.45;
+                const pumpkin = new THREE.Mesh(new THREE.SphereGeometry(pRadius, 12, 10), pumpkinMat);
+                pumpkin.scale.set(1.15, 0.85, 1.15);
+                const px = -11 + Math.random() * 14;
+                const pz = 6 + Math.random() * 10;
+                pumpkin.position.set(px, pRadius * 0.7, pz);
+                pumpkin.castShadow = true;
+                hutGroup.add(pumpkin);
+
+                // Register world position for levitation
+                levitatingObjects.push({
+                    mesh: pumpkin,
+                    baseY: pRadius * 0.7,
+                    phase: Math.random() * Math.PI * 2,
+                    speed: 1.5 + Math.random()
+                });
+            }
+
+            scene.add(hutGroup);
+
+            // Initialize Chimney Smoke Particles
+            const smokeGeo = new THREE.SphereGeometry(0.6, 8, 8);
+            const smokeMat = new THREE.MeshBasicMaterial({
+                color: 0x94a3b8,
+                transparent: true,
+                opacity: 0.35
+            });
+            for (let i = 0; i < 18; i++) {
+                const p = new THREE.Mesh(smokeGeo, smokeMat.clone());
+                p.position.set(78 - 3.2, 13 + i * 0.9, 38 - 2.5);
+                p.userData = {
+                    offset: i * 0.55,
+                    driftX: (Math.random() - 0.5) * 0.4
+                };
+                scene.add(p);
+                smokeParticles.push(p);
+            }
+        }
+
+        // --- Forbidden Forest & Magical Wisps ---
+        function createForbiddenForest() {
+            const forestGroup = new THREE.Group();
+
+            const trunkMat = new THREE.MeshStandardMaterial({ color: 0x1f1712, roughness: 0.95 });
+            const foliageMat = new THREE.MeshStandardMaterial({ color: 0x0b1f17, roughness: 0.85 });
+
+            // Generate dense dark pine trees on the right/east flank
+            for (let i = 0; i < 110; i++) {
+                const tx = 65 + Math.random() * 140;
+                const tz = -110 + Math.random() * 210;
+
+                // Keep clearing around Hagrid's Hut (78, 38)
+                const distHut = Math.hypot(tx - 78, tz - 38);
+                if (distHut < 22) continue;
+
+                const tree = new THREE.Group();
+                const scale = 0.85 + Math.random() * 0.95;
+
+                const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.75, 6, 7), trunkMat);
+                trunk.position.y = 3;
+                tree.add(trunk);
+
+                // 3 Tiered Pine Cones
+                for (let tier = 0; tier < 3; tier++) {
+                    const cone = new THREE.Mesh(
+                        new THREE.ConeGeometry(3.8 - tier * 0.85, 7.5 - tier * 1.1, 8),
+                        foliageMat
+                    );
+                    cone.position.y = 7 + tier * 3.8;
+                    cone.castShadow = true;
+                    tree.add(cone);
+                }
+
+                tree.position.set(tx, 0, tz);
+                tree.scale.setScalar(scale);
+                forestGroup.add(tree);
+            }
+
+            // Magical Blue/Silver Wisps floating inside the Forbidden Forest
+            const wispGeo = new THREE.SphereGeometry(0.42, 10, 10);
+            const wispMat = new THREE.MeshBasicMaterial({ color: 0x7dd3fc });
+
+            for (let i = 0; i < 24; i++) {
+                const wisp = new THREE.Mesh(wispGeo, wispMat);
+                const wx = 80 + Math.random() * 100;
+                const wy = 4 + Math.random() * 14;
+                const wz = -70 + Math.random() * 140;
+                wisp.position.set(wx, wy, wz);
+                wisp.userData = {
+                    basePos: new THREE.Vector3(wx, wy, wz),
+                    phase: Math.random() * Math.PI * 2,
+                    radius: 2 + Math.random() * 4
+                };
+                forestGroup.add(wisp);
+                forestWisps.push(wisp);
+            }
+
+            scene.add(forestGroup);
+        }
+
+        // --- Floating Candles over the Lake & Castle ---
+        function createFloatingCandles() {
+            const candleGeo = new THREE.CylinderGeometry(0.14, 0.14, 1.3, 8);
+            const candleMat = new THREE.MeshBasicMaterial({ color: 0xfef3c7 });
+            const flameGeo = new THREE.SphereGeometry(0.22, 8, 8);
+            const flameMat = new THREE.MeshBasicMaterial({ color: 0xffb703 });
+
+            for (let i = 0; i < 75; i++) {
+                const candle = new THREE.Group();
+                const body = new THREE.Mesh(candleGeo, candleMat);
+                const flame = new THREE.Mesh(flameGeo, flameMat);
+                flame.position.y = 0.85;
+                candle.add(body);
+                candle.add(flame);
+
+                // Spread between Castle cliff and Lake
+                const cx = (Math.random() - 0.5) * 120;
+                const cy = 8 + Math.random() * 34;
+                const cz = -45 + Math.random() * 115;
+
+                candle.position.set(cx, cy, cz);
+                candle.userData = {
+                    baseY: cy,
+                    phase: Math.random() * Math.PI * 2,
+                    speed: 0.8 + Math.random() * 0.9
+                };
+                scene.add(candle);
+                floatingCandles.push(candle);
+            }
+        }
+
+        // --- Interactive Flying Broomstick (Nimbus / Firebolt Style) ---
+        function createBroomstick() {
+            broomGroup = new THREE.Group();
+
+            // Polished Mahogany Handle
+            const handleGeo = new THREE.CylinderGeometry(0.08, 0.11, 4.2, 12);
+            handleGeo.rotateX(Math.PI / 2);
+            const handleMat = new THREE.MeshStandardMaterial({
+                color: 0x5c2314,
+                roughness: 0.35,
+                metalness: 0.2
+            });
+            const handle = new THREE.Mesh(handleGeo, handleMat);
+            broomGroup.add(handle);
+
+            // Golden Brass Band
+            const bandGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.25, 12);
+            bandGeo.rotateX(Math.PI / 2);
+            const goldMat = new THREE.MeshStandardMaterial({ color: 0xf5c542, metalness: 0.85, roughness: 0.2 });
+            const band = new THREE.Mesh(bandGeo, goldMat);
+            band.position.z = 1.1;
+            broomGroup.add(band);
+
+            // Aerodynamic Birch Twigs Tail
+            const twigsGeo = new THREE.ConeGeometry(0.48, 2.2, 14);
+            twigsGeo.rotateX(Math.PI / 2);
+            const twigsMat = new THREE.MeshStandardMaterial({ color: 0x85582b, roughness: 0.85 });
+            const twigs = new THREE.Mesh(twigsGeo, twigsMat);
+            twigs.position.z = 2.2;
+            broomGroup.add(twigs);
+
+            // Lumos Light Source at the front tip of the broom/wand
+            wandTipMesh = new THREE.Mesh(
+                new THREE.SphereGeometry(0.16, 12, 12),
+                new THREE.MeshBasicMaterial({ color: 0xffffff })
+            );
+            wandTipMesh.position.set(0, 0.08, -2.15);
+            wandTipMesh.visible = false;
+            broomGroup.add(wandTipMesh);
+
+            wandTipLight = new THREE.PointLight(0xdbeafe, 0, 65);
+            wandTipLight.position.set(0, 0.2, -2.3);
+            broomGroup.add(wandTipLight);
+
+            broomGroup.visible = false;
+            scene.add(broomGroup);
+        }
+
+        // --- Particle Systems for Patronus & Fireworks ---
+        function initParticleSystems() {
+            // Patronus Particle Cloud
+            const pCount = 350;
+            const pGeo = new THREE.BufferGeometry();
+            const pPos = new Float32Array(pCount * 3);
+            pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+
+            const pMat = new THREE.PointsMaterial({
+                color: 0x7dd3fc,
+                size: 1.4,
+                transparent: true,
+                opacity: 0,
+                blending: THREE.AdditiveBlending
+            });
+            const pPoints = new THREE.Points(pGeo, pMat);
+            scene.add(pPoints);
+            patronusParticles = { points: pPoints, count: pCount, angles: [] };
+            for (let i = 0; i < pCount; i++) {
+                patronusParticles.angles.push({
+                    theta: Math.random() * Math.PI * 2,
+                    phi: Math.acos(2 * Math.random() - 1),
+                    speedVar: 0.8 + Math.random() * 0.4
+                });
+            }
+        }
+
+        // --- Spawn Magical Fireworks Burst ---
+        function spawnFireworkBurst(origin) {
+            const count = 120;
+            const geo = new THREE.BufferGeometry();
+            const positions = new Float32Array(count * 3);
+            const velocities = [];
+            const palette = [0xff4d6d, 0xffbe0b, 0x3a86ff, 0x8338ec, 0x06d6a0];
+            const color = new THREE.Color(palette[Math.floor(Math.random() * palette.length)]);
+
+            for (let i = 0; i < count; i++) {
+                positions[i * 3] = origin.x;
+                positions[i * 3 + 1] = origin.y;
+                positions[i * 3 + 2] = origin.z;
+
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(2 * Math.random() - 1);
+                const spd = 8 + Math.random() * 18;
+                velocities.push(new THREE.Vector3(
+                    spd * Math.sin(phi) * Math.cos(theta),
+                    spd * Math.cos(phi) + 4,
+                    spd * Math.sin(phi) * Math.sin(theta)
+                ));
+            }
+            geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+            const mat = new THREE.PointsMaterial({
+                color: color,
+                size: 1.5,
+                transparent: true,
+                opacity: 1,
+                blending: THREE.AdditiveBlending
+            });
+
+            const points = new THREE.Points(geo, mat);
+            scene.add(points);
+            fireworkParticles.push({ points, velocities, life: 1.8 });
+        }
+
+        // --- Cast Interactive Spells ---
+        window.castSpell = function(spell) {
+            MagicAudio.playSpell(spell);
+
+            if (spell === 'lumos') {
+                lumosActive = !lumosActive;
+                const btn = document.getElementById('spell-lumos');
+                if (lumosActive) {
+                    btn.classList.add('spell-active');
+                    wandTipMesh.visible = true;
+                    wandTipLight.intensity = 3.5;
+                    renderer.toneMappingExposure = 1.45;
+                    showToast('לומוס! אור קסום מאיר את הסביבה', '🪄');
+                } else {
+                    btn.classList.remove('spell-active');
+                    wandTipMesh.visible = false;
+                    wandTipLight.intensity = 0;
+                    renderer.toneMappingExposure = 1.15;
+                    showToast('נוקס! האור כובה', '🌑');
+                }
+            } else if (spell === 'patronum') {
+                const btn = document.getElementById('spell-patronum');
+                btn.classList.add('spell-active');
+                setTimeout(() => btn.classList.remove('spell-active'), 2200);
+
+                patronusWave.active = true;
+                patronusWave.radius = 2;
+                patronusWave.origin.copy(isBroomMode ? broomState.position : controls.target);
+                patronusParticles.points.material.opacity = 0.95;
+                showToast('אקספקטו פטרונום! גל אור כסוף מגרש את החשיכה', '🦌');
+            } else if (spell === 'leviosa') {
+                leviosaActive = !leviosaActive;
+                const btn = document.getElementById('spell-leviosa');
+                if (leviosaActive) {
+                    btn.classList.add('spell-active');
+                    showToast('וינגארדיום לביוסה! הדלעות ליד הבקתה מרחפות באוויר', '🪶');
+                } else {
+                    btn.classList.remove('spell-active');
+                    showToast('הכישוף הוסר', '✨');
+                }
+            } else if (spell === 'fireworks') {
+                const btn = document.getElementById('spell-fireworks');
+                btn.classList.add('spell-active');
+                setTimeout(() => btn.classList.remove('spell-active'), 1200);
+
+                // Launch 3 colorful bursts above the castle & lake
+                spawnFireworkBurst(new THREE.Vector3(-15, 62, -20));
+                setTimeout(() => spawnFireworkBurst(new THREE.Vector3(22, 68, -10)), 250);
+                setTimeout(() => spawnFireworkBurst(new THREE.Vector3(0, 74, 15)), 500);
+                showToast('זיקוקי הקסם של פרד וג\'ורג\' מאירים את השמיים!', '🎆');
+            }
+        };
+
+        // --- Quick Location Teleport ---
+        window.teleportTo = function(loc) {
+            const targets = {
+                castle: { cam: [12, 48, 42], target: [0, 32, -32], name: 'טירת הוגוורטס' },
+                quidditch: { cam: [-88, 28, 48], target: [-88, 12, -10], name: 'מגרש הקווידיץ\'' },
+                hagrid: { cam: [62, 16, 62], target: [78, 7, 38], name: 'הבקתה של האגריד' },
+                lake: { cam: [-25, 14, 115], target: [0, 22, -20], name: 'האגם השחור' }
+            };
+            const dest = targets[loc];
+            if (!dest) return;
+
+            if (isBroomMode) {
+                broomState.position.set(...dest.cam);
+                broomState.yaw = 0;
+                broomState.pitch = -0.05;
+            } else {
+                camera.position.set(...dest.cam);
+                controls.target.set(...dest.target);
+                controls.update();
+            }
+            showToast(`התעתקת אל ${dest.name}`, '⚡');
+        };
+
+        // --- Switch Between Orbit Mode and Flying Broomstick Mode ---
+        function setFlightMode(enableBroom) {
+            isBroomMode = enableBroom;
+            const orbitBtn = document.getElementById('mode-orbit-btn');
+            const broomBtn = document.getElementById('mode-broom-btn');
+            const broomHud = document.getElementById('broom-hud');
+            const mobileControls = document.getElementById('mobile-flight-controls');
+
+            if (isBroomMode) {
+                orbitBtn.className = 'px-3.5 py-2 rounded-xl text-xs md:text-sm font-medium transition text-slate-300 hover:text-white';
+                broomBtn.className = 'px-3.5 py-2 rounded-xl text-xs md:text-sm font-medium transition bg-amber-500/30 text-amber-200 border border-amber-400/50';
+                broomHud.classList.remove('hidden');
+                broomHud.classList.add('flex');
+                if ('ontouchstart' in window || window.innerWidth < 900) {
+                    mobileControls.classList.remove('hidden');
+                    mobileControls.classList.add('flex');
+                }
+
+                controls.enabled = false;
+                broomGroup.visible = true;
+                broomState.position.copy(camera.position);
+                // Face toward castle initially
+                broomState.yaw = Math.atan2(-broomState.position.x, -broomState.position.z - 25);
+                broomState.pitch = -0.08;
+                showToast('עלית על מטאטא אש המחץ! טוס ותפוס את הסניץ\' המוזהב', '🧹');
+            } else {
+                broomBtn.className = 'px-3.5 py-2 rounded-xl text-xs md:text-sm font-medium transition text-slate-300 hover:text-white';
+                orbitBtn.className = 'px-3.5 py-2 rounded-xl text-xs md:text-sm font-medium transition bg-amber-500/30 text-amber-200 border border-amber-400/50';
+                broomHud.classList.add('hidden');
+                broomHud.classList.remove('flex');
+                mobileControls.classList.add('hidden');
+                mobileControls.classList.remove('flex');
+
+                broomGroup.visible = false;
+                controls.enabled = true;
+                controls.target.set(0, 26, -15);
+                controls.update();
+                showToast('עברת למצב סיור מצלמה חופשי', '🔭');
+            }
+        }
+
+        // --- Setup UI & Keyboard/Mouse Listeners ---
+        function setupEventListeners() {
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+
+            document.getElementById('mode-orbit-btn').addEventListener('click', () => setFlightMode(false));
+            document.getElementById('mode-broom-btn').addEventListener('click', () => setFlightMode(true));
+
+            document.getElementById('audio-toggle').addEventListener('click', (e) => {
+                const active = MagicAudio.toggle();
+                e.currentTarget.textContent = active ? '🔊' : '🔇';
+                showToast(active ? 'מוזיקת הקסמים הופעלה' : 'השמע הושתק', active ? '🎵' : '🔇');
+            });
+
+            // Keyboard Controls
+            window.addEventListener('keydown', (e) => {
+                keysPressed[e.code] = true;
+                if (e.key === '1') castSpell('lumos');
+                if (e.key === '2') castSpell('patronum');
+                if (e.key === '3') castSpell('leviosa');
+                if (e.key === '4') castSpell('fireworks');
+            });
+            window.addEventListener('keyup', (e) => {
+                keysPressed[e.code] = false;
+            });
+
+            // Mouse steering while flying broomstick
+            let isDragging = false;
+            let prevMouse = { x: 0, y: 0 };
+            renderer.domElement.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                prevMouse = { x: e.clientX, y: e.clientY };
+            });
+            window.addEventListener('mouseup', () => { isDragging = false; });
+            window.addEventListener('mousemove', (e) => {
+                if (!isBroomMode || !isDragging) return;
+                const dx = e.clientX - prevMouse.x;
+                const dy = e.clientY - prevMouse.y;
+                broomState.yaw -= dx * 0.0045;
+                broomState.pitch = Math.max(-1.1, Math.min(1.1, broomState.pitch - dy * 0.0045));
+                prevMouse = { x: e.clientX, y: e.clientY };
+            });
+
+            // Touch Flight Buttons
+            document.querySelectorAll('.touch-key').forEach(btn => {
+                const code = btn.getAttribute('data-key');
+                btn.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    keysPressed[code] = true;
+                });
+                btn.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    keysPressed[code] = false;
+                });
+            });
+        }
+
+        // --- Animation Loop ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const dt = Math.min(clock.getDelta(), 0.05);
+            const elapsed = clock.getElapsedTime();
+
+            // 1. Subtle Starfield & Water Shimmer
+            if (starField) starField.rotation.y = elapsed * 0.006;
+            if (waterMesh) {
+                waterMesh.position.y = -1.2 + Math.sin(elapsed * 1.4) * 0.12;
+            }
+
+            // 2. Floating Candles Gentle Bobbing
+            for (let i = 0; i < floatingCandles.length; i++) {
+                const c = floatingCandles[i];
+                c.position.y = c.userData.baseY + Math.sin(elapsed * c.userData.speed + c.userData.phase) * 0.85;
+            }
+
+            // 3. Forbidden Forest Wisps Orbiting
+            for (let i = 0; i < forestWisps.length; i++) {
+                const w = forestWisps[i];
+                const d = w.userData;
+                w.position.x = d.basePos.x + Math.cos(elapsed * 0.9 + d.phase) * d.radius;
+                w.position.y = d.basePos.y + Math.sin(elapsed * 1.3 + d.phase) * 1.5;
+                w.position.z = d.basePos.z + Math.sin(elapsed * 0.9 + d.phase) * d.radius;
+            }
+
+            // 4. Hagrid's Hut Rising Chimney Smoke
+            for (let i = 0; i < smokeParticles.length; i++) {
+                const p = smokeParticles[i];
+                const cycle = (elapsed * 0.8 + p.userData.offset) % 6;
+                p.position.y = 12 + cycle * 2.2;
+                p.position.x = (78 - 3.2) + Math.sin(elapsed + i) * 0.6 + cycle * p.userData.driftX;
+                p.scale.setScalar(0.6 + cycle * 0.35);
+                p.material.opacity = Math.max(0, 0.38 * (1 - cycle / 6));
+            }
+
+            // 5. Golden Snitch Darting Flight around Quidditch Pitch
+            if (snitchGroup) {
+                const snitchT = elapsed * 1.35;
+                snitchGroup.position.x = -88 + Math.sin(snitchT) * 26 + Math.cos(snitchT * 2.3) * 8;
+                snitchGroup.position.y = 14 + Math.sin(snitchT * 2.1) * 7 + Math.cos(snitchT * 1.4) * 3;
+                snitchGroup.position.z = -10 + Math.cos(snitchT * 0.85) * 34;
+
+                // Rapid Wing Flutter
+                const flap = Math.sin(elapsed * 48) * 0.65;
+                snitchLeftWing.rotation.y = flap;
+                snitchRightWing.rotation.y = -flap;
+            }
+
+            // 6. Wingardium Leviosa Pumpkin Levitation
+            for (let i = 0; i < levitatingObjects.length; i++) {
+                const obj = levitatingObjects[i];
+                const targetY = leviosaActive
+                    ? obj.baseY + 5.5 + Math.sin(elapsed * obj.speed + obj.phase) * 1.4
+                    : obj.baseY;
+                obj.mesh.position.y += (targetY - obj.mesh.position.y) * 4 * dt;
+                if (leviosaActive) {
+                    obj.mesh.rotation.y += dt * 1.2;
+                }
+            }
+
+            // 7. Expecto Patronum Expanding Light Wave
+            if (patronusWave.active) {
+                patronusWave.radius += 55 * dt;
+                const posArr = patronusParticles.points.geometry.attributes.position.array;
+                for (let i = 0; i < patronusParticles.count; i++) {
+                    const ang = patronusParticles.angles[i];
+                    const r = patronusWave.radius * ang.speedVar;
+                    posArr[i * 3] = patronusWave.origin.x + r * Math.sin(ang.phi) * Math.cos(ang.theta);
+                    posArr[i * 3 + 1] = patronusWave.origin.y + r * Math.cos(ang.phi) * 0.65;
+                    posArr[i * 3 + 2] = patronusWave.origin.z + r * Math.sin(ang.phi) * Math.sin(ang.theta);
+                }
+                patronusParticles.points.geometry.attributes.position.needsUpdate = true;
+                patronusParticles.points.material.opacity = Math.max(0, 1 - patronusWave.radius / 140);
+
+                if (patronusWave.radius > 140) {
+                    patronusWave.active = false;
+                    patronusParticles.points.material.opacity = 0;
+                }
+            }
+
+            // 8. Fireworks Particle Physics
+            for (let i = fireworkParticles.length - 1; i >= 0; i--) {
+                const fw = fireworkParticles[i];
+                fw.life -= dt;
+                const posArr = fw.points.geometry.attributes.position.array;
+                for (let j = 0; j < fw.velocities.length; j++) {
+                    fw.velocities[j].y -= 9.8 * dt; // Gravity
+                    posArr[j * 3] += fw.velocities[j].x * dt;
+                    posArr[j * 3 + 1] += fw.velocities[j].y * dt;
+                    posArr[j * 3 + 2] += fw.velocities[j].z * dt;
+                }
+                fw.points.geometry.attributes.position.needsUpdate = true;
+                fw.points.material.opacity = Math.max(0, fw.life / 1.8);
+
+                if (fw.life <= 0) {
+                    scene.remove(fw.points);
+                    fireworkParticles.splice(i, 1);
+                }
+            }
+
+            // 9. Broomstick Flight Controls & Snitch Catch Detection
+            if (isBroomMode) {
+                const turnSpeed = 1.9 * dt;
+                if (keysPressed['KeyA'] || keysPressed['ArrowLeft']) {
+                    broomState.yaw += turnSpeed;
+                    broomState.roll = THREE.MathUtils.lerp(broomState.roll, 0.35, 6 * dt);
+                } else if (keysPressed['KeyD'] || keysPressed['ArrowRight']) {
+                    broomState.yaw -= turnSpeed;
+                    broomState.roll = THREE.MathUtils.lerp(broomState.roll, -0.35, 6 * dt);
+                } else {
+                    broomState.roll = THREE.MathUtils.lerp(broomState.roll, 0, 6 * dt);
+                }
+
+                let targetSpeed = 14; // Gentle cruise speed
+                if (keysPressed['KeyW'] || keysPressed['ArrowUp']) targetSpeed = broomState.maxSpeed;
+                if (keysPressed['KeyS'] || keysPressed['ArrowDown']) targetSpeed = -15;
+                broomState.speed = THREE.MathUtils.lerp(broomState.speed, targetSpeed, 4 * dt);
+
+                // Vertical Ascend / Descend
+                if (keysPressed['Space']) broomState.position.y += 24 * dt;
+                if (keysPressed['ShiftLeft'] || keysPressed['ShiftRight']) broomState.position.y -= 24 * dt;
+
+                // Forward Movement Vector
+                const forward = new THREE.Vector3(
+                    -Math.sin(broomState.yaw) * Math.cos(broomState.pitch),
+                    Math.sin(broomState.pitch),
+                    -Math.cos(broomState.yaw) * Math.cos(broomState.pitch)
+                );
+                broomState.position.addScaledVector(forward, broomState.speed * dt);
+
+                // Prevent dipping below water surface
+                if (broomState.position.y < 1.5) broomState.position.y = 1.5;
+
+                // Position Broomstick slightly below camera
+                broomGroup.position.copy(broomState.position);
+                broomGroup.rotation.set(broomState.pitch, broomState.yaw, broomState.roll, 'YXZ');
+                broomGroup.translateY(-1.05);
+                broomGroup.translateZ(-1.6);
+
+                // Sync Camera to Broomstick
+                camera.position.copy(broomState.position);
+                camera.rotation.set(broomState.pitch, broomState.yaw, broomState.roll * 0.25, 'YXZ');
+
+                // Check Snitch Catch Distance
+                if (snitchGroup && broomState.position.distanceTo(snitchGroup.position) < 6.5) {
+                    snitchCaughtCount++;
+                    document.getElementById('snitch-score').textContent = snitchCaughtCount;
+                    MagicAudio.playSpell('snitch');
+                    spawnFireworkBurst(snitchGroup.position.clone());
+                    showToast(`תפסת את הסניץ' המוזהב! 150 נקודות לבית שלך! (סה"כ: ${snitchCaughtCount})`, '🏆');
+                    // Relocate Snitch to a new spot around the pitch
+                    snitchGroup.position.set(-88 + (Math.random() - 0.5) * 40, 22, -10 + (Math.random() - 0.5) * 40);
+                }
+            } else {
+                controls.update();
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // Start on window load
+        window.onload = function() {
+            init();
+            animate();
+        };
+    </script>
+
+<a id="club-back" href="../index.html#products-shelf" style="position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#fff;color:#1d2433;border:2px solid #cfe0f0;border-radius:999px;padding:8px 18px;font:600 15px/1.2 Arial,sans-serif;text-decoration:none;direction:rtl;box-shadow:0 3px 0 #cfe0f0">→ חזרה לאתר החוג</a>
+<script>if (window.top !== window) document.getElementById("club-back").remove();</script>
+</body>
+</html>

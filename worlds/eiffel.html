@@ -1,0 +1,1174 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>מגדל אייפל - פריז 3D</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js & OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- Google Fonts: Heebo & Frank Ruhl Libre -->
+    <link href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@500;700&family=Heebo:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Heebo', sans-serif;
+            background-color: #0b1021;
+            user-select: none;
+        }
+        h1, .serif-title {
+            font-family: 'Frank Ruhl Libre', serif;
+        }
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.65);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+        .btn-glass {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .btn-glass:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(251, 191, 36, 0.25);
+        }
+        .btn-glass.active {
+            background: linear-gradient(135deg, rgba(245, 158, 11, 0.8), rgba(217, 119, 6, 0.9));
+            border-color: #fcd34d;
+            color: #fff;
+            font-weight: 700;
+            box-shadow: 0 0 15px rgba(245, 158, 11, 0.5);
+        }
+        .sparkle-active {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.8), rgba(147, 51, 234, 0.8)) !important;
+            border-color: #93c5fd !important;
+            animation: pulseGlow 2s infinite;
+        }
+        @keyframes pulseGlow {
+            0%, 100% { box-shadow: 0 0 12px rgba(147, 197, 253, 0.6); }
+            50% { box-shadow: 0 0 24px rgba(192, 132, 252, 0.9); }
+        }
+        /* Custom scrollbar for mobile if needed */
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.3); border-radius: 4px; }
+    </style>
+</head>
+<body class="text-white antialiased">
+
+    <!-- 3D Canvas Container -->
+    <div id="canvas-container"></div>
+
+    <!-- Loading Overlay -->
+    <div id="loader" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-950 transition-opacity duration-700">
+        <div class="w-16 h-16 border-4 border-amber-500/30 border-t-amber-400 rounded-full animate-spin mb-4"></div>
+        <h2 class="text-2xl font-bold text-amber-300 tracking-wide">בונה את פריז בתלת-מימד...</h2>
+        <p class="text-slate-400 text-sm mt-1">מכין קורות פלדה, גנים ותאורה</p>
+    </div>
+
+    <!-- Header & Info Panel (Top Right) -->
+    <header class="fixed top-4 right-4 z-10 max-w-sm pointer-events-auto">
+        <div class="glass-panel rounded-2xl p-4 sm:p-5">
+            <div class="flex items-center gap-3 mb-1">
+                <span class="text-2xl">🗼</span>
+                <h1 class="text-2xl sm:text-3xl font-bold bg-gradient-to-l from-amber-200 via-amber-400 to-amber-200 bg-clip-text text-transparent">
+                    מגדל אייפל - פריז 3D
+                </h1>
+            </div>
+            <p class="text-xs sm:text-sm text-slate-300 leading-relaxed mt-1">
+                סיור אינטראקטיבי בגברת הברזל ובפארק שאן דה מארס.
+            </p>
+            <div class="mt-3 pt-2.5 border-t border-white/10 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-300">
+                <span>🖱️ <b>גרירה:</b> סיבוב</span>
+                <span>🔍 <b>גלגלת / צביטה:</b> זום</span>
+                <span>🖐️ <b>כפתור ימני / 2 אצבעות:</b> הזזה</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Toggle UI Visibility Button (Top Left) -->
+    <button id="toggle-ui-btn" title="הסתר/הצג ממשק" class="fixed top-4 left-4 z-20 glass-panel btn-glass p-3 rounded-full text-white flex items-center justify-center">
+        <svg id="eye-icon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+        </svg>
+    </button>
+
+    <!-- Controls Dashboard (Bottom) -->
+    <main id="controls-panel" class="fixed bottom-4 left-1/2 -translate-x-1/2 z-10 w-[95%] max-w-4xl transition-all duration-300">
+        <div class="glass-panel rounded-2xl p-3 sm:p-4 flex flex-col md:flex-row items-center justify-between gap-3 sm:gap-4">
+            
+            <!-- Time of Day / Lighting Controls -->
+            <div class="flex flex-col items-center md:items-start w-full md:w-auto">
+                <span class="text-[11px] uppercase tracking-wider text-slate-400 mb-1.5 font-medium">אווירה ותאורה</span>
+                <div class="flex items-center gap-1.5 sm:gap-2 w-full justify-center">
+                    <button onclick="setEnvironment('day')" id="btn-day" class="btn-glass px-3 py-2 rounded-xl text-xs sm:text-sm flex items-center gap-1.5">
+                        <span>☀️</span> <span>יום</span>
+                    </button>
+                    <button onclick="setEnvironment('sunset')" id="btn-sunset" class="btn-glass px-3 py-2 rounded-xl text-xs sm:text-sm flex items-center gap-1.5">
+                        <span>🌅</span> <span>שקיעה</span>
+                    </button>
+                    <button onclick="setEnvironment('night')" id="btn-night" class="btn-glass active px-3 py-2 rounded-xl text-xs sm:text-sm flex items-center gap-1.5">
+                        <span>🌙</span> <span>לילה</span>
+                    </button>
+                    <div class="h-6 w-[1px] bg-white/15 mx-0.5"></div>
+                    <button onclick="toggleSparkle()" id="btn-sparkle" class="btn-glass sparkle-active px-3 py-2 rounded-xl text-xs sm:text-sm flex items-center gap-1.5 font-medium">
+                        <span>✨</span> <span>נצנוץ</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Camera Presets -->
+            <div class="flex flex-col items-center md:items-end w-full md:w-auto">
+                <span class="text-[11px] uppercase tracking-wider text-slate-400 mb-1.5 font-medium">זוויות צילום</span>
+                <div class="flex flex-wrap items-center gap-1.5 sm:gap-2 justify-center">
+                    <button onclick="setCameraView('panoramic')" id="cam-panoramic" class="btn-glass active px-3 py-2 rounded-xl text-xs sm:text-sm">
+                        פנורמי
+                    </button>
+                    <button onclick="setCameraView('low')" id="cam-low" class="btn-glass px-3 py-2 rounded-xl text-xs sm:text-sm">
+                        מבט מלמטה
+                    </button>
+                    <button onclick="setCameraView('top')" id="cam-top" class="btn-glass px-3 py-2 rounded-xl text-xs sm:text-sm">
+                        מבט על
+                    </button>
+                    <button onclick="toggleAutoTour()" id="cam-tour" class="btn-glass px-3 py-2 rounded-xl text-xs sm:text-sm flex items-center gap-1">
+                        <span>🔄</span> <span>סיור</span>
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        /**
+         * Global Variables & Scene State
+         */
+        let scene, camera, renderer, controls;
+        let towerGroup, beaconGroup, sparklePoints;
+        let ambientLight, sunLight, towerGlowLight, topBeaconSpot1, topBeaconSpot2;
+        let starsSystem, sunMoonMesh;
+        let streetLights = [];
+        let fountainParticles;
+
+        // State Flags
+        let currentEnv = 'night'; // 'day', 'sunset', 'night'
+        let isSparkling = true;
+        let isAutoTour = true;
+        let clock = new THREE.Clock();
+
+        // Camera Smooth Transition State
+        let targetCamPos = new THREE.Vector3(0, 85, 220);
+        let targetLookAt = new THREE.Vector3(0, 75, 0);
+        let isTransitioningCam = false;
+
+        // Materials that change with lighting
+        let towerMaterial, towerGoldLitMaterial, waterMaterial, skyUniforms;
+
+        /**
+         * Initialize the 3D Scene, Camera, Renderer, and World Elements
+         */
+        function init() {
+            const container = document.getElementById('canvas-container');
+
+            // 1. Scene & Fog
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x0b1021, 0.0014);
+
+            // 2. Camera
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 2000);
+            camera.position.copy(targetCamPos);
+
+            // 3. Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.1;
+            container.appendChild(renderer.domElement);
+
+            // 4. OrbitControls
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.target.copy(targetLookAt);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.maxPolarAngle = Math.PI / 2 - 0.015; // Prevent going underground
+            controls.minDistance = 20;
+            controls.maxDistance = 480;
+            controls.autoRotate = isAutoTour;
+            controls.autoRotateSpeed = 0.65;
+
+            // Stop auto-tour if user manually drags
+            controls.addEventListener('start', () => {
+                isTransitioningCam = false;
+                if (isAutoTour) {
+                    toggleAutoTour(false);
+                }
+            });
+
+            // 5. Build World Components
+            createSkyAndAtmosphere();
+            setupLights();
+            createEnvironment();
+            createEiffelTower();
+            createSparkleSystem();
+
+            // Set initial environment
+            setEnvironment('night');
+
+            // Event Listeners
+            window.addEventListener('resize', onWindowResize);
+            setupUIToggle();
+
+            // Hide Loader
+            setTimeout(() => {
+                const loader = document.getElementById('loader');
+                loader.style.opacity = '0';
+                setTimeout(() => loader.remove(), 700);
+            }, 500);
+
+            // Start Animation Loop
+            animate();
+        }
+
+        /**
+         * Dynamic Sky Dome & Stars
+         */
+        function createSkyAndAtmosphere() {
+            // Custom Shader Sky Dome for smooth Day / Sunset / Night transitions
+            const skyGeo = new THREE.SphereGeometry(950, 32, 32);
+            skyUniforms = {
+                topColor: { value: new THREE.Color(0x050814) },
+                bottomColor: { value: new THREE.Color(0x162238) },
+                offset: { value: 20 },
+                exponent: { value: 0.6 }
+            };
+
+            const skyMat = new THREE.ShaderMaterial({
+                uniforms: skyUniforms,
+                vertexShader: `
+                    varying vec3 vWorldPosition;
+                    void main() {
+                        vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+                        vWorldPosition = worldPosition.xyz;
+                        gl_Position = projectionMatrix * viewMatrix * worldPosition;
+                    }
+                `,
+                fragmentShader: `
+                    uniform vec3 topColor;
+                    uniform vec3 bottomColor;
+                    uniform float offset;
+                    uniform float exponent;
+                    varying vec3 vWorldPosition;
+                    void main() {
+                        float h = normalize(vWorldPosition + offset).y;
+                        gl_FragColor = vec4(mix(bottomColor, topColor, max(pow(max(h, 0.0), exponent), 0.0)), 1.0);
+                    }
+                `,
+                side: THREE.BackSide,
+                depthWrite: false
+            });
+
+            const skyMesh = new THREE.Mesh(skyGeo, skyMat);
+            scene.add(skyMesh);
+
+            // Sun / Moon Sphere
+            const orbGeo = new THREE.SphereGeometry(18, 24, 24);
+            const orbMat = new THREE.MeshBasicMaterial({ color: 0xfffbeb });
+            sunMoonMesh = new THREE.Mesh(orbGeo, orbMat);
+            sunMoonMesh.position.set(-220, 260, -450);
+            scene.add(sunMoonMesh);
+
+            // Starfield for Night & Sunset
+            const starCount = 2500;
+            const starGeo = new THREE.BufferGeometry();
+            const starPositions = new Float32Array(starCount * 3);
+            for (let i = 0; i < starCount; i++) {
+                const r = 700 + Math.random() * 200;
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(Math.random()); // Upper hemisphere only
+                starPositions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+                starPositions[i * 3 + 1] = r * Math.cos(phi) + 20;
+                starPositions[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+            }
+            starGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+            const starMat = new THREE.PointsMaterial({
+                color: 0xffffff,
+                size: 1.8,
+                transparent: true,
+                opacity: 0.85
+            });
+            starsSystem = new THREE.Points(starGeo, starMat);
+            scene.add(starsSystem);
+        }
+
+        /**
+         * Lighting Setup
+         */
+        function setupLights() {
+            ambientLight = new THREE.HemisphereLight(0x8fa8ff, 0x1e293b, 0.5);
+            scene.add(ambientLight);
+
+            sunLight = new THREE.DirectionalLight(0xffedd5, 1.2);
+            sunLight.position.set(150, 250, 180);
+            sunLight.castShadow = true;
+            sunLight.shadow.mapSize.width = 2048;
+            sunLight.shadow.mapSize.height = 2048;
+            sunLight.shadow.camera.near = 10;
+            sunLight.shadow.camera.far = 700;
+            const d = 160;
+            sunLight.shadow.camera.left = -d;
+            sunLight.shadow.camera.right = d;
+            sunLight.shadow.camera.top = d;
+            sunLight.shadow.camera.bottom = -d;
+            sunLight.shadow.bias = -0.0005;
+            scene.add(sunLight);
+
+            // Warm internal golden glow for the Eiffel Tower at night
+            towerGlowLight = new THREE.PointLight(0xffaa2b, 3.5, 220, 1.4);
+            towerGlowLight.position.set(0, 65, 0);
+            scene.add(towerGlowLight);
+        }
+
+        /**
+         * Build Eiffel Tower (Detailed Lattice, 4 Legs, Arches, 3 Decks, Beacon)
+         * Total Height: ~165 units (scaled proportionally to 330m)
+         */
+        function createEiffelTower() {
+            towerGroup = new THREE.Group();
+
+            // Authentic "Eiffel Tower Brown" metallic material
+            towerMaterial = new THREE.MeshStandardMaterial({
+                color: 0x5c4738,
+                metalness: 0.65,
+                roughness: 0.42,
+                emissive: 0x3b230a,
+                emissiveIntensity: 0.45
+            });
+
+            const deckFloorMat = new THREE.MeshStandardMaterial({
+                color: 0x3d2f26,
+                metalness: 0.5,
+                roughness: 0.6
+            });
+
+            const goldAccentMat = new THREE.MeshStandardMaterial({
+                color: 0xd97706,
+                metalness: 0.8,
+                roughness: 0.25,
+                emissive: 0xb45309,
+                emissiveIntensity: 0.5
+            });
+
+            // Helper: Create a beam/strut between two 3D points
+            function createStrut(p1, p2, thickness, mat = towerMaterial) {
+                const dir = new THREE.Vector3().subVectors(p2, p1);
+                const len = dir.length();
+                if (len < 0.01) return null;
+                const geo = new THREE.BoxGeometry(thickness, len, thickness);
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.copy(p1).add(p2).multiplyScalar(0.5);
+                mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                return mesh;
+            }
+
+            // Mathematical curve function for the tower's outer half-width at height y (0 to 145)
+            // Real Eiffel tower follows an exponential/parabolic taper
+            function getOuterHalfWidth(y) {
+                if (y <= 30) {
+                    // Base (0m -> 31m half-width) to 1st deck (30 -> 18.5)
+                    const t = y / 30;
+                    return 31 - 12.5 * Math.pow(t, 0.85);
+                } else if (y <= 62) {
+                    // 1st deck to 2nd deck (62 -> 10.5)
+                    const t = (y - 30) / 32;
+                    return 18.5 - 8.0 * Math.pow(t, 0.9);
+                } else if (y <= 138) {
+                    // 2nd deck to 3rd deck (138 -> 3.2)
+                    const t = (y - 62) / 76;
+                    return 10.5 - 7.3 * Math.pow(t, 0.72);
+                } else {
+                    return 3.2;
+                }
+            }
+
+            // Inner cutout half-width for the 4 separate legs up to Deck 2
+            function getInnerHalfWidth(y) {
+                if (y < 29) {
+                    const t = y / 29;
+                    return 18.0 * (1 - t * 0.72);
+                } else if (y < 60) {
+                    const t = (y - 29) / 31;
+                    return 5.0 * (1 - t);
+                }
+                return 0;
+            }
+
+            // 1. Stone Masonry Pedestals (4 corners)
+            const pedestalGeo = new THREE.BoxGeometry(8.5, 2.5, 8.5);
+            const pedestalMat = new THREE.MeshStandardMaterial({ color: 0xc2b8a3, roughness: 0.85 });
+            const baseCornerOffset = 25.5;
+            [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(([sx, sz]) => {
+                const ped = new THREE.Mesh(pedestalGeo, pedestalMat);
+                ped.position.set(sx * baseCornerOffset, 1.25, sz * baseCornerOffset);
+                ped.castShadow = true;
+                ped.receiveShadow = true;
+                towerGroup.add(ped);
+            });
+
+            // 2. Build the 4 Slanted Lattice Legs (from y=2 to y=62)
+            const legSigns = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+            const legSegments = 18;
+            const yStart = 2, yMid = 62;
+
+            legSigns.forEach(([sx, sz]) => {
+                for (let i = 0; i < legSegments; i++) {
+                    const y0 = yStart + (yMid - yStart) * (i / legSegments);
+                    const y1 = yStart + (yMid - yStart) * ((i + 1) / legSegments);
+
+                    const out0 = getOuterHalfWidth(y0);
+                    const in0 = getInnerHalfWidth(y0);
+                    const out1 = getOuterHalfWidth(y1);
+                    const in1 = getInnerHalfWidth(y1);
+
+                    // 4 corner nodes of this leg segment
+                    const c0_00 = new THREE.Vector3(sx * in0, y0, sz * in0);
+                    const c0_10 = new THREE.Vector3(sx * out0, y0, sz * in0);
+                    const c0_11 = new THREE.Vector3(sx * out0, y0, sz * out0);
+                    const c0_01 = new THREE.Vector3(sx * in0, y0, sz * out0);
+
+                    const c1_00 = new THREE.Vector3(sx * in1, y1, sz * in1);
+                    const c1_10 = new THREE.Vector3(sx * out1, y1, sz * in1);
+                    const c1_11 = new THREE.Vector3(sx * out1, y1, sz * out1);
+                    const c1_01 = new THREE.Vector3(sx * in1, y1, sz * out1);
+
+                    const mainThick = i < 9 ? 0.75 : 0.55;
+                    const braceThick = 0.24;
+
+                    // Main Corner Columns
+                    towerGroup.add(createStrut(c0_00, c1_00, mainThick));
+                    towerGroup.add(createStrut(c0_10, c1_10, mainThick));
+                    towerGroup.add(createStrut(c0_11, c1_11, mainThick));
+                    towerGroup.add(createStrut(c0_01, c1_01, mainThick));
+
+                    // Horizontal Ties
+                    towerGroup.add(createStrut(c1_00, c1_10, braceThick));
+                    towerGroup.add(createStrut(c1_10, c1_11, braceThick));
+                    towerGroup.add(createStrut(c1_11, c1_01, braceThick));
+                    towerGroup.add(createStrut(c1_01, c1_00, braceThick));
+
+                    // X-Bracing on all 4 faces of each leg
+                    towerGroup.add(createStrut(c0_00, c1_10, braceThick));
+                    towerGroup.add(createStrut(c0_10, c1_00, braceThick));
+
+                    towerGroup.add(createStrut(c0_10, c1_11, braceThick));
+                    towerGroup.add(createStrut(c0_11, c1_10, braceThick));
+
+                    towerGroup.add(createStrut(c0_11, c1_01, braceThick));
+                    towerGroup.add(createStrut(c0_01, c1_11, braceThick));
+
+                    towerGroup.add(createStrut(c0_01, c1_00, braceThick));
+                    towerGroup.add(createStrut(c0_00, c1_01, braceThick));
+                }
+            });
+
+            // 3. Upper Shaft (Merged single lattice shaft from y=62 to y=138)
+            const upperSegments = 22;
+            const yTop = 138;
+            for (let i = 0; i < upperSegments; i++) {
+                const y0 = yMid + (yTop - yMid) * (i / upperSegments);
+                const y1 = yMid + (yTop - yMid) * ((i + 1) / upperSegments);
+                const w0 = getOuterHalfWidth(y0);
+                const w1 = getOuterHalfWidth(y1);
+
+                const p0 = [
+                    new THREE.Vector3(-w0, y0, -w0),
+                    new THREE.Vector3(w0, y0, -w0),
+                    new THREE.Vector3(w0, y0, w0),
+                    new THREE.Vector3(-w0, y0, w0)
+                ];
+                const p1 = [
+                    new THREE.Vector3(-w1, y1, -w1),
+                    new THREE.Vector3(w1, y1, -w1),
+                    new THREE.Vector3(w1, y1, w1),
+                    new THREE.Vector3(-w1, y1, w1)
+                ];
+
+                const mainThick = 0.5 - (i / upperSegments) * 0.2;
+                const braceThick = 0.2;
+
+                for (let side = 0; side < 4; side++) {
+                    const next = (side + 1) % 4;
+                    // Vertical corner beam
+                    towerGroup.add(createStrut(p0[side], p1[side], mainThick));
+                    // Horizontal ring
+                    towerGroup.add(createStrut(p1[side], p1[next], braceThick));
+                    // X-Bracing
+                    towerGroup.add(createStrut(p0[side], p1[next], braceThick));
+                    towerGroup.add(createStrut(p0[next], p1[side], braceThick));
+                }
+            }
+
+            // 4. Decorative Lower Arches (4 iconic semicircular arches between the legs)
+            const archRadius = 17.5;
+            const archHeight = 10;
+            const archSides = [
+                { pos: [0, archHeight, 19.5], rotY: 0 },
+                { pos: [0, archHeight, -19.5], rotY: Math.PI },
+                { pos: [19.5, archHeight, 0], rotY: Math.PI / 2 },
+                { pos: [-19.5, archHeight, 0], rotY: -Math.PI / 2 }
+            ];
+
+            archSides.forEach(side => {
+                const archGroup = new THREE.Group();
+                archGroup.position.set(...side.pos);
+                archGroup.rotation.y = side.rotY;
+
+                const steps = 16;
+                for (let s = 0; s < steps; s++) {
+                    const a0 = (Math.PI * s) / steps;
+                    const a1 = (Math.PI * (s + 1)) / steps;
+
+                    const rOuter = archRadius;
+                    const rInner = archRadius - 2.2;
+
+                    const o0 = new THREE.Vector3(Math.cos(a0) * rOuter, Math.sin(a0) * rOuter, 0);
+                    const o1 = new THREE.Vector3(Math.cos(a1) * rOuter, Math.sin(a1) * rOuter, 0);
+                    const i0 = new THREE.Vector3(Math.cos(a0) * rInner, Math.sin(a0) * rInner, 0);
+                    const i1 = new THREE.Vector3(Math.cos(a1) * rInner, Math.sin(a1) * rInner, 0);
+
+                    archGroup.add(createStrut(o0, o1, 0.45));
+                    archGroup.add(createStrut(i0, i1, 0.45));
+                    archGroup.add(createStrut(o0, i0, 0.25));
+                    archGroup.add(createStrut(o0, i1, 0.2));
+                }
+                towerGroup.add(archGroup);
+            });
+
+            // 5. Three Observation Decks (Platforms, Railings & Arched Friezes)
+            function buildDeck(y, width, height, hasGallery) {
+                const deck = new THREE.Group();
+                deck.position.y = y;
+
+                // Main platform slab
+                const slabGeo = new THREE.BoxGeometry(width, height, width);
+                const slab = new THREE.Mesh(slabGeo, deckFloorMat);
+                slab.castShadow = true;
+                slab.receiveShadow = true;
+                deck.add(slab);
+
+                // Golden trim border
+                const trimGeo = new THREE.BoxGeometry(width + 0.5, 0.45, width + 0.5);
+                const trim = new THREE.Mesh(trimGeo, goldAccentMat);
+                trim.position.y = height / 2;
+                deck.add(trim);
+
+                // Safety Railing
+                const railHeight = 1.2;
+                const railGeo = new THREE.BoxGeometry(width + 0.3, railHeight, width + 0.3);
+                const railMat = new THREE.MeshStandardMaterial({
+                    color: 0x3b2c22,
+                    wireframe: true
+                });
+                const rail = new THREE.Mesh(railGeo, railMat);
+                rail.position.y = height / 2 + railHeight / 2;
+                deck.add(rail);
+
+                // Observation Gallery Pavilion (for 1st & 2nd decks)
+                if (hasGallery) {
+                    const pavW = width * 0.78;
+                    const pavH = height * 1.15;
+                    const pavGeo = new THREE.BoxGeometry(pavW, pavH, pavW);
+                    const pavMat = new THREE.MeshStandardMaterial({
+                        color: 0x4a382c,
+                        emissive: 0xffb703,
+                        emissiveIntensity: 0.35,
+                        roughness: 0.3
+                    });
+                    const pav = new THREE.Mesh(pavGeo, pavMat);
+                    pav.position.y = height / 2 + pavH / 2;
+                    deck.add(pav);
+                }
+
+                towerGroup.add(deck);
+            }
+
+            buildDeck(30, 39, 2.6, true);    // 1st Floor (57m)
+            buildDeck(62, 22.5, 2.2, true);  // 2nd Floor (115m)
+            buildDeck(138, 8.2, 2.0, false); // 3rd Floor / Summit Observation (276m)
+
+            // 6. Summit Lantern, Spire & Rotating Lighthouse Beacon (y=139 to y=166)
+            const summitBase = new THREE.Mesh(
+                new THREE.CylinderGeometry(2.6, 3.4, 5, 16),
+                towerMaterial
+            );
+            summitBase.position.y = 141.5;
+            towerGroup.add(summitBase);
+
+            // Glass Lighthouse Room
+            const beaconGlass = new THREE.Mesh(
+                new THREE.CylinderGeometry(2.1, 2.1, 3.2, 16),
+                new THREE.MeshBasicMaterial({ color: 0xfffbeb })
+            );
+            beaconGlass.position.y = 145.6;
+            towerGroup.add(beaconGlass);
+
+            // Cupola Dome
+            const cupola = new THREE.Mesh(
+                new THREE.SphereGeometry(2.2, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2),
+                goldAccentMat
+            );
+            cupola.position.y = 147.2;
+            towerGroup.add(cupola);
+
+            // Broadcast Antenna Spire
+            const antenna = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.12, 0.65, 17, 12),
+                towerMaterial
+            );
+            antenna.position.y = 157;
+            towerGroup.add(antenna);
+
+            // Rotating Light Beams (Paris Lighthouse Effect)
+            beaconGroup = new THREE.Group();
+            beaconGroup.position.set(0, 145.6, 0);
+
+            const beamLength = 260;
+            const beamGeo = new THREE.ConeGeometry(16, beamLength, 24, 1, true);
+            // Shift cone vertex to origin (0,0,0) and point along +X and -X
+            beamGeo.translate(0, -beamLength / 2, 0);
+            beamGeo.rotateZ(Math.PI / 2);
+
+            const beamMat = new THREE.MeshBasicMaterial({
+                color: 0xe0f2fe,
+                transparent: true,
+                opacity: 0.16,
+                side: THREE.DoubleSide,
+                depthWrite: false,
+                blending: THREE.AdditiveBlending
+            });
+
+            const beam1 = new THREE.Mesh(beamGeo, beamMat);
+            const beam2 = new THREE.Mesh(beamGeo, beamMat);
+            beam2.rotation.y = Math.PI;
+
+            beaconGroup.add(beam1);
+            beaconGroup.add(beam2);
+            towerGroup.add(beaconGroup);
+
+            scene.add(towerGroup);
+        }
+
+        /**
+         * Iconic Hourly Sparkle / Twinkling Lights System (20,000 bulbs effect)
+         */
+        function createSparkleSystem() {
+            const count = 2400;
+            const positions = new Float32Array(count * 3);
+            const phases = new Float32Array(count);
+
+            for (let i = 0; i < count; i++) {
+                // Distribute points along the Eiffel Tower silhouette
+                const y = 3 + Math.pow(Math.random(), 1.15) * 135;
+                let w;
+                if (y <= 30) w = 31 - 12.5 * Math.pow(y / 30, 0.85);
+                else if (y <= 62) w = 18.5 - 8.0 * Math.pow((y - 30) / 32, 0.9);
+                else w = 10.5 - 7.3 * Math.pow((y - 62) / 76, 0.72);
+
+                // Place bulbs mostly on the outer edges/faces
+                const face = Math.floor(Math.random() * 4);
+                const posAlongSide = (Math.random() * 2 - 1) * w;
+                let x, z;
+                if (face === 0) { x = posAlongSide; z = w + 0.3; }
+                else if (face === 1) { x = posAlongSide; z = -w - 0.3; }
+                else if (face === 2) { x = w + 0.3; z = posAlongSide; }
+                else { x = -w - 0.3; z = posAlongSide; }
+
+                // If below 2nd deck, filter out empty middle space between legs
+                if (y < 58) {
+                    const innerW = y < 29 ? 18.0 * (1 - (y / 29) * 0.72) : 5.0 * (1 - (y - 29) / 31);
+                    if (Math.abs(x) < innerW && Math.abs(z) < innerW) {
+                        x = (x >= 0 ? 1 : -1) * (innerW + Math.random() * (w - innerW));
+                        z = (z >= 0 ? 1 : -1) * (innerW + Math.random() * (w - innerW));
+                    }
+                }
+
+                positions[i * 3] = x;
+                positions[i * 3 + 1] = y;
+                positions[i * 3 + 2] = z;
+                phases[i] = Math.random() * Math.PI * 2;
+            }
+
+            const geo = new THREE.BufferGeometry();
+            geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geo.setAttribute('aPhase', new THREE.BufferAttribute(phases, 1));
+
+            // Custom shader for crisp twinkling star-like flashes
+            const sparkleMat = new THREE.ShaderMaterial({
+                uniforms: {
+                    uTime: { value: 0 },
+                    uOpacity: { value: 1.0 }
+                },
+                vertexShader: `
+                    attribute float aPhase;
+                    varying float vAlpha;
+                    uniform float uTime;
+                    void main() {
+                        // Sharp flash curve so bulbs sparkle randomly like camera flashes
+                        float wave = sin(uTime * 7.5 + aPhase * 13.0) * sin(uTime * 4.3 + aPhase * 7.0);
+                        vAlpha = smoothstep(0.62, 0.98, wave);
+                        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+                        gl_PointSize = (18.0 + vAlpha * 28.0) * (100.0 / -mvPosition.z);
+                        gl_Position = projectionMatrix * mvPosition;
+                    }
+                `,
+                fragmentShader: `
+                    varying float vAlpha;
+                    uniform float uOpacity;
+                    void main() {
+                        if (vAlpha <= 0.02 || uOpacity <= 0.01) discard;
+                        vec2 uv = gl_PointCoord - vec2(0.5);
+                        float dist = length(uv);
+                        if (dist > 0.5) discard;
+                        float glow = pow(1.0 - dist * 2.0, 2.0);
+                        gl_FragColor = vec4(1.0, 0.96, 0.85, glow * vAlpha * uOpacity);
+                    }
+                `,
+                transparent: true,
+                depthWrite: false,
+                blending: THREE.AdditiveBlending
+            });
+
+            sparklePoints = new THREE.Points(geo, sparkleMat);
+            scene.add(sparklePoints);
+        }
+
+        /**
+         * Parisian Environment: Champ de Mars Gardens, Seine River, Fountains, Haussmann Buildings
+         */
+        function createEnvironment() {
+            const envGroup = new THREE.Group();
+
+            // 1. Main Ground Plaza (Champ de Mars Gravel & Stone)
+            const groundGeo = new THREE.CircleGeometry(650, 64);
+            const groundMat = new THREE.MeshStandardMaterial({
+                color: 0xd6cfc2,
+                roughness: 0.9,
+                metalness: 0.05
+            });
+            const ground = new THREE.Mesh(groundGeo, groundMat);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            envGroup.add(ground);
+
+            // Central Paved Esplanade around Tower
+            const plazaGeo = new THREE.RingGeometry(24, 52, 4);
+            const plazaMat = new THREE.MeshStandardMaterial({
+                color: 0xb8afa0,
+                roughness: 0.85
+            });
+            const plaza = new THREE.Mesh(plazaGeo, plazaMat);
+            plaza.rotation.x = -Math.PI / 2;
+            plaza.rotation.z = Math.PI / 4;
+            plaza.position.y = 0.05;
+            plaza.receiveShadow = true;
+            envGroup.add(plaza);
+
+            // 2. Champ de Mars Green Lawns (Symmetrical Gardens)
+            const lawnMat = new THREE.MeshStandardMaterial({
+                color: 0x2d5a27,
+                roughness: 0.88
+            });
+
+            const lawnConfigs = [
+                { w: 46, d: 180, x: -34, z: 165 },
+                { w: 46, d: 180, x: 34, z: 165 },
+                { w: 38, d: 90, x: -30, z: -115 },
+                { w: 38, d: 90, x: 30, z: -115 }
+            ];
+
+            lawnConfigs.forEach(cfg => {
+                const lawn = new THREE.Mesh(new THREE.BoxGeometry(cfg.w, 0.25, cfg.d), lawnMat);
+                lawn.position.set(cfg.x, 0.12, cfg.z);
+                lawn.receiveShadow = true;
+                envGroup.add(lawn);
+            });
+
+            // 3. The Seine River & Pont d'Iéna Bridge (North-West side, z = -195)
+            waterMaterial = new THREE.MeshStandardMaterial({
+                color: 0x0f2942,
+                metalness: 0.85,
+                roughness: 0.18
+            });
+            const river = new THREE.Mesh(new THREE.PlaneGeometry(1300, 95), waterMaterial);
+            river.rotation.x = -Math.PI / 2;
+            river.position.set(0, 0.18, -225);
+            river.receiveShadow = true;
+            envGroup.add(river);
+
+            // Pont d'Iéna Bridge crossing the Seine
+            const bridge = new THREE.Mesh(
+                new THREE.BoxGeometry(36, 2.2, 98),
+                new THREE.MeshStandardMaterial({ color: 0xcbd5e1, roughness: 0.7 })
+            );
+            bridge.position.set(0, 1.1, -225);
+            bridge.castShadow = true;
+            bridge.receiveShadow = true;
+            envGroup.add(bridge);
+
+            // 4. Trocadéro Reflecting Pool & Fountains
+            const poolBorder = new THREE.Mesh(
+                new THREE.BoxGeometry(52, 0.8, 70),
+                new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.6 })
+            );
+            poolBorder.position.set(0, 0.4, -320);
+            envGroup.add(poolBorder);
+
+            const poolWater = new THREE.Mesh(new THREE.PlaneGeometry(48, 66), waterMaterial);
+            poolWater.rotation.x = -Math.PI / 2;
+            poolWater.position.set(0, 0.85, -320);
+            envGroup.add(poolWater);
+
+            // 5. Stylized Parisian Trees along the avenues
+            const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4a3525, roughness: 0.9 });
+            const foliageMat = new THREE.MeshStandardMaterial({ color: 0x244d20, roughness: 0.85 });
+
+            function createTree(x, z, scale = 1) {
+                const tree = new THREE.Group();
+                const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.45 * scale, 0.65 * scale, 4.5 * scale, 7), trunkMat);
+                trunk.position.y = 2.25 * scale;
+                trunk.castShadow = true;
+
+                // Trimmed Parisian cube/rounded boxwood-style tree crown
+                const crown = new THREE.Mesh(new THREE.DodecahedronGeometry(3.4 * scale, 1), foliageMat);
+                crown.position.y = 6.2 * scale;
+                crown.scale.set(1, 1.15, 1);
+                crown.castShadow = true;
+                crown.receiveShadow = true;
+
+                tree.add(trunk, crown);
+                tree.position.set(x, 0, z);
+                envGroup.add(tree);
+            }
+
+            // Tree avenues flanking Champ de Mars
+            for (let z = 75; z <= 250; z += 18) {
+                createTree(-64, z, 1.1);
+                createTree(-74, z, 0.95);
+                createTree(64, z, 1.1);
+                createTree(74, z, 0.95);
+            }
+            for (let z = -165; z <= -75; z += 20) {
+                createTree(-58, z, 1.0);
+                createTree(58, z, 1.0);
+            }
+
+            // 6. Classic Parisian Street Lamps & Benches
+            const lampPostMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.8, roughness: 0.3 });
+            const lampBulbMat = new THREE.MeshBasicMaterial({ color: 0xfef08a });
+
+            function createStreetLamp(x, z) {
+                const lamp = new THREE.Group();
+                const post = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.35, 6.5, 8), lampPostMat);
+                post.position.y = 3.25;
+                const lantern = new THREE.Mesh(new THREE.SphereGeometry(0.55, 10, 10), lampBulbMat);
+                lantern.position.y = 6.7;
+                lamp.add(post, lantern);
+                lamp.position.set(x, 0, z);
+                envGroup.add(lamp);
+                streetLights.push(lantern);
+            }
+
+            for (let z = 65; z <= 240; z += 35) {
+                createStreetLamp(-10, z);
+                createStreetLamp(10, z);
+            }
+
+            // 7. Haussmann Parisian Buildings Perimeter Skyline
+            const buildingMat = new THREE.MeshStandardMaterial({
+                color: 0xe7dec8, // Classic Parisian limestone
+                roughness: 0.75
+            });
+            const mansardRoofMat = new THREE.MeshStandardMaterial({
+                color: 0x334155, // Slate blue-grey Mansard roofs
+                roughness: 0.6,
+                metalness: 0.3
+            });
+
+            function createHaussmannBlock(x, z, w, d, h, rotY = 0) {
+                const bGroup = new THREE.Group();
+                bGroup.position.set(x, 0, z);
+                bGroup.rotation.y = rotY;
+
+                // Main limestone facade
+                const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), buildingMat);
+                body.position.y = h / 2;
+                body.castShadow = true;
+                body.receiveShadow = true;
+                bGroup.add(body);
+
+                // Sloped Mansard Roof
+                const roofH = 4.5;
+                const roof = new THREE.Mesh(
+                    new THREE.CylinderGeometry(Math.min(w, d) * 0.55, Math.min(w, d) * 0.7, roofH, 4),
+                    mansardRoofMat
+                );
+                roof.rotation.y = Math.PI / 4;
+                roof.scale.set(w / Math.min(w, d), 1, d / Math.min(w, d));
+                roof.position.y = h + roofH / 2;
+                bGroup.add(roof);
+
+                envGroup.add(bGroup);
+            }
+
+            // Place Parisian blocks along the left, right, and far horizon
+            for (let z = -140; z <= 280; z += 45) {
+                const h1 = 22 + Math.sin(z) * 4;
+                const h2 = 24 + Math.cos(z) * 4;
+                createHaussmannBlock(-115, z, 32, 38, h1);
+                createHaussmannBlock(115, z, 32, 38, h2);
+            }
+            // École Militaire style grand building at South end of Champ de Mars
+            createHaussmannBlock(0, 310, 140, 36, 28);
+            createHaussmannBlock(-95, 305, 45, 32, 24);
+            createHaussmannBlock(95, 305, 45, 32, 24);
+
+            // Palais de Chaillot wings across the river (Trocadéro)
+            createHaussmannBlock(-68, -335, 75, 24, 24, -0.2);
+            createHaussmannBlock(68, -335, 75, 24, 24, 0.2);
+
+            scene.add(envGroup);
+        }
+
+        /**
+         * Switch Lighting & Sky Mood: 'day', 'sunset', 'night'
+         */
+        function setEnvironment(mode) {
+            currentEnv = mode;
+
+            // Update UI button states
+            ['day', 'sunset', 'night'].forEach(m => {
+                const btn = document.getElementById(`btn-${m}`);
+                if (m === mode) btn.classList.add('active');
+                else btn.classList.remove('active');
+            });
+
+            if (mode === 'day') {
+                skyUniforms.topColor.value.setHex(0x2563eb);
+                skyUniforms.bottomColor.value.setHex(0xbae6fd);
+                scene.fog.color.setHex(0xbae6fd);
+                scene.fog.density = 0.0009;
+
+                ambientLight.color.setHex(0xffffff);
+                ambientLight.groundColor.setHex(0x64748b);
+                ambientLight.intensity = 0.95;
+
+                sunLight.color.setHex(0xfffbeb);
+                sunLight.intensity = 1.65;
+                sunLight.position.set(160, 280, 140);
+
+                sunMoonMesh.material.color.setHex(0xfef08a);
+                sunMoonMesh.position.set(220, 340, -320);
+
+                starsSystem.visible = false;
+                towerGlowLight.intensity = 0.2;
+                towerMaterial.emissiveIntensity = 0.05;
+                beaconGroup.visible = false;
+                waterMaterial.color.setHex(0x1d4ed8);
+                renderer.toneMappingExposure = 1.05;
+
+            } else if (mode === 'sunset') {
+                skyUniforms.topColor.value.setHex(0x1e1b4b);
+                skyUniforms.bottomColor.value.setHex(0xf97316);
+                scene.fog.color.setHex(0xfb923c);
+                scene.fog.density = 0.0012;
+
+                ambientLight.color.setHex(0xfdba74);
+                ambientLight.groundColor.setHex(0x312e81);
+                ambientLight.intensity = 0.75;
+
+                sunLight.color.setHex(0xfb923c);
+                sunLight.intensity = 1.85;
+                sunLight.position.set(-220, 75, -180);
+
+                sunMoonMesh.material.color.setHex(0xfb923c);
+                sunMoonMesh.position.set(-280, 70, -400);
+
+                starsSystem.visible = true;
+                starsSystem.material.opacity = 0.35;
+                towerGlowLight.intensity = 2.2;
+                towerMaterial.emissiveIntensity = 0.32;
+                beaconGroup.visible = true;
+                waterMaterial.color.setHex(0x7c2d12);
+                renderer.toneMappingExposure = 1.1;
+
+            } else if (mode === 'night') {
+                skyUniforms.topColor.value.setHex(0x040711);
+                skyUniforms.bottomColor.value.setHex(0x172554);
+                scene.fog.color.setHex(0x0b1021);
+                scene.fog.density = 0.0014;
+
+                ambientLight.color.setHex(0x6366f1);
+                ambientLight.groundColor.setHex(0x0f172a);
+                ambientLight.intensity = 0.45;
+
+                sunLight.color.setHex(0x93c5fd);
+                sunLight.intensity = 0.55;
+                sunLight.position.set(-140, 220, -160);
+
+                sunMoonMesh.material.color.setHex(0xf8fafc);
+                sunMoonMesh.position.set(-220, 260, -450);
+
+                starsSystem.visible = true;
+                starsSystem.material.opacity = 0.9;
+                towerGlowLight.intensity = 4.2;
+                towerMaterial.emissiveIntensity = 0.52;
+                beaconGroup.visible = true;
+                waterMaterial.color.setHex(0x09192f);
+                renderer.toneMappingExposure = 1.15;
+            }
+        }
+
+        /**
+         * Toggle Hourly Sparkle Lights
+         */
+        function toggleSparkle() {
+            isSparkling = !isSparkling;
+            const btn = document.getElementById('btn-sparkle');
+            if (isSparkling) {
+                btn.classList.add('sparkle-active');
+                sparklePoints.material.uniforms.uOpacity.value = 1.0;
+            } else {
+                btn.classList.remove('sparkle-active');
+                sparklePoints.material.uniforms.uOpacity.value = 0.0;
+            }
+        }
+
+        /**
+         * Camera Preset Views
+         */
+        function setCameraView(preset) {
+            // Update active styling
+            ['panoramic', 'low', 'top'].forEach(p => {
+                const el = document.getElementById(`cam-${p}`);
+                if (p === preset) el.classList.add('active');
+                else el.classList.remove('active');
+            });
+
+            if (preset === 'panoramic') {
+                targetCamPos.set(0, 85, 225);
+                targetLookAt.set(0, 72, 0);
+            } else if (preset === 'low') {
+                // Dramatic upward view from directly beneath the tower center!
+                targetCamPos.set(0, 4, 14);
+                targetLookAt.set(0, 115, 0);
+            } else if (preset === 'top') {
+                // Bird's eye panoramic view above the summit
+                targetCamPos.set(95, 195, 95);
+                targetLookAt.set(0, 65, 0);
+            }
+
+            isTransitioningCam = true;
+        }
+
+        /**
+         * Toggle Auto-Orbit Tour
+         */
+        function toggleAutoTour(forceState = null) {
+            isAutoTour = forceState !== null ? forceState : !isAutoTour;
+            controls.autoRotate = isAutoTour;
+            const btn = document.getElementById('cam-tour');
+            if (isAutoTour) btn.classList.add('active');
+            else btn.classList.remove('active');
+        }
+
+        /**
+         * Hide/Show UI Panels for clean screenshots/viewing
+         */
+        function setupUIToggle() {
+            const btn = document.getElementById('toggle-ui-btn');
+            const header = document.querySelector('header');
+            const main = document.getElementById('controls-panel');
+            let visible = true;
+
+            btn.addEventListener('click', () => {
+                visible = !visible;
+                header.style.opacity = visible ? '1' : '0';
+                header.style.pointerEvents = visible ? 'auto' : 'none';
+                main.style.opacity = visible ? '1' : '0';
+                main.style.pointerEvents = visible ? 'auto' : 'none';
+            });
+        }
+
+        /**
+         * Handle Responsive Window Resize
+         */
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        /**
+         * Main Render & Animation Loop
+         */
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const elapsed = clock.getElapsedTime();
+
+            // 1. Rotate Summit Lighthouse Beams
+            if (beaconGroup && beaconGroup.visible) {
+                beaconGroup.rotation.y = elapsed * 0.55;
+            }
+
+            // 2. Update Sparkle Shader Time
+            if (sparklePoints && isSparkling) {
+                sparklePoints.material.uniforms.uTime.value = elapsed;
+            }
+
+            // 3. Subtle pulsing of golden tower floodlights at night
+            if (currentEnv === 'night') {
+                towerGlowLight.intensity = 4.0 + Math.sin(elapsed * 2.0) * 0.35;
+            }
+
+            // 4. Smooth Camera Preset Interpolation
+            if (isTransitioningCam) {
+                camera.position.lerp(targetCamPos, 0.055);
+                controls.target.lerp(targetLookAt, 0.055);
+
+                if (camera.position.distanceTo(targetCamPos) < 0.8 && controls.target.distanceTo(targetLookAt) < 0.8) {
+                    isTransitioningCam = false;
+                }
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // Start on window load
+        window.onload = init;
+    </script>
+
+<a id="club-back" href="../index.html#products-shelf" style="position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#fff;color:#1d2433;border:2px solid #cfe0f0;border-radius:999px;padding:8px 18px;font:600 15px/1.2 Arial,sans-serif;text-decoration:none;direction:rtl;box-shadow:0 3px 0 #cfe0f0">→ חזרה לאתר החוג</a>
+<script>if (window.top !== window) document.getElementById("club-back").remove();</script>
+</body>
+</html>

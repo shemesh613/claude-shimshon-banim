@@ -1,0 +1,1302 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ארץ ישראל בתלת-ממד - סיור אינטראקטיבי</title>
+    <!-- Tailwind CSS for sleek RTL UI -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Heebo & Assistant for crisp Hebrew typography -->
+    <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@300;400;600;700&family=Heebo:wght@400;700;900&display=swap" rel="stylesheet">
+    <!-- Three.js & OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Assistant', 'Heebo', sans-serif;
+            background-color: #0f172a;
+            user-select: none;
+        }
+
+        #canvas-container {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        /* Glassmorphism RTL Panels */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.68);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+        }
+
+        .glass-btn {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .glass-btn:hover {
+            background: rgba(56, 189, 248, 0.25);
+            border-color: rgba(56, 189, 248, 0.6);
+            transform: translateY(-1px);
+        }
+
+        .glass-btn.active {
+            background: linear-gradient(135deg, rgba(2, 132, 199, 0.75), rgba(56, 189, 248, 0.55));
+            border-color: #7dd3fc;
+            box-shadow: 0 0 18px rgba(56, 189, 248, 0.35);
+        }
+
+        /* Custom Scrollbar for Landmark List */
+        .custom-scroll::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+        .custom-scroll::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.25);
+            border-radius: 10px;
+        }
+
+        /* Floating 3D HTML Labels */
+        .landmark-label {
+            position: absolute;
+            z-index: 5;
+            pointer-events: auto;
+            cursor: pointer;
+            transform: translate(-50%, -100%);
+            transition: opacity 0.2s, transform 0.2s;
+        }
+
+        .landmark-label:hover .label-pill {
+            background: rgba(2, 132, 199, 0.95);
+            border-color: #ffffff;
+            transform: scale(1.08);
+        }
+
+        .label-pill {
+            background: rgba(15, 23, 42, 0.82);
+            backdrop-filter: blur(6px);
+            color: #f8fafc;
+            border: 1px solid rgba(125, 211, 252, 0.55);
+            padding: 3px 10px;
+            border-radius: 9999px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            white-space: nowrap;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: all 0.2s ease;
+        }
+
+        .label-stem {
+            width: 2px;
+            height: 14px;
+            background: linear-gradient(to bottom, rgba(125, 211, 252, 0.9), transparent);
+            margin: 0 auto;
+        }
+
+        /* Loading Screen */
+        #loader {
+            transition: opacity 0.6s ease;
+        }
+    </style>
+</head>
+<body class="text-slate-100">
+
+    <!-- Loading Overlay -->
+    <div id="loader" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-950 text-white">
+        <div class="w-16 h-16 border-4 border-sky-400 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <h2 class="text-2xl font-bold tracking-wide text-sky-300">בונה את ארץ ישראל בתלת-ממד...</h2>
+        <p class="text-slate-400 text-sm mt-1">מפסל הרים, ממלא את הכנרת וים המלח</p>
+    </div>
+
+    <!-- 3D WebGL Canvas Container -->
+    <div id="canvas-container"></div>
+
+    <!-- Container for Projected 3D Landmark Labels -->
+    <div id="labels-container" class="fixed inset-0 pointer-events-none z-10 overflow-hidden"></div>
+
+    <!-- Top Header & Lighting Controls -->
+    <header class="fixed top-4 right-4 left-4 z-20 flex flex-wrap items-center justify-between gap-3 pointer-events-none">
+        <!-- Title Badge -->
+        <div class="glass-panel rounded-2xl px-5 py-3 pointer-events-auto flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-400 to-blue-600 flex items-center justify-center shadow-lg">
+                <!-- Star of David / Compass SVG Icon -->
+                <svg class="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <polygon points="12 2 19 15 5 15 12 2"></polygon>
+                    <polygon points="12 22 19 9 5 9 12 22"></polygon>
+                </svg>
+            </div>
+            <div>
+                <h1 class="text-xl md:text-2xl font-black tracking-tight bg-gradient-to-l from-white via-sky-100 to-sky-300 bg-clip-text text-transparent">
+                    ארץ ישראל בתלת-ממד
+                </h1>
+                <p class="text-xs text-slate-300 hidden sm:block">סיור טופוגרפי אינטראקטיבי מהחרמון ועד אילת</p>
+            </div>
+        </div>
+
+        <!-- Time of Day & Camera Controls -->
+        <div class="glass-panel rounded-2xl p-2 pointer-events-auto flex items-center gap-1.5 sm:gap-2">
+            <button onclick="setTimeOfDay('day')" id="btn-day" class="glass-btn active rounded-xl px-3 py-2 text-xs sm:text-sm font-semibold flex items-center gap-1.5" title="תאורת יום">
+                <span>☀️</span><span class="hidden sm:inline">בוקר</span>
+            </button>
+            <button onclick="setTimeOfDay('sunset')" id="btn-sunset" class="glass-btn rounded-xl px-3 py-2 text-xs sm:text-sm font-semibold flex items-center gap-1.5" title="שעת שקיעה">
+                <span>🌅</span><span class="hidden sm:inline">שקיעה</span>
+            </button>
+            <button onclick="setTimeOfDay('night')" id="btn-night" class="glass-btn rounded-xl px-3 py-2 text-xs sm:text-sm font-semibold flex items-center gap-1.5" title="לילה וכוכבים">
+                <span>🌙</span><span class="hidden sm:inline">לילה</span>
+            </button>
+            <div class="w-px h-6 bg-white/15 mx-1"></div>
+            <button onclick="toggleAutoRotate()" id="btn-rotate" class="glass-btn rounded-xl px-3 py-2 text-xs sm:text-sm font-semibold flex items-center gap-1.5" title="סיבוב אוטומטי">
+                <span>🔄</span><span class="hidden md:inline">סיבוב</span>
+            </button>
+            <button onclick="resetCamera()" class="glass-btn rounded-xl px-3 py-2 text-xs sm:text-sm font-semibold flex items-center gap-1.5 text-sky-300" title="תצוגה כללית">
+                <span>🗺️</span><span>מבט על</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Right Sidebar: Landmarks Navigation Menu -->
+    <aside class="fixed bottom-4 right-4 left-4 md:left-auto md:top-24 md:bottom-6 md:w-64 z-20 pointer-events-none flex flex-col justify-end md:justify-start">
+        <div class="glass-panel rounded-2xl p-3 pointer-events-auto flex flex-col max-h-full">
+            <div class="flex items-center justify-between px-2 pb-2 mb-2 border-b border-white/10">
+                <span class="text-sm font-bold text-sky-300">נקודות ציון ואתרים</span>
+                <span class="text-xs text-slate-400">לחץ לטיסה ליעד</span>
+            </div>
+            <div id="landmarks-menu" class="flex md:flex-col gap-2 overflow-x-auto md:overflow-y-auto custom-scroll pb-1 md:pb-0">
+                <!-- Populated dynamically via JS -->
+            </div>
+        </div>
+    </aside>
+
+    <!-- Left Info Card: Selected Landmark Details -->
+    <section id="info-card" class="fixed top-24 left-4 w-80 max-w-[calc(100vw-2rem)] z-20 glass-panel rounded-2xl p-5 transition-all duration-300 opacity-0 pointer-events-none -translate-x-4">
+        <div class="flex items-start justify-between gap-2 mb-3">
+            <div>
+                <span id="info-region" class="inline-block text-xs font-bold px-2.5 py-0.5 rounded-full bg-sky-500/25 text-sky-300 border border-sky-400/30 mb-1">
+                    אזור גאוגרפי
+                </span>
+                <h2 id="info-title" class="text-2xl font-black text-white">שם האתר</h2>
+            </div>
+            <button onclick="closeInfoCard()" class="p-1.5 rounded-lg hover:bg-white/10 text-slate-300 hover:text-white transition" aria-label="סגור">
+                ✕
+            </button>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 mb-3 text-xs">
+            <div class="bg-white/5 rounded-xl p-2.5 border border-white/10">
+                <div class="text-slate-400">גובה טופוגרפי</div>
+                <div id="info-elevation" class="font-bold text-sky-200 text-sm mt-0.5">0 מ'</div>
+            </div>
+            <div class="bg-white/5 rounded-xl p-2.5 border border-white/10">
+                <div class="text-slate-400">מאפיין בולט</div>
+                <div id="info-feature" class="font-bold text-amber-200 text-sm mt-0.5">טבע והיסטוריה</div>
+            </div>
+        </div>
+
+        <p id="info-desc" class="text-sm text-slate-200 leading-relaxed mb-4">
+            תיאור מפורט של האתר יופיע כאן.
+        </p>
+
+        <div class="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-white/10">
+            <span>גרור לסיבוב • גלגל לזום</span>
+            <button onclick="resetCamera()" class="text-sky-300 hover:underline font-semibold">חזרה למפה המלאה ←</button>
+        </div>
+    </section>
+
+    <script>
+        /**
+         * ארץ ישראל בתלת-ממד - מנוע Three.js מלא בקובץ יחיד
+         * כולל:
+         * 1. מפת תבליט פרוצדורלית מדויקת מקו החוף, הגליל, החרמון, בקעת הירדן, הרי יהודה, הנגב, מכתש רמון ואילת.
+         * 2. שיידרים/אנימציה לגלי הים התיכון, הכנרת, ים המלח ומפרץ אילת.
+         * 3. מודלים אדריכליים תלת-מימדיים לכל נקודת ציון.
+         * 4. מערכת תאורה דינמית (בוקר / שקיעה / לילה) + כוכבים + עננים + להקות ציפורים.
+         */
+
+        // ==========================================
+        // 1. נתוני אתרים ונקודות ציון (Landmarks Data)
+        // ==========================================
+        const LANDMARKS = [
+            {
+                id: 'hermon',
+                name: 'הר החרמון',
+                region: 'צפון הגולן',
+                icon: '🏔️',
+                x: 11.5, z: -44.0,
+                elevation: '2,814 מ׳ (הגבוה בארץ)',
+                feature: 'פסגה מושלגת ורכבל',
+                description: '״העיניים של המדינה״ – הר החרמון מתנשא בצפון-מזרח הארץ ופסגתו מכוסה שלג בחודשי החורף והאביב. מהווה מקור מים מרכזי לנחלי הצפון ולנהר הירדן.',
+                camOffset: { x: 14, y: 18, z: 16 }
+            },
+            {
+                id: 'kinneret',
+                name: 'הכנרת',
+                region: 'בקעת כנרות',
+                icon: '🌊',
+                x: 8.8, z: -31.5,
+                elevation: '213- מ׳ מתחת לפני הים',
+                feature: 'אגם המים המתוקים הלאומי',
+                description: 'ימת הכנרת השוכנת בבקע ים המלח היא אגם המים המתוקים הנמוך בעולם. מוקפת בהרי הגליל, רמת הגולן, טבריה ואתרים היסטוריים מרהיבים.',
+                camOffset: { x: -15, y: 14, z: 14 }
+            },
+            {
+                id: 'haifa',
+                name: 'חיפה והכרמל',
+                region: 'מישור החוף הצפוני',
+                icon: '🌿',
+                x: -4.2, z: -29.0,
+                elevation: '546 מ׳ (רכס הכרמל)',
+                feature: 'הגנים הבהאיים ומפרץ חיפה',
+                description: 'העיר הצפונית הגדולה השוכנת על מורדות הר הכרמל הירוק הנושק לים התיכון. מפורסמת בזכות הגנים הבהאיים המדורגים, נמל חיפה והדו-קיום.',
+                camOffset: { x: -16, y: 13, z: 12 }
+            },
+            {
+                id: 'telaviv',
+                name: 'תל אביב-יפו',
+                region: 'מישור החוף המרכזי',
+                icon: '🏙️',
+                x: -9.8, z: -12.5,
+                elevation: '15 מ׳ מעל פני הים',
+                feature: 'העיר הלבנה, גורדי שחקים וחופים',
+                description: 'המרכז התרבותי והכלכלי של ישראל. משלבת בין יפו העתיקה בת אלפי השנים לבין שדרות מודרניות, מגדלים מרהיבים ורצועת חוף תוססת לאורך הים התיכון.',
+                camOffset: { x: -17, y: 12, z: 12 }
+            },
+            {
+                id: 'jerusalem',
+                name: 'ירושלים',
+                region: 'הרי יהודה',
+                icon: '🕌',
+                x: 2.2, z: -5.5,
+                elevation: '800 מ׳ מעל פני הים',
+                feature: 'חומות העיר העתיקה ואבן ירושלמית',
+                description: 'בירת ישראל והעיר הקדושה לשלוש הדתות המונותאיסטיות. שוכנת בלב הרי יהודה ובנויה מאבן ירושלמית זהובה המנצנצת באור השמש.',
+                camOffset: { x: -15, y: 14, z: 13 }
+            },
+            {
+                id: 'deadsea',
+                name: 'ים המלח',
+                region: 'מדבר יהודה והבקעה',
+                icon: '💎',
+                x: 7.5, z: 2.5,
+                elevation: '438- מ׳ (הנמוך בעולם)',
+                feature: 'גבישי מלח ומי טורקיז עשירים',
+                description: 'המקום הנמוך ביותר על פני כדור הארץ. ריכוז המלחים הגבוה (כ-34%) מאפשר ציפה קלה על פני המים ויוצר תצורות מלח לבנות מרהיבות לאורך החוף.',
+                camOffset: { x: 16, y: 13, z: 14 }
+            },
+            {
+                id: 'masada',
+                name: 'מצדה',
+                region: 'מדבר יהודה',
+                icon: '🏰',
+                x: 5.8, z: 7.5,
+                elevation: '63 מ׳ מעל פני הים (450 מ׳ מעל ים המלח)',
+                feature: 'מבצר צוקי קדום ואתר מורשת עולמית',
+                description: 'מבצר עתיק בראש צוק מבודד ותלול במזרח מדבר יהודה, המשקיף על ים המלח והרי מואב. נבנה על ידי המלך הורדוס ונודע כסמל לגבורה ועמידה איתנה.',
+                camOffset: { x: 13, y: 11, z: 11 }
+            },
+            {
+                id: 'ramon',
+                name: 'מכתש רמון',
+                region: 'הר הנגב',
+                icon: '🏜️',
+                x: -3.2, z: 22.5,
+                elevation: '900 מ׳ (שפת המכתש)',
+                feature: 'מכתש הסחיפה הגדול בעולם',
+                description: 'תופעה גאולוגית ייחודית בלב הנגב: מכתש באורך 40 ק״מ שנחצב על ידי כוחות טבע של מים וסחיפה, וחושף שכבות סלע צבעוניות, דיונות והר ארדון.',
+                camOffset: { x: -15, y: 14, z: 14 }
+            },
+            {
+                id: 'eilat',
+                name: 'אילת והים האדום',
+                region: 'הערבה הדרומית ומפרץ אילת',
+                icon: '🌴',
+                x: -2.2, z: 45.5,
+                elevation: '0 מ׳ (חוף מפרץ אילת)',
+                feature: 'שוניות אלמוגים, דקלים והרי גרניט',
+                description: 'העיר הדרומית ביותר בישראל, השוכנת לחופו הצפוני של מפרץ אילת (ים סוף). מוקפת בהרי גרניט אדמדמים וידועה בשוניות האלמוגים המרהיבות שלה.',
+                camOffset: { x: -13, y: 11, z: 14 }
+            }
+        ];
+
+        // ==========================================
+        // 2. משתני מערכת Three.js
+        // ==========================================
+        let scene, camera, renderer, controls;
+        let terrainMesh, medSeaMesh, kinneretMesh, deadSeaMesh, redSeaMesh;
+        let sunLight, ambientLight, hemiLight, cityLightsGroup, starsPoints;
+        let cloudsGroup, birdsGroup;
+        let landmarkMeshes = [];
+        let labelElements = [];
+        let clock = new THREE.Clock();
+
+        // מצב מצלמה ותאורה
+        let currentTimeMode = 'day';
+        let isFlying = false;
+        let targetCamPos = new THREE.Vector3();
+        let targetControlsLookAt = new THREE.Vector3();
+        let selectedLandmarkId = null;
+
+        const DEFAULT_CAM_POS = new THREE.Vector3(-42, 48, 52);
+        const DEFAULT_LOOK_AT = new THREE.Vector3(0, 0, 2);
+
+        // ==========================================
+        // 3. פונקציות גאוגרפיה וטופוגרפיה של ארץ ישראל
+        // ==========================================
+
+        /**
+         * מחשב את קו החוף המערבי (X) כפונקציה של קו הרוחב (Z: צפון=-46, דרום=+47)
+         */
+        function getCoastlineX(z) {
+            if (z < -35) return -3.2; // ראש הנקרה / לבנון
+            if (z < -28.5) {
+                // מפרץ עכו וחיפה
+                const t = (z + 35) / 6.5;
+                return -3.2 - Math.sin(t * Math.PI) * 1.4 - t * 1.8;
+            }
+            if (z < 12) {
+                // מישור החוף מחיפה דרומה לכיוון עזה
+                const t = (z + 28.5) / 40.5;
+                return -5.0 - Math.pow(t, 1.15) * 11.5;
+            }
+            // סיני (מתרחב מערבה)
+            const t = (z - 12) / 36;
+            return -16.5 - t * 14.0;
+        }
+
+        /**
+         * מחשב את קו הגבול המזרחי / בקע הירדן והערבה (X) כפונקציה של Z
+         */
+        function getJordanRiftX(z) {
+            if (z < -25) {
+                // אצבע הגליל והכנרת
+                return 9.2 + Math.sin(z * 0.2) * 0.6;
+            }
+            if (z < 11) {
+                // עמק הירדן וים המלח
+                const t = (z + 25) / 36;
+                return 8.8 - t * 1.2;
+            }
+            // הערבה לכיוון אילת
+            const t = (z - 11) / 36;
+            return 7.6 - t * 9.8; // מגיע ל-X = -2.2 באילת (Z = 47)
+        }
+
+        /**
+         * רעש פרוצדורלי חלק ליצירת טבעיות בהרים ובוואדיות
+         */
+        function pseudoNoise(x, z) {
+            return Math.sin(x * 0.35 + z * 0.25) * 0.5 +
+                   Math.cos(x * 0.7 - z * 0.55) * 0.25 +
+                   Math.sin(x * 1.4 + z * 1.3) * 0.12;
+        }
+
+        /**
+         * מחשב את הגובה (Y) בכל נקודה (x, z) במפה
+         */
+        function getTerrainHeight(x, z) {
+            const coastX = getCoastlineX(z);
+            const riftX = getJordanRiftX(z);
+            const n = pseudoNoise(x, z);
+
+            // 1. הים התיכון (ממערב לקו החוף, מצפון לקו אלכסון של צפון סיני)
+            const sinaiShoreZ = 14.0 + (-x - 16.5) * 0.55;
+            if (x < coastX && z < sinaiShoreZ) {
+                const distFromShore = coastX - x;
+                return -0.8 - Math.min(2.2, distFromShore * 0.15);
+            }
+
+            // 2. מפרץ אילת (הים האדום בקצה הדרומי)
+            if (z > 46.2) {
+                const gulfWidth = 1.6 + (z - 46.2) * 0.55;
+                if (Math.abs(x - (-2.2)) < gulfWidth) {
+                    return -1.4;
+                }
+            }
+
+            // 3. שקע הכנרת (אגם בצפון הבקעה)
+            const distKinneret = Math.hypot((x - 8.8) * 1.35, (z - (-31.5)) * 0.75);
+            if (distKinneret < 2.6) {
+                return -1.35 + (distKinneret / 2.6) * 0.5;
+            }
+
+            // 4. שקע ים המלח (המקום הנמוך ביותר)
+            const inDeadSeaZ = z > -2.5 && z < 11.5;
+            const distDeadSeaX = Math.abs(x - 7.6);
+            if (inDeadSeaZ && distDeadSeaX < 2.3) {
+                const edgeFactor = Math.max(0, (distDeadSeaX - 1.3) / 1.0);
+                return -2.1 + edgeFactor * 1.4;
+            }
+
+            // גובה בסיס יבשתי
+            let h = 0.25;
+
+            // עלייה הדרגתית מקו החוף מזרחה
+            const distFromCoast = Math.max(0, x - coastX);
+            h += Math.min(1.6, distFromCoast * 0.14);
+
+            // שדרת ההר המרכזית (הגליל, השומרון, הרי יהודה)
+            if (z > -38 && z < 12) {
+                const spineX = (coastX + riftX) * 0.54;
+                const distFromSpine = Math.abs(x - spineX);
+                const mountainRidge = Math.max(0, 1 - distFromSpine / 6.8);
+                h += Math.pow(mountainRidge, 1.5) * (3.4 + n * 0.75);
+            }
+
+            // הר הכרמל (שלוחה בולטת ליד חיפה)
+            const distCarmel = Math.hypot(x - (-3.5), z - (-27.5));
+            if (distCarmel < 4.5) {
+                h += (1 - distCarmel / 4.5) * 2.4;
+            }
+
+            // רמת הגולן והר החרמון בצפון-מזרח
+            if (x > riftX + 1.2 && z < -20) {
+                h += 2.6 + n * 0.5; // רמת הגולן
+                // פסגת החרמון המרשימה
+                const distHermon = Math.hypot(x - 11.5, z - (-44.0));
+                if (distHermon < 7.5) {
+                    const hermonPeak = Math.pow(1 - distHermon / 7.5, 1.6) * 8.2;
+                    h += hermonPeak;
+                }
+            }
+
+            // הרי מואב ואדום (ממזרח לבקע ים המלח והערבה)
+            if (x > riftX + 1.6 && z >= -20) {
+                const eastWall = Math.min(1, (x - (riftX + 1.6)) / 4.5);
+                h += eastWall * (3.6 + n * 0.7);
+            }
+
+            // צוק מצדה (שולחן סלע דרמטי ליד ים המלח)
+            const distMasada = Math.hypot(x - 5.8, z - 7.5);
+            if (distMasada < 1.6) {
+                h = Math.max(h, 2.35 - distMasada * 0.3);
+            }
+
+            // הנגב ומכתש רמון
+            if (z >= 12 && z <= 46) {
+                const negevBase = 1.4 + Math.sin((z - 12) * 0.12) * 0.9 + n * 0.6;
+                h = Math.max(h, negevBase);
+
+                // הר הנגב ומכתש רמון (שקע מוקף מצוקים תלולים)
+                const dxRamon = (x - (-3.2)) * 0.85;
+                const dzRamon = (z - 22.5) * 1.45;
+                const distRamon = Math.hypot(dxRamon, dzRamon);
+                if (distRamon < 4.8) {
+                    if (distRamon > 2.7) {
+                        // שפת המכתש הגבוהה
+                        h += (1 - Math.abs(distRamon - 3.6) / 1.2) * 2.5;
+                    } else {
+                        // קרקעית המכתש העמוקה
+                        h -= (1 - distRamon / 2.7) * 1.8;
+                    }
+                }
+
+                // הרי אילת התלולים בדרום
+                if (z > 38) {
+                    const eilatHills = ((z - 38) / 8) * 2.4;
+                    if (Math.abs(x - (-2.2)) > 1.8) {
+                        h += eilatHills + Math.abs(n) * 1.1;
+                    }
+                }
+            }
+
+            // עמק הערבה (שקע צר בין הרי הנגב להרי אדום)
+            if (z > 11 && z <= 46.5) {
+                const distArava = Math.abs(x - riftX);
+                if (distArava < 2.2) {
+                    const aravaDip = 1 - distArava / 2.2;
+                    h = h * (1 - aravaDip * 0.75) + 0.15;
+                }
+            }
+
+            return h;
+        }
+
+        /**
+         * קובע את צבע הקרקע (Vertex Color) בהתאם לגובה, לאזור האקלימי ולמיקום
+         */
+        function getTerrainColor(x, y, z) {
+            const color = new THREE.Color();
+            const n = pseudoNoise(x * 1.5, z * 1.5);
+
+            // קרקעית ים / אגמים
+            if (y < -0.15) {
+                if (z > -3 && z < 12 && x > 4) {
+                    // משקעי מלח טורקיז-לבן בים המלח
+                    return color.setHex(0x88d4d8);
+                }
+                return color.setHex(0xc2b280); // חול קרקעית
+            }
+
+            // חופי הים התיכון ואילת (חול זהוב)
+            const coastX = getCoastlineX(z);
+            if (Math.abs(x - coastX) < 1.1 && z < 15) {
+                return color.setHex(0xead298);
+            }
+
+            // חופי ים המלח (גבישי מלח לבנים בוהקים)
+            if (z > -3.2 && z < 12.2 && Math.abs(x - 7.6) < 2.65 && y < 0.35) {
+                return color.setHex(0xf1f5f9);
+            }
+
+            // הר החרמון המושלג!
+            if (z < -38 && x > 6 && y > 4.2 + n * 0.5) {
+                const snowMix = Math.min(1, (y - 4.2) / 3.2);
+                const rockColor = new THREE.Color(0x64748b);
+                const snowColor = new THREE.Color(0xffffff);
+                return color.copy(rockColor).lerp(snowColor, snowMix);
+            }
+
+            // חלוקה אקלימית מצפון לדרום (ירוק פורה בצפון -> אבן גיר במרכז -> מדבר זהוב ואדמדם בדרום)
+            if (z < -16) {
+                // צפון הארץ: הגליל, הכרמל, עמק יזרעאל והגולן (ירוק עשיר)
+                const baseGreen = y > 2.4 ? 0x3f6212 : 0x4d7c0f;
+                const lushGreen = 0x65a30d;
+                color.setHex(baseGreen).lerp(new THREE.Color(lushGreen), 0.4 + n * 0.4);
+            } else if (z < 6) {
+                // מרכז הארץ והרי יהודה (ירוק-זית ואבן גיר בהירה)
+                const olive = new THREE.Color(0x6b7c32);
+                const limestone = new THREE.Color(0xc8b896);
+                const t = Math.min(1, Math.max(0, (z + 16) / 22 + n * 0.15));
+                color.copy(olive).lerp(limestone, t);
+            } else {
+                // מדבר יהודה, הנגב, מכתש רמון והרי אילת
+                const sand = new THREE.Color(0xd9a05b);
+                const ochre = new THREE.Color(0xb4532a); // אבן חול אדומה (רמון ואילת)
+                const desertFactor = Math.min(1, Math.max(0, (z - 14) / 25 + n * 0.25));
+                color.copy(sand).lerp(ochre, desertFactor);
+
+                // הדגשת צבעי מכתש רמון
+                const distRamon = Math.hypot((x - (-3.2)) * 0.85, (z - 22.5) * 1.45);
+                if (distRamon < 4.5) {
+                    color.lerp(new THREE.Color(0x9a3412), 0.55);
+                }
+            }
+
+            return color;
+        }
+
+        // ==========================================
+        // 4. בניית הסצנה התלת-מימדית
+        // ==========================================
+        function init() {
+            const container = document.getElementById('canvas-container');
+
+            // יצירת סצנה
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x7dd3fc);
+            scene.fog = new THREE.FogExp2(0xbae6fd, 0.0055);
+
+            // מצלמה
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.5, 450);
+            camera.position.copy(DEFAULT_CAM_POS);
+
+            // רנדרר
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.1;
+            container.appendChild(renderer.domElement);
+
+            // בקרת מסלול (OrbitControls)
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.target.copy(DEFAULT_LOOK_AT);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.06;
+            controls.maxPolarAngle = Math.PI * 0.46; // מניעת ירידה מתחת לפני הקרקע
+            controls.minDistance = 8;
+            controls.maxDistance = 135;
+
+            // ביטול טיסה אוטומטית אם המשתמש מזיז ידנית
+            controls.addEventListener('start', () => {
+                isFlying = false;
+            });
+
+            setupLighting();
+            buildTerrain();
+            buildWaterBodies();
+            buildLandmarks3D();
+            buildAtmosphere();
+            buildUIMenu();
+
+            window.addEventListener('resize', onWindowResize);
+
+            // הסרת מסך הטעינה
+            setTimeout(() => {
+                const loader = document.getElementById('loader');
+                loader.style.opacity = '0';
+                setTimeout(() => loader.remove(), 600);
+            }, 500);
+
+            animate();
+        }
+
+        /**
+         * הגדרת מערכת התאורה (שמש, תאורת שמיים וכוכבים)
+         */
+        function setupLighting() {
+            hemiLight = new THREE.HemisphereLight(0xe0f2fe, 0x854d0e, 0.65);
+            scene.add(hemiLight);
+
+            ambientLight = new THREE.AmbientLight(0xffffff, 0.25);
+            scene.add(ambientLight);
+
+            sunLight = new THREE.DirectionalLight(0xfffbeb, 1.35);
+            sunLight.position.set(-35, 55, 25);
+            sunLight.castShadow = true;
+            sunLight.shadow.mapSize.width = 2048;
+            sunLight.shadow.mapSize.height = 2048;
+            sunLight.shadow.camera.near = 10;
+            sunLight.shadow.camera.far = 160;
+            const d = 55;
+            sunLight.shadow.camera.left = -d;
+            sunLight.shadow.camera.right = d;
+            sunLight.shadow.camera.top = d;
+            sunLight.shadow.camera.bottom = -d;
+            sunLight.shadow.bias = -0.0005;
+            scene.add(sunLight);
+        }
+
+        /**
+         * יצירת משטח התבליט הטופוגרפי ברזולוציה גבוהה
+         */
+        function buildTerrain() {
+            const width = 68;
+            const depth = 104;
+            const segX = 180;
+            const segZ = 260;
+
+            const geometry = new THREE.PlaneGeometry(width, depth, segX, segZ);
+            geometry.rotateX(-Math.PI / 2);
+
+            const posAttr = geometry.attributes.position;
+            const colors = new Float32Array(posAttr.count * 3);
+
+            for (let i = 0; i < posAttr.count; i++) {
+                const x = posAttr.getX(i);
+                const z = posAttr.getZ(i);
+                const y = getTerrainHeight(x, z);
+                posAttr.setY(i, y);
+
+                const col = getTerrainColor(x, y, z);
+                colors[i * 3] = col.r;
+                colors[i * 3 + 1] = col.g;
+                colors[i * 3 + 2] = col.b;
+            }
+
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            geometry.computeVertexNormals();
+
+            const material = new THREE.MeshStandardMaterial({
+                vertexColors: true,
+                roughness: 0.82,
+                metalness: 0.05,
+                flatShading: false
+            });
+
+            terrainMesh = new THREE.Mesh(geometry, material);
+            terrainMesh.receiveShadow = true;
+            terrainMesh.castShadow = true;
+            scene.add(terrainMesh);
+
+            // מסגרת בסיס גאולוגית כהה מתחת למפה (תצוגת חתך מוזיאונית)
+            const baseGeo = new THREE.BoxGeometry(width, 4, depth);
+            const baseMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.9 });
+            const baseMesh = new THREE.Mesh(baseGeo, baseMat);
+            baseMesh.position.y = -4.2;
+            scene.add(baseMesh);
+        }
+
+        /**
+         * בניית גופי המים: הים התיכון, הכנרת, ים המלח ומפרץ אילת
+         */
+        function buildWaterBodies() {
+            // 1. הים התיכון (עם רשת צפופה להנפשת גלים)
+            const medGeo = new THREE.PlaneGeometry(36, 98, 45, 110);
+            medGeo.rotateX(-Math.PI / 2);
+            const medMat = new THREE.MeshStandardMaterial({
+                color: 0x0284c7,
+                emissive: 0x0369a1,
+                emissiveIntensity: 0.15,
+                roughness: 0.18,
+                metalness: 0.65,
+                transparent: true,
+                opacity: 0.92
+            });
+            medSeaMesh = new THREE.Mesh(medGeo, medMat);
+            medSeaMesh.position.set(-16, -0.25, -3);
+            medSeaMesh.receiveShadow = true;
+            // שמירת מיקום Y מקורי לגלים
+            medSeaMesh.userData.origY = new Float32Array(medGeo.attributes.position.count);
+            scene.add(medSeaMesh);
+
+            // 2. הכנרת (טורקיז-כחול מתוק)
+            const kinGeo = new THREE.CircleGeometry(2.6, 32);
+            kinGeo.rotateX(-Math.PI / 2);
+            kinGeo.scale(0.75, 1, 1.35);
+            const kinMat = new THREE.MeshStandardMaterial({
+                color: 0x0ea5e9,
+                roughness: 0.15,
+                metalness: 0.6,
+                transparent: true,
+                opacity: 0.9
+            });
+            kinneretMesh = new THREE.Mesh(kinGeo, kinMat);
+            kinneretMesh.position.set(8.8, -0.85, -31.5);
+            scene.add(kinneretMesh);
+
+            // 3. ים המלח (טורקיז-אזמרגד ייחודי)
+            const deadGeo = new THREE.PlaneGeometry(4.4, 13.8, 12, 24);
+            deadGeo.rotateX(-Math.PI / 2);
+            const deadMat = new THREE.MeshStandardMaterial({
+                color: 0x14b8a6,
+                emissive: 0x0d9488,
+                emissiveIntensity: 0.18,
+                roughness: 0.12,
+                metalness: 0.7,
+                transparent: true,
+                opacity: 0.92
+            });
+            deadSeaMesh = new THREE.Mesh(deadGeo, deadMat);
+            deadSeaMesh.position.set(7.6, -1.45, 4.5);
+            scene.add(deadSeaMesh);
+
+            // 4. מפרץ אילת / הים האדום
+            const redGeo = new THREE.PlaneGeometry(10, 6.5, 16, 16);
+            redGeo.rotateX(-Math.PI / 2);
+            const redMat = new THREE.MeshStandardMaterial({
+                color: 0x0369a1,
+                roughness: 0.15,
+                metalness: 0.7,
+                transparent: true,
+                opacity: 0.92
+            });
+            redSeaMesh = new THREE.Mesh(redGeo, redMat);
+            redSeaMesh.position.set(-2.2, -0.35, 49.0);
+            scene.add(redSeaMesh);
+        }
+
+        /**
+         * בניית מודלים אדריכליים תלת-מימדיים מותאמים לכל אתר
+         */
+        function buildLandmarks3D() {
+            cityLightsGroup = new THREE.Group();
+            scene.add(cityLightsGroup);
+
+            const labelsContainer = document.getElementById('labels-container');
+
+            LANDMARKS.forEach(lm => {
+                const groundY = Math.max(-1.4, getTerrainHeight(lm.x, lm.z));
+                const group = new THREE.Group();
+                group.position.set(lm.x, groundY, lm.z);
+                group.userData = { landmark: lm };
+
+                // יצירת מודל ייחודי לכל יעד
+                if (lm.id === 'jerusalem') {
+                    // חומות העיר העתיקה + מגדל דוד + כיפת הזהב
+                    const wallMat = new THREE.MeshStandardMaterial({ color: 0xfde68a, roughness: 0.6 });
+                    const walls = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.55, 1.8), wallMat);
+                    walls.position.y = 0.27;
+                    walls.castShadow = true;
+                    group.add(walls);
+
+                    // כיפת הסלע הזהובה
+                    const drum = new THREE.Mesh(
+                        new THREE.CylinderGeometry(0.45, 0.45, 0.35, 16),
+                        new THREE.MeshStandardMaterial({ color: 0xfef3c7 })
+                    );
+                    drum.position.set(0.25, 0.7, -0.2);
+                    group.add(drum);
+
+                    const dome = new THREE.Mesh(
+                        new THREE.SphereGeometry(0.44, 20, 16, 0, Math.PI * 2, 0, Math.PI / 2),
+                        new THREE.MeshStandardMaterial({ color: 0xfbbf24, metalness: 0.85, roughness: 0.2, emissive: 0xd97706, emissiveIntensity: 0.25 })
+                    );
+                    dome.position.set(0.25, 0.87, -0.2);
+                    group.add(dome);
+
+                    // מגדל דוד
+                    const tower = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.95, 0.38), wallMat);
+                    tower.position.set(-0.55, 0.47, 0.45);
+                    group.add(tower);
+
+                } else if (lm.id === 'telaviv') {
+                    // קו הרקיע של תל אביב (מגדלי עזריאלי - עגול, משולש, מרובע + מגדלים נוספים)
+                    const glassMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, metalness: 0.8, roughness: 0.2 });
+                    const towerMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.5, roughness: 0.3 });
+
+                    const roundTower = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 1.9, 16), glassMat);
+                    roundTower.position.set(0.2, 0.95, -0.2);
+                    group.add(roundTower);
+
+                    const triTower = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 1.65, 3), glassMat);
+                    triTower.position.set(-0.3, 0.82, 0.2);
+                    group.add(triTower);
+
+                    const sqTower = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.45, 0.4), towerMat);
+                    sqTower.position.set(0.35, 0.72, 0.35);
+                    group.add(sqTower);
+
+                    const beachTower = new THREE.Mesh(new THREE.BoxGeometry(0.3, 1.15, 0.3), glassMat);
+                    beachTower.position.set(-0.5, 0.57, -0.4);
+                    group.add(beachTower);
+
+                } else if (lm.id === 'haifa') {
+                    // הגנים הבהאיים המדורגים על הכרמל + כיפת זהב
+                    const terraceMat = new THREE.MeshStandardMaterial({ color: 0x22c55e, roughness: 0.7 });
+                    for (let t = 0; t < 4; t++) {
+                        const step = new THREE.Mesh(new THREE.BoxGeometry(1.3 - t * 0.22, 0.16, 0.45), terraceMat);
+                        step.position.set(0, 0.08 + t * 0.16, -0.4 + t * 0.25);
+                        group.add(step);
+                    }
+                    const shrineDome = new THREE.Mesh(
+                        new THREE.SphereGeometry(0.26, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2),
+                        new THREE.MeshStandardMaterial({ color: 0xfacc15, metalness: 0.8, roughness: 0.2 })
+                    );
+                    shrineDome.position.set(0, 0.72, 0.35);
+                    group.add(shrineDome);
+
+                } else if (lm.id === 'hermon') {
+                    // תחנת רכבל / מצפה שלגים בפסגת החרמון
+                    const cabin = new THREE.Mesh(
+                        new THREE.BoxGeometry(0.6, 0.4, 0.6),
+                        new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.4 })
+                    );
+                    cabin.position.y = 0.2;
+                    group.add(cabin);
+
+                } else if (lm.id === 'masada') {
+                    // שרידי ארמונות הורדוס על שולחן מצדה
+                    const ruinMat = new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.85 });
+                    const palace = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.25, 0.6), ruinMat);
+                    palace.position.y = 0.12;
+                    group.add(palace);
+
+                } else if (lm.id === 'eilat') {
+                    // עצי דקל ומלונות לחוף הים האדום
+                    const hotel = new THREE.Mesh(
+                        new THREE.BoxGeometry(0.9, 0.75, 0.5),
+                        new THREE.MeshStandardMaterial({ color: 0xfef08a, roughness: 0.4 })
+                    );
+                    hotel.position.set(0.25, 0.37, -0.2);
+                    group.add(hotel);
+
+                    // עץ דקל
+                    const trunk = new THREE.Mesh(
+                        new THREE.CylinderGeometry(0.05, 0.08, 0.8, 8),
+                        new THREE.MeshStandardMaterial({ color: 0x78350f })
+                    );
+                    trunk.position.set(-0.4, 0.4, 0.2);
+                    group.add(trunk);
+
+                    const leaves = new THREE.Mesh(
+                        new THREE.ConeGeometry(0.4, 0.35, 7),
+                        new THREE.MeshStandardMaterial({ color: 0x16a34a })
+                    );
+                    leaves.position.set(-0.4, 0.85, 0.2);
+                    group.add(leaves);
+                }
+
+                // טבעת סימון זוהרת על הקרקע לכל אתר
+                const ringGeo = new THREE.RingGeometry(0.75, 1.05, 32);
+                ringGeo.rotateX(-Math.PI / 2);
+                const ringMat = new THREE.MeshBasicMaterial({
+                    color: 0x38bdf8,
+                    side: THREE.DoubleSide,
+                    transparent: true,
+                    opacity: 0.75
+                });
+                const ring = new THREE.Mesh(ringGeo, ringMat);
+                ring.position.y = 0.08;
+                group.add(ring);
+                group.userData.ring = ring;
+
+                // תאורת עיר חמה (נדלקת בלילה ובשקיעה)
+                const cityLight = new THREE.PointLight(0xfbbf24, 0, 8);
+                cityLight.position.set(lm.x, groundY + 1.5, lm.z);
+                cityLightsGroup.add(cityLight);
+
+                scene.add(group);
+                landmarkMeshes.push(group);
+
+                // יצירת תווית HTML צפה מעל כל אתר
+                const labelDiv = document.createElement('div');
+                labelDiv.className = 'landmark-label';
+                labelDiv.innerHTML = `
+                    <div class="label-pill">
+                        <span>${lm.icon}</span>
+                        <span>${lm.name}</span>
+                    </div>
+                    <div class="label-stem"></div>
+                `;
+                labelDiv.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    flyToLandmark(lm.id);
+                });
+                labelsContainer.appendChild(labelDiv);
+
+                labelElements.push({
+                    el: labelDiv,
+                    pos: new THREE.Vector3(lm.x, groundY + 1.4, lm.z)
+                });
+            });
+
+            // הוספת עצים קטנים באזור הצפון (הגליל והכרמל) להעשרת הנוף
+            addNorthernForests();
+        }
+
+        /**
+         * פיזור יערות ירוקים בצפון הארץ
+         */
+        function addNorthernForests() {
+            const treeGeo = new THREE.ConeGeometry(0.28, 0.85, 6);
+            const treeMat = new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.85 });
+            const forestGroup = new THREE.Group();
+
+            for (let i = 0; i < 140; i++) {
+                const x = -4 + Math.random() * 14;
+                const z = -37 + Math.random() * 18;
+                const y = getTerrainHeight(x, z);
+                // רק ביבשה בגובה בינוני בצפון
+                if (y > 0.6 && y < 4.5) {
+                    const tree = new THREE.Mesh(treeGeo, treeMat);
+                    tree.position.set(x, y + 0.35, z);
+                    const s = 0.7 + Math.random() * 0.6;
+                    tree.scale.set(s, s, s);
+                    forestGroup.add(tree);
+                }
+            }
+            scene.add(forestGroup);
+        }
+
+        /**
+         * אטמוספירה: עננים רכים, להקת ציפורים נודדות וכוכבי לילה
+         */
+        function buildAtmosphere() {
+            // 1. עננים צפים
+            cloudsGroup = new THREE.Group();
+            const cloudMat = new THREE.MeshStandardMaterial({
+                color: 0xffffff,
+                roughness: 0.9,
+                transparent: true,
+                opacity: 0.82
+            });
+
+            for (let i = 0; i < 16; i++) {
+                const cloud = new THREE.Group();
+                const puffs = 3 + Math.floor(Math.random() * 3);
+                for (let p = 0; p < puffs; p++) {
+                    const puff = new THREE.Mesh(
+                        new THREE.DodecahedronGeometry(1.1 + Math.random() * 0.9, 1),
+                        cloudMat
+                    );
+                    puff.position.set(p * 1.1 - 1.5, Math.random() * 0.4, (Math.random() - 0.5) * 1.2);
+                    puff.scale.y = 0.55;
+                    cloud.add(puff);
+                }
+                cloud.position.set(
+                    (Math.random() - 0.5) * 65,
+                    14 + Math.random() * 7,
+                    (Math.random() - 0.5) * 85
+                );
+                cloud.userData.speed = 0.35 + Math.random() * 0.4;
+                cloudsGroup.add(cloud);
+            }
+            scene.add(cloudsGroup);
+
+            // 2. להקת ציפורים נודדות מעל עמק החולה והכנרת
+            birdsGroup = new THREE.Group();
+            const birdMat = new THREE.MeshBasicMaterial({ color: 0x1e293b, side: THREE.DoubleSide });
+            const wingGeo = new THREE.PlaneGeometry(0.45, 0.15);
+
+            for (let i = 0; i < 14; i++) {
+                const bird = new THREE.Group();
+                const leftWing = new THREE.Mesh(wingGeo, birdMat);
+                leftWing.position.x = -0.2;
+                const rightWing = new THREE.Mesh(wingGeo, birdMat);
+                rightWing.position.x = 0.2;
+                bird.add(leftWing, rightWing);
+
+                // מבנה ראש חץ (V)
+                const row = Math.floor((i + 1) / 2);
+                const side = i % 2 === 0 ? 1 : -1;
+                bird.position.set(side * row * 0.8, 0, row * 0.8);
+                bird.userData = { leftWing, rightWing, phase: i * 0.4 };
+                birdsGroup.add(bird);
+            }
+            birdsGroup.position.set(4, 10, -25);
+            scene.add(birdsGroup);
+
+            // 3. שמי כוכבים (מופיע בלילה)
+            const starGeo = new THREE.BufferGeometry();
+            const starCount = 900;
+            const starPos = new Float32Array(starCount * 3);
+            for (let i = 0; i < starCount * 3; i += 3) {
+                const r = 130 + Math.random() * 70;
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.random() * Math.PI * 0.48;
+                starPos[i] = r * Math.sin(phi) * Math.cos(theta);
+                starPos[i + 1] = r * Math.cos(phi) + 10;
+                starPos[i + 2] = r * Math.sin(phi) * Math.sin(theta);
+            }
+            starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+            const starMat = new THREE.PointsMaterial({ color: 0xf8fafc, size: 0.75, transparent: true, opacity: 0 });
+            starsPoints = new THREE.Points(starGeo, starMat);
+            scene.add(starsPoints);
+        }
+
+        // ==========================================
+        // 5. ממשק משתמש ואינטראקציה בעברית
+        // ==========================================
+        function buildUIMenu() {
+            const menu = document.getElementById('landmarks-menu');
+            LANDMARKS.forEach(lm => {
+                const btn = document.createElement('button');
+                btn.id = `menu-btn-${lm.id}`;
+                btn.className = 'glass-btn rounded-xl px-3.5 py-2.5 text-right flex items-center justify-between gap-2 shrink-0 md:shrink';
+                btn.innerHTML = `
+                    <div class="flex items-center gap-2.5">
+                        <span class="text-lg">${lm.icon}</span>
+                        <div>
+                            <div class="font-bold text-sm text-white leading-tight">${lm.name}</div>
+                            <div class="text-[11px] text-slate-300 hidden md:block">${lm.region}</div>
+                        </div>
+                    </div>
+                    <span class="text-sky-300 text-xs hidden md:inline">◂</span>
+                `;
+                btn.onclick = () => flyToLandmark(lm.id);
+                menu.appendChild(btn);
+            });
+        }
+
+        /**
+         * טיסה חלקה של המצלמה אל אתר נבחר והצגת כרטיס המידע
+         */
+        function flyToLandmark(id) {
+            const lm = LANDMARKS.find(item => item.id === id);
+            if (!lm) return;
+
+            selectedLandmarkId = id;
+            controls.autoRotate = false;
+            document.getElementById('btn-rotate').classList.remove('active');
+
+            const groundY = Math.max(0, getTerrainHeight(lm.x, lm.z));
+            targetControlsLookAt.set(lm.x, groundY + 0.8, lm.z);
+            targetCamPos.set(
+                lm.x + lm.camOffset.x,
+                groundY + lm.camOffset.y,
+                lm.z + lm.camOffset.z
+            );
+            isFlying = true;
+
+            // עדכון כפתור פעיל בתפריט
+            document.querySelectorAll('#landmarks-menu button').forEach(b => b.classList.remove('active'));
+            const activeBtn = document.getElementById(`menu-btn-${id}`);
+            if (activeBtn) {
+                activeBtn.classList.add('active');
+                activeBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+            }
+
+            // הצגת כרטיס המידע
+            document.getElementById('info-region').textContent = lm.region;
+            document.getElementById('info-title').textContent = `${lm.icon} ${lm.name}`;
+            document.getElementById('info-elevation').textContent = lm.elevation;
+            document.getElementById('info-feature').textContent = lm.feature;
+            document.getElementById('info-desc').textContent = lm.description;
+
+            const card = document.getElementById('info-card');
+            card.classList.remove('opacity-0', 'pointer-events-none', '-translate-x-4');
+        }
+
+        function closeInfoCard() {
+            const card = document.getElementById('info-card');
+            card.classList.add('opacity-0', 'pointer-events-none', '-translate-x-4');
+            selectedLandmarkId = null;
+            document.querySelectorAll('#landmarks-menu button').forEach(b => b.classList.remove('active'));
+        }
+
+        function resetCamera() {
+            closeInfoCard();
+            targetCamPos.copy(DEFAULT_CAM_POS);
+            targetControlsLookAt.copy(DEFAULT_LOOK_AT);
+            isFlying = true;
+        }
+
+        function toggleAutoRotate() {
+            controls.autoRotate = !controls.autoRotate;
+            controls.autoRotateSpeed = 1.2;
+            document.getElementById('btn-rotate').classList.toggle('active', controls.autoRotate);
+        }
+
+        /**
+         * החלפת מצב תאורה: בוקר / שקיעה / לילה
+         */
+        function setTimeOfDay(mode) {
+            currentTimeMode = mode;
+            ['day', 'sunset', 'night'].forEach(m => {
+                document.getElementById(`btn-${m}`).classList.toggle('active', m === mode);
+            });
+
+            if (mode === 'day') {
+                scene.background.setHex(0x7dd3fc);
+                scene.fog.color.setHex(0xbae6fd);
+                sunLight.color.setHex(0xfffbeb);
+                sunLight.intensity = 1.35;
+                sunLight.position.set(-35, 55, 25);
+                hemiLight.color.setHex(0xe0f2fe);
+                hemiLight.intensity = 0.65;
+                starsPoints.material.opacity = 0;
+                cityLightsGroup.children.forEach(l => l.intensity = 0);
+            } else if (mode === 'sunset') {
+                scene.background.setHex(0xfb7185);
+                scene.fog.color.setHex(0xfdba74);
+                sunLight.color.setHex(0xf97316);
+                sunLight.intensity = 1.55;
+                sunLight.position.set(-60, 14, 15); // שמש נמוכה מעל הים התיכון!
+                hemiLight.color.setHex(0xfed7aa);
+                hemiLight.intensity = 0.5;
+                starsPoints.material.opacity = 0.25;
+                cityLightsGroup.children.forEach(l => l.intensity = 1.2);
+            } else if (mode === 'night') {
+                scene.background.setHex(0x020617);
+                scene.fog.color.setHex(0x0f172a);
+                sunLight.color.setHex(0x60a5fa);
+                sunLight.intensity = 0.35;
+                sunLight.position.set(25, 45, -20);
+                hemiLight.color.setHex(0x1e293b);
+                hemiLight.intensity = 0.3;
+                starsPoints.material.opacity = 0.9;
+                cityLightsGroup.children.forEach(l => l.intensity = 2.6);
+            }
+        }
+
+        // ==========================================
+        // 6. לולאת אנימציה ועדכון תוויות
+        // ==========================================
+        function animate() {
+            requestAnimationFrame(animate);
+            const elapsed = clock.getElapsedTime();
+
+            // 1. הנפשת גלי הים התיכון
+            if (medSeaMesh) {
+                const pos = medSeaMesh.geometry.attributes.position;
+                for (let i = 0; i < pos.count; i++) {
+                    const x = pos.getX(i);
+                    const z = pos.getZ(i);
+                    const wave = Math.sin(x * 0.8 + elapsed * 2.2) * 0.06 +
+                                 Math.cos(z * 0.6 + elapsed * 1.7) * 0.05;
+                    pos.setY(i, wave);
+                }
+                pos.needsUpdate = true;
+            }
+
+            // 2. פעימת טבעות הסימון של נקודות הציון
+            landmarkMeshes.forEach((group, idx) => {
+                const ring = group.userData.ring;
+                if (ring) {
+                    const isSelected = group.userData.landmark.id === selectedLandmarkId;
+                    const scale = isSelected
+                        ? 1.35 + Math.sin(elapsed * 5) * 0.2
+                        : 1.0 + Math.sin(elapsed * 2.5 + idx) * 0.1;
+                    ring.scale.set(scale, scale, 1);
+                    ring.material.color.setHex(isSelected ? 0xfbbf24 : 0x38bdf8);
+                }
+            });
+
+            // 3. תנועת עננים עדינה
+            if (cloudsGroup) {
+                cloudsGroup.children.forEach(cloud => {
+                    cloud.position.x += cloud.userData.speed * 0.015;
+                    if (cloud.position.x > 36) cloud.position.x = -36;
+                });
+            }
+
+            // 4. מעוף להקת הציפורים
+            if (birdsGroup) {
+                birdsGroup.position.z = -35 + ((elapsed * 1.8) % 75);
+                birdsGroup.position.x = 2 + Math.sin(elapsed * 0.4) * 5;
+                birdsGroup.children.forEach(bird => {
+                    const flap = Math.sin(elapsed * 9 + bird.userData.phase) * 0.45;
+                    bird.userData.leftWing.rotation.z = flap;
+                    bird.userData.rightWing.rotation.z = -flap;
+                });
+            }
+
+            // 5. טיסה חלקה של המצלמה (Camera Interpolation)
+            if (isFlying) {
+                camera.position.lerp(targetCamPos, 0.055);
+                controls.target.lerp(targetControlsLookAt, 0.065);
+                if (camera.position.distanceTo(targetCamPos) < 0.25) {
+                    isFlying = false;
+                }
+            }
+
+            controls.update();
+            updateLabelsProjection();
+            renderer.render(scene, camera);
+        }
+
+        /**
+         * המרת קואורדינטות 3D למיקום 2D על המסך עבור תוויות השמות
+         */
+        function updateLabelsProjection() {
+            const tempV = new THREE.Vector3();
+            const widthHalf = window.innerWidth / 2;
+            const heightHalf = window.innerHeight / 2;
+
+            labelElements.forEach(item => {
+                tempV.copy(item.pos);
+                tempV.project(camera);
+
+                // הסתרה אם הנקודה מאחורי המצלמה
+                if (tempV.z > 1) {
+                    item.el.style.opacity = '0';
+                    item.el.style.pointerEvents = 'none';
+                    return;
+                }
+
+                const x = (tempV.x * widthHalf) + widthHalf;
+                const y = -(tempV.y * heightHalf) + heightHalf;
+
+                item.el.style.opacity = '1';
+                item.el.style.pointerEvents = 'auto';
+                item.el.style.left = `${x}px`;
+                item.el.style.top = `${y}px`;
+            });
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // הפעלת העולם לאחר טעינת הדף
+        window.onload = init;
+    </script>
+
+<a id="club-back" href="../index.html#products-shelf" style="position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#fff;color:#1d2433;border:2px solid #cfe0f0;border-radius:999px;padding:8px 18px;font:600 15px/1.2 Arial,sans-serif;text-decoration:none;direction:rtl;box-shadow:0 3px 0 #cfe0f0">→ חזרה לאתר החוג</a>
+<script>if (window.top !== window) document.getElementById("club-back").remove();</script>
+</body>
+</html>

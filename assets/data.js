@@ -134,6 +134,41 @@ window.SITE = {
       "href": "worlds/giza.html"
     },
     {
+      "title": "ארץ ישראל בתלת־ממד",
+      "cover": "lessons/img/ex3d-eretz-israel.jpg",
+      "href": "worlds/eretz-israel.html"
+    },
+    {
+      "title": "תיכון הראל",
+      "cover": "lessons/img/ex3d-harel.jpg",
+      "href": "worlds/harel.html"
+    },
+    {
+      "title": "ארמון בקינגהאם",
+      "cover": "lessons/img/ex3d-buckingham.jpg",
+      "href": "worlds/buckingham.html"
+    },
+    {
+      "title": "מגדל אייפל בפריז",
+      "cover": "lessons/img/ex3d-eiffel.jpg",
+      "href": "worlds/eiffel.html"
+    },
+    {
+      "title": "סין הקסומה",
+      "cover": "lessons/img/ex3d-china.jpg",
+      "href": "worlds/china.html"
+    },
+    {
+      "title": "הוגוורטס: עולם הקסמים",
+      "cover": "lessons/img/ex3d-hogwarts.jpg",
+      "href": "worlds/hogwarts.html"
+    },
+    {
+      "title": "ממלכת האופל",
+      "cover": "lessons/img/ex3d-dark-kingdom.jpg",
+      "href": "worlds/dark-kingdom.html"
+    },
+    {
       "title": "החצר והבתים התימניים",
       "cover": "lessons/img/ex3d-yemen.jpg",
       "href": "worlds/yemen.html"
@@ -172,6 +207,21 @@ window.SITE = {
       "title": "חדר גיימינג עם תאורת RGB",
       "cover": "lessons/img/ex3d-gaming-rgb.jpg",
       "href": "worlds/gaming-rgb.html"
+    },
+    {
+      "title": "הצלת המלך (משחק)",
+      "cover": "lessons/img/ex3d-save-king.jpg",
+      "href": "worlds/save-king.html"
+    },
+    {
+      "title": "סימולטור מרוצי מכוניות (משחק)",
+      "cover": "lessons/img/ex3d-racing-sim.jpg",
+      "href": "worlds/racing-sim.html"
+    },
+    {
+      "title": "מרוץ החלל (משחק)",
+      "cover": "lessons/img/ex3d-space-run.jpg",
+      "href": "worlds/space-run.html"
     },
     {
       "title": "אקסטרים אופניים 3D (משחק)",
