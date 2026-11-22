@@ -209,6 +209,11 @@ window.SITE = {
       "href": "worlds/gaming-rgb.html"
     },
     {
+      "title": "היכל סודות בראשית (חדר בריחה)",
+      "cover": "lessons/img/ex3d-bereshit.jpg",
+      "href": "worlds/bereshit.html"
+    },
+    {
       "title": "הצלת המלך (משחק)",
       "cover": "lessons/img/ex3d-save-king.jpg",
       "href": "worlds/save-king.html"

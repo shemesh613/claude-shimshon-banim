@@ -1,0 +1,1599 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>היכל בראשית - חדר בריחה תלת-מימדי לכיתה ו'</title>
+    <!-- טעינת גופן עברי מרשים וברור -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <!-- טעינת Tailwind CSS לעיצוב ממשק המשתמש -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- טעינת ספריית Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Rubik', sans-serif;
+            user-select: none;
+            background-color: #1a1510;
+        }
+
+        #canvas-container {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        /* כוונת מרכזית אינטראקטיבית */
+        #crosshair {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            width: 18px;
+            height: 18px;
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+            border: 2.5px solid rgba(255, 255, 255, 0.85);
+            box-shadow: 0 0 8px rgba(0, 0, 0, 0.6);
+            pointer-events: none;
+            z-index: 10;
+            transition: all 0.2s ease;
+        }
+
+        #crosshair::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 4px;
+            height: 4px;
+            background: #fbbf24;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        #crosshair.hovered {
+            width: 30px;
+            height: 30px;
+            border-color: #fbbf24;
+            background-color: rgba(251, 191, 36, 0.22);
+            box-shadow: 0 0 15px rgba(251, 191, 36, 0.8);
+        }
+
+        /* תווית מרחפת מעל אובייקט */
+        #hover-label {
+            position: fixed;
+            top: calc(50% + 26px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(28, 22, 16, 0.92);
+            color: #fde68a;
+            border: 1.5px solid #f59e0b;
+            padding: 6px 16px;
+            border-radius: 999px;
+            font-size: 0.95rem;
+            font-weight: 700;
+            pointer-events: none;
+            z-index: 10;
+            opacity: 0;
+            transition: opacity 0.2s ease, transform 0.2s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+            white-space: nowrap;
+        }
+
+        #hover-label.visible {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        /* אנימציות לממשק */
+        @keyframes floatGlow {
+            0%, 100% { transform: translateY(0); filter: drop-shadow(0 0 6px rgba(245, 158, 11, 0.5)); }
+            50% { transform: translateY(-3px); filter: drop-shadow(0 0 12px rgba(245, 158, 11, 0.9)); }
+        }
+
+        .seal-active {
+            animation: floatGlow 2.5s infinite ease-in-out;
+        }
+
+        /* עיצוב גלילה פנימית בחלונות החידה */
+        .custom-scroll::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scroll::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: #d97706;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- קנבס התלת-מימד -->
+    <div id="canvas-container"></div>
+
+    <!-- כוונת ותווית זיהוי -->
+    <div id="crosshair"></div>
+    <div id="hover-label">לחצו לחקירה</div>
+
+    <!-- שכבת ממשק עליונה (HUD) -->
+    <div id="hud" class="fixed inset-0 pointer-events-none z-20 flex flex-col justify-between p-3 sm:p-5 hidden">
+        
+        <!-- סרגל עליון: מד התקדמות, טיימר וכפתורי עזר -->
+        <div class="flex flex-wrap items-center justify-between gap-3 w-full">
+            
+            <!-- כרטיס חותמות חומש בראשית -->
+            <div class="pointer-events-auto bg-stone-900/90 backdrop-blur-md border-2 border-amber-500/70 rounded-2xl px-4 py-2.5 shadow-xl flex items-center gap-3">
+                <div class="text-right">
+                    <div class="text-xs text-amber-300/90 font-medium">חותמות החומש שנאספו</div>
+                    <div class="text-lg sm:text-xl font-black text-white leading-tight">
+                        <span id="seals-count" class="text-amber-400">0</span> / 5
+                    </div>
+                </div>
+                <!-- 5 אייקוני חותמות -->
+                <div class="flex items-center gap-1.5 sm:gap-2 pr-2 border-r border-stone-700" id="seals-icons">
+                    <div id="seal-badge-0" title="חותם הבריאה" class="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-stone-800 border border-stone-600 flex items-center justify-center text-sm opacity-40 transition-all">🌍</div>
+                    <div id="seal-badge-1" title="חותם המבול והקשת" class="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-stone-800 border border-stone-600 flex items-center justify-center text-sm opacity-40 transition-all">🌈</div>
+                    <div id="seal-badge-2" title="חותם הכוכבים ואברהם" class="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-stone-800 border border-stone-600 flex items-center justify-center text-sm opacity-40 transition-all">✨</div>
+                    <div id="seal-badge-3" title="חותם סולם יעקב" class="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-stone-800 border border-stone-600 flex items-center justify-center text-sm opacity-40 transition-all">🪜</div>
+                    <div id="seal-badge-4" title="חותם חלומות יוסף" class="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-stone-800 border border-stone-600 flex items-center justify-center text-sm opacity-40 transition-all">🌾</div>
+                </div>
+            </div>
+
+            <!-- כפתורי שליטה ומידע -->
+            <div class="pointer-events-auto flex items-center gap-2">
+                <!-- טיימר -->
+                <div class="bg-stone-900/90 backdrop-blur-md border border-stone-700 rounded-xl px-3.5 py-2 text-amber-300 font-bold text-sm sm:text-base shadow-lg flex items-center gap-1.5">
+                    <span>⏱️</span>
+                    <span id="timer-display">00:00</span>
+                </div>
+
+                <!-- כפתור מפה / קפיצה מהירה לתחנות (נוח מאוד לתלמידים) -->
+                <button id="btn-stations-menu" class="bg-amber-600 hover:bg-amber-500 active:scale-95 text-white font-bold px-3.5 py-2 rounded-xl shadow-lg transition flex items-center gap-1.5 text-sm sm:text-base border border-amber-400">
+                    <span>🧭</span>
+                    <span class="hidden sm:inline">תחנות</span>
+                </button>
+
+                <!-- כפתור הוראות -->
+                <button id="btn-help" class="bg-stone-800/90 hover:bg-stone-700 active:scale-95 text-amber-200 font-bold px-3 py-2 rounded-xl shadow-lg transition border border-stone-600 text-sm sm:text-base" title="הוראות שליטה">
+                    ❓
+                </button>
+
+                <!-- כפתור השתקה -->
+                <button id="btn-mute" class="bg-stone-800/90 hover:bg-stone-700 active:scale-95 text-amber-200 font-bold px-3 py-2 rounded-xl shadow-lg transition border border-stone-600 text-sm sm:text-base" title="השתק / הפעל צלילים">
+                    🔊
+                </button>
+            </div>
+        </div>
+
+        <!-- הודעת התראה / פידבק מהיר במרכז העליון -->
+        <div id="toast-banner" class="mx-auto bg-amber-950/95 border-2 border-amber-400 text-amber-100 px-5 py-2.5 rounded-2xl shadow-2xl font-bold text-center text-sm sm:text-base transition-all duration-300 opacity-0 -translate-y-4">
+            הודעת מערכת
+        </div>
+
+        <!-- פקדי תנועה על המסך (מותאם למגע, טאבלט ועכבר) -->
+        <div class="flex items-end justify-between w-full">
+            <!-- הסבר שליטה קצר -->
+            <div class="hidden md:block bg-stone-900/80 backdrop-blur-sm border border-stone-700/80 rounded-xl px-4 py-2.5 text-xs text-stone-300 shadow-lg">
+                <div class="font-bold text-amber-400 mb-0.5">שליטה בהיכל:</div>
+                <div>🖱️ <b>גרירת עכבר:</b> סיבוב מבט | <b>לחיצה על מוצג:</b> פתיחת חידה</div>
+                <div>⌨️ <b>חיצים / WASD:</b> הליכה במרחב</div>
+            </div>
+
+            <!-- כפתורי תנועה ויזואליים (D-Pad) -->
+            <div class="pointer-events-auto mr-auto md:mr-0 grid grid-cols-3 gap-1.5 bg-stone-900/80 backdrop-blur-md p-2 rounded-2xl border border-stone-700 shadow-xl">
+                <div></div>
+                <button id="pad-up" class="w-11 h-11 bg-stone-800 hover:bg-amber-600 active:bg-amber-500 text-white rounded-xl flex items-center justify-center font-bold text-lg border border-stone-600 shadow transition" aria-label="קדימה">▲</button>
+                <div></div>
+                <button id="pad-left" class="w-11 h-11 bg-stone-800 hover:bg-amber-600 active:bg-amber-500 text-white rounded-xl flex items-center justify-center font-bold text-lg border border-stone-600 shadow transition" aria-label="שמאלה">◄</button>
+                <button id="pad-down" class="w-11 h-11 bg-stone-800 hover:bg-amber-600 active:bg-amber-500 text-white rounded-xl flex items-center justify-center font-bold text-lg border border-stone-600 shadow transition" aria-label="אחורה">▼</button>
+                <button id="pad-right" class="w-11 h-11 bg-stone-800 hover:bg-amber-600 active:bg-amber-500 text-white rounded-xl flex items-center justify-center font-bold text-lg border border-stone-600 shadow transition" aria-label="ימינה">►</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- מסך פתיחה חגיגי -->
+    <div id="start-screen" class="fixed inset-0 z-40 bg-stone-950/90 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="max-w-xl w-full bg-gradient-to-b from-stone-900 to-stone-950 border-2 border-amber-500/80 rounded-3xl p-6 sm:p-8 text-center shadow-2xl relative overflow-hidden">
+            <div class="inline-block bg-amber-500/20 border border-amber-400/50 text-amber-300 text-xs sm:text-sm font-bold px-4 py-1 rounded-full mb-3">
+                הרפתקה תלת-מימדית בתנ"ך • כיתה ו'
+            </div>
+            <h1 class="text-3xl sm:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-l from-amber-200 via-amber-400 to-yellow-500 mb-4 leading-tight">
+                היכל סודות בראשית
+            </h1>
+            <p class="text-stone-300 text-base sm:text-lg leading-relaxed mb-6">
+                ברוכים הבאים להיכל העתיק של חומש בראשית! שערי ההיכל ננעלו בחמישה חותמות קדומים: 
+                <span class="text-amber-300 font-semibold">בריאת העולם, תיבת נח, אוהל אברהם, סולם יעקב וחלומות יוסף</span>.
+                סיירו במרחב התלת-מימדי, פתרו את חמש החידות, ופתחו את שער היציאה הגדול!
+            </p>
+
+            <div class="grid grid-cols-2 gap-3 text-right bg-stone-800/70 border border-stone-700 rounded-2xl p-4 mb-6 text-sm text-stone-200">
+                <div class="flex items-center gap-2">
+                    <span class="text-xl">🖱️</span>
+                    <span><b>גרירת עכבר</b> לסיבוב המבט לכל כיוון</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-xl">⌨️</span>
+                    <span><b>חיצים / WASD</b> להליכה חופשית בהיכל</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-xl">✨</span>
+                    <span><b>לחיצה</b> על מוצג זוהר לפתיחת החידה</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-xl">🚪</span>
+                    <span>איסוף <b>5 חותמות</b> פותח את השער</span>
+                </div>
+            </div>
+
+            <button id="btn-start-game" class="w-full py-4 bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-400 hover:to-yellow-500 active:scale-98 text-stone-950 font-black text-xl rounded-2xl shadow-lg shadow-amber-500/30 transition cursor-pointer">
+                היכנסו להיכל והתחילו במשימה! 🚀
+            </button>
+        </div>
+    </div>
+
+    <!-- חלון קפיצה מהירה לתחנות (מפת ההיכל) -->
+    <div id="stations-modal" class="fixed inset-0 z-30 bg-black/75 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="max-w-lg w-full bg-stone-900 border-2 border-amber-500 rounded-3xl p-6 shadow-2xl">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-2xl font-black text-amber-400">🧭 מפת תחנות ההיכל</h2>
+                <button id="close-stations-modal" class="w-9 h-9 rounded-full bg-stone-800 hover:bg-stone-700 text-stone-300 font-bold">✕</button>
+            </div>
+            <p class="text-stone-300 text-sm mb-4">בחרו תחנה כדי להביט אליה ישירות או לנווט אליה בקלות:</p>
+            <div id="stations-list" class="space-y-2.5">
+                <!-- יתמלא דינמית -->
+            </div>
+        </div>
+    </div>
+
+    <!-- חלון חידה אינטראקטיבי -->
+    <div id="puzzle-modal" class="fixed inset-0 z-30 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-3 sm:p-5">
+        <div class="max-w-2xl w-full bg-gradient-to-b from-stone-900 to-stone-950 border-2 border-amber-500 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+            
+            <!-- כותרת החידה -->
+            <div class="bg-stone-800/90 px-6 py-4 border-b border-amber-500/40 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <span id="puzzle-icon" class="text-3xl">🌍</span>
+                    <div>
+                        <div id="puzzle-parasha" class="text-xs font-bold text-amber-400">פרשת בראשית</div>
+                        <h2 id="puzzle-title" class="text-xl sm:text-2xl font-black text-white">כותרת התחנה</h2>
+                    </div>
+                </div>
+                <button id="close-puzzle-btn" class="w-10 h-10 rounded-full bg-stone-700 hover:bg-red-600/80 text-white font-bold transition flex items-center justify-center text-lg">✕</button>
+            </div>
+
+            <!-- גוף החידה -->
+            <div class="p-5 sm:p-6 overflow-y-auto custom-scroll space-y-5">
+                <!-- קטע רקע תנ"כי קצר -->
+                <div id="puzzle-story" class="bg-amber-950/40 border-r-4 border-amber-400 p-4 rounded-xl text-amber-100/95 text-sm sm:text-base leading-relaxed">
+                </div>
+
+                <!-- שאלת החידה -->
+                <div>
+                    <div id="puzzle-question" class="text-lg sm:text-xl font-bold text-white mb-4">
+                    </div>
+
+                    <!-- אזור האינטראקציה הדינמי (רב-ברירה / סידור סדר / קוד) -->
+                    <div id="puzzle-interactive-area" class="space-y-2.5">
+                    </div>
+                </div>
+
+                <!-- אזור רמז ומשוב -->
+                <div id="puzzle-hint-box" class="hidden bg-sky-950/70 border border-sky-400/60 rounded-xl p-3.5 text-sky-200 text-sm">
+                </div>
+
+                <div id="puzzle-feedback" class="hidden rounded-xl p-3.5 font-bold text-center text-base">
+                </div>
+            </div>
+
+            <!-- סרגל תחתון של החידה -->
+            <div class="bg-stone-900 px-6 py-4 border-t border-stone-800 flex items-center justify-between gap-3">
+                <button id="btn-show-hint" class="px-4 py-2.5 rounded-xl bg-sky-900/70 hover:bg-sky-800 border border-sky-500/50 text-sky-200 font-bold text-sm transition flex items-center gap-1.5">
+                    <span>💡</span>
+                    <span>רמז מהתורה</span>
+                </button>
+                <button id="btn-submit-answer" class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-400 hover:to-yellow-500 text-stone-950 font-black text-base shadow-lg transition">
+                    בדיקת תשובה ✨
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- מסך ניצחון חגיגי -->
+    <div id="victory-modal" class="fixed inset-0 z-40 bg-stone-950/90 backdrop-blur-md hidden items-center justify-center p-4">
+        <div class="max-w-xl w-full bg-gradient-to-b from-amber-950 via-stone-900 to-stone-950 border-2 border-amber-400 rounded-3xl p-6 sm:p-8 text-center shadow-2xl">
+            <div class="text-6xl mb-3">🏆✨📜</div>
+            <h2 class="text-3xl sm:text-4xl font-black text-amber-300 mb-2">כל הכבוד! שער בראשית נפתח!</h2>
+            <p class="text-stone-200 text-base sm:text-lg mb-6">
+                הוכחתם בקיאות מרשימה בסיפורי חומש בראשית — מבריאת העולם ועד חלומות יוסף במצרים — ואספתם את כל חמשת החותמות!
+            </p>
+
+            <div class="grid grid-cols-3 gap-3 bg-stone-900/90 border border-amber-500/40 rounded-2xl p-4 mb-6">
+                <div>
+                    <div class="text-xs text-stone-400">חותמות שנאספו</div>
+                    <div class="text-2xl font-black text-amber-400">5 / 5</div>
+                </div>
+                <div>
+                    <div class="text-xs text-stone-400">זמן סיום</div>
+                    <div id="final-time" class="text-2xl font-black text-emerald-400">00:00</div>
+                </div>
+                <div>
+                    <div class="text-xs text-stone-400">ניקוד סופי</div>
+                    <div id="final-score" class="text-2xl font-black text-sky-400">100</div>
+                </div>
+            </div>
+
+            <button id="btn-restart-game" class="w-full py-3.5 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-stone-950 font-black text-lg rounded-2xl shadow-lg transition cursor-pointer">
+                שחקו שוב מההתחלה 🔄
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // 1. מערכת צלילים עדינה מבוססת Web Audio API
+        // ==========================================
+        class SoundEffects {
+            constructor() {
+                this.ctx = null;
+                this.muted = false;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioContext();
+                }
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            }
+
+            playTone(freq, type, duration, delay = 0, volume = 0.15) {
+                if (this.muted) return;
+                try {
+                    this.init();
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = type;
+                    osc.frequency.setValueAtTime(freq, this.ctx.currentTime + delay);
+                    
+                    gain.gain.setValueAtTime(volume, this.ctx.currentTime + delay);
+                    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + delay + duration);
+                    
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    
+                    osc.start(this.ctx.currentTime + delay);
+                    osc.stop(this.ctx.currentTime + delay + duration);
+                } catch (e) {
+                    // התעלמות משגיאת אודיו בדפדפן חוסם
+                }
+            }
+
+            playClick() {
+                this.playTone(520, 'sine', 0.08, 0, 0.1);
+            }
+
+            playSuccess() {
+                // אקורד חגיגי עולה
+                this.playTone(523.25, 'triangle', 0.25, 0, 0.18);     // C5
+                this.playTone(659.25, 'triangle', 0.25, 0.1, 0.18);   // E5
+                this.playTone(783.99, 'triangle', 0.35, 0.2, 0.2);    // G5
+                this.playTone(1046.50, 'sine', 0.5, 0.3, 0.22);       // C6
+            }
+
+            playError() {
+                this.playTone(220, 'sawtooth', 0.2, 0, 0.12);
+                this.playTone(185, 'sawtooth', 0.3, 0.12, 0.12);
+            }
+
+            playGateOpen() {
+                // צליל פתיחת שער עתיק וניצחון
+                const notes = [261.63, 329.63, 392.00, 523.25, 659.25, 783.99, 1046.50];
+                notes.forEach((n, idx) => {
+                    this.playTone(n, 'triangle', 0.6, idx * 0.12, 0.18);
+                });
+            }
+        }
+
+        const sfx = new SoundEffects();
+
+        // ==========================================
+        // 2. מאגר התוכן והחידות לחומש בראשית (רמת כיתה ו')
+        // ==========================================
+        const STATIONS_DATA = [
+            {
+                id: 0,
+                name: "עמודי הבריאה",
+                parasha: "פרשת בראשית",
+                icon: "🌍",
+                story: "בפרק א' של ספר בראשית מתואר סדר בריאת העולם בשישה ימים, וביום השביעי שבת ה' מכל מלאכתו. תלמידי חכמים שמו לב להקבלה מופלאה בין שלושת הימים הראשונים לשלושת הימים הבאים: ביום הראשון נברא האור, וביום הרביעי נתלו המאורות (השמש, הירח והכוכבים) ברקיע.",
+                question: "סדרו את האירועים הבאים לפי הסדר הכרונולוגי הנכון שבו נבראו בתורה (מלמעלה למטה - מהמוקדם למאוחר):",
+                type: "order",
+                items: [
+                    { id: "d1", text: "בריאת האור והבדלה בין אור לחושך (יום ראשון)" },
+                    { id: "d3", text: "היקוות המים לימים, הופעת היבשה וצמיחת העשבים והעצים (יום שלישי)" },
+                    { id: "d4", text: "תליית המאורות ברקיע השמיים - השמש, הירח והכוכבים (יום רביעי)" },
+                    { id: "d6", text: "בריאת חיות היבשה ויצירת האדם בצלם אלוהים (יום שישי)" }
+                ],
+                correctOrder: ["d1", "d3", "d4", "d6"],
+                hint: "זכרו: קודם נברא האור הכללי, אחר כך הצמחים ביבשה, ורק ביום הרביעי המאורות. האדם נברא אחרון, ביום השישי!",
+                position: { x: -11, z: -6 },
+                lookAt: { x: -11, y: 2.2, z: -6 }
+            },
+            {
+                id: 1,
+                name: "תיבת נח והמבול",
+                parasha: "פרשת נח",
+                icon: "🌈",
+                story: "כאשר ראה ה' כי רבה רעת האדם בארץ, ציווה על נח לבנות תיבת עצי גופר כדי להציל את משפחתו ואת בעלי החיים. המבול ירד ארבעים יום וארבעים לילה. בסיום המבול שלח נח תחילה את העורב, ואחריו שלח שלוש פעמים את היונה לבדוק האם קלו המים מעל פני האדמה.",
+                question: "מה הביאה היונה בפיה בפעם השנייה שנח שלח אותה מהתיבה, ומה קבע ה' כ'אות ברית' שלא יביא עוד מבול לעולם?",
+                type: "mcq",
+                options: [
+                    "ענף של עץ ארז; ואות הברית הוא עמוד הענן",
+                    "עלה זית טרף בפיה; ואות הברית הוא הקשת בענן",
+                    "אשכול ענבים; ואות הברית הוא כוכב הצפון",
+                    "גרגיר חיטה; ואות הברית הוא לוחות הברית"
+                ],
+                correctIndex: 1,
+                hint: "העלה שהיונה הביאה הפך לסמל השלום עד ימינו, ואות הברית מופיע בשמיים כשיש שמש וגשם יחד.",
+                position: { x: 11, z: -6 },
+                lookAt: { x: 11, y: 2.0, z: -6 }
+            },
+            {
+                id: 2,
+                name: "אוהל אברהם והכוכבים",
+                parasha: "פרשת לך-לך ופרשת וירא",
+                icon: "✨",
+                story: "אברהם אבינו נודע במידת הכנסת האורחים המופלאה שלו — אוהלו היה פתוח לארבע רוחות השמיים כדי לקבל עוברי אורח. בברית בין הבתרים הוציא ה' את אברהם החוצה ואמר לו להביט השמיימה ולספור את הכוכבים: 'כה יהיה זרעך'.",
+                question: "כאשר ישב אברהם בפתח האוהל בחום היום, כמה מלאכים (אנשים) הגיעו לבקרו, ומה הייתה הבשורה המרכזית שבישרו לו ולשרה?",
+                type: "mcq",
+                options: [
+                    "שני מלאכים; שייצאו ממצרים ברכוש גדול",
+                    "שלושה מלאכים; שלשרה ואברהם ייוולד בן (יצחק) בעוד שנה",
+                    "ארבעה מלאכים; שינצחו במלחמת ארבעת המלכים",
+                    "מלאך אחד; שיבנה מזבח בהר המוריה"
+                ],
+                correctIndex: 1,
+                hint: "לכל אחד מהאורחים היה תפקיד מיוחד: אחד לבשר על הולדת הבן, אחד להפוך את סדום, ואחד לרפא את אברהם.",
+                position: { x: -11, z: 6 },
+                lookAt: { x: -11, y: 2.0, z: 6 }
+            },
+            {
+                id: 3,
+                name: "סולם יעקב ובאר המים",
+                parasha: "פרשת ויצא",
+                icon: "🪜",
+                story: "בדרכו לחרן עצר יעקב ללון במקום שנקרא לימים 'בית אל', ושם אבן למראשותיו. בחלומו ראה סולם מוצב ארצה וראשו מגיע השמיימה, ומלאכי אלוהים עולים ויורדים בו. בהמשך דרכו הגיע לבאר מים ופגש שם את רחל.",
+                question: "השלימו את הקוד הסודי בן 3 הספרות לפי הסיפור: (1) מספר האבנים שהפכו לאבן אחת תחת ראש יעקב, (2) מספר השנים שעבד יעקב עבור רחל בפעם הראשונה, (3) מספר בניו של יעקב שהפכו לשבטי ישראל (12, כתבו רק את ספרת האחדות 2):",
+                type: "code",
+                codeLength: 3,
+                correctCode: "172",
+                labels: ["אבן אחת", "שנות עבודה ראשונות", "ספרת האחדות של 12 השבטים"],
+                hint: "רמז: אבן (1), שבע שנים עבד יעקב ברחל והיו בעיניו כימים אחדים (7), ו-12 שבטים -> ספרת האחדות היא (2).",
+                position: { x: 11, z: 6 },
+                lookAt: { x: 11, y: 2.4, z: 6 }
+            },
+            {
+                id: 4,
+                name: "כתונת הפסים וחלומות יוסף",
+                parasha: "פרשת וישב ופרשת מקץ",
+                icon: "🌾",
+                story: "יעקב אהב את יוסף מכל בניו ועשה לו כתונת פסים. יוסף חלם שני חלומות — חלום האלומות בשדה וחלום השמש, הירח ואחד-עשר הכוכבים — שבישרו כי בעתיד אחיו ישתחוו לו. שנים לאחר מכן במצרים, פתר יוסף את חלומות פרעה על 7 הפרות ו-7 השיבולים.",
+                question: "כיצד פתר יוסף את חלומות פרעה על 7 הפרות הבריאות שאחריהן עלו 7 פרות רזות, ומה הייתה עצתו המעשית להצלת מצרים?",
+                type: "mcq",
+                options: [
+                    "יהיו 7 שנות מלחמה ואחריהן 7 שנות שלום; הציע לבנות חומות סביב הערים",
+                    "יהיו 7 שנות שובע גדול ואחריהן 7 שנות רעב כבד; הציע לאגור תבואה בשנות השובע",
+                    "הנילוס יעלה על גדותיו 7 פעמים; הציע לחפור תעלות מים חדשות",
+                    "פרעה ימלוך 14 שנים; הציע לשחרר את כל האסירים מבית הסוהר"
+                ],
+                correctIndex: 1,
+                hint: "הפרות הבריאות והשיבולים המלאות מסמלות שפע של מזון, והרזות מסמלות מחסור. לכן צריך לחסוך מזון מראש!",
+                position: { x: 0, z: -2 },
+                lookAt: { x: 0, y: 1.6, z: -2 }
+            }
+        ];
+
+        // ==========================================
+        // 3. משתני מצב המשחק (Game State)
+        // ==========================================
+        const gameState = {
+            started: false,
+            solvedStations: [false, false, false, false, false],
+            gateUnlocked: false,
+            gateOpenProgress: 0,
+            currentStationId: null,
+            score: 100,
+            startTime: null,
+            elapsedSeconds: 0,
+            timerInterval: null,
+            userOrderSelection: []
+        };
+
+        // ==========================================
+        // 4. הקמת הסצנה התלת-מימדית (Three.js)
+        // ==========================================
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1f1912);
+        scene.fog = new THREE.FogExp2(0x1f1912, 0.016);
+
+        const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 120);
+        // מיקום התחלתי של השחקן - מביט לעבר מרכז ההיכל והשער הגדול
+        const player = {
+            pos: new THREE.Vector3(0, 2.1, 13.5),
+            yaw: 0,      // מבט לכיוון -Z (לכיוון השער)
+            pitch: -0.04,
+            speed: 0.14
+        };
+        camera.position.copy(player.pos);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.outputEncoding = THREE.sRGBEncoding;
+        container.appendChild(renderer.domElement);
+
+        // --- יצירת טקסטורות פרוצדורליות (אבן, עץ, פסיפס, זהב) ---
+        function createStoneTexture(baseHex, lineHex) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = baseHex;
+            ctx.fillRect(0, 0, 256, 256);
+
+            // הוספת טקסטורת גרגרי אבן
+            for (let i = 0; i < 1800; i++) {
+                ctx.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.06)';
+                ctx.fillRect(Math.random() * 256, Math.random() * 256, 3, 3);
+            }
+
+            // קווי לבנים עתיקות
+            ctx.strokeStyle = lineHex;
+            ctx.lineWidth = 3;
+            for (let y = 0; y < 256; y += 64) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(256, y);
+                ctx.stroke();
+
+                const offset = (y / 64) % 2 === 0 ? 0 : 64;
+                for (let x = offset; x < 256; x += 128) {
+                    ctx.beginPath();
+                    ctx.moveTo(x, y);
+                    ctx.lineTo(x, y + 64);
+                    ctx.stroke();
+                }
+            }
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.RepeatWrapping;
+            return tex;
+        }
+
+        function createFloorTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#3b2f23';
+            ctx.fillRect(0, 0, 512, 512);
+
+            // דוגמת אריחי אבן ירושלמית עם מסגרת זהב עדינה
+            ctx.strokeStyle = '#5c4936';
+            ctx.lineWidth = 4;
+            ctx.strokeRect(8, 8, 496, 496);
+
+            ctx.strokeStyle = 'rgba(217, 119, 6, 0.25)';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(24, 24, 464, 464);
+
+            for (let i = 0; i < 2000; i++) {
+                ctx.fillStyle = Math.random() > 0.5 ? 'rgba(255,240,210,0.03)' : 'rgba(0,0,0,0.05)';
+                ctx.fillRect(Math.random() * 512, Math.random() * 512, 4, 4);
+            }
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.RepeatWrapping;
+            tex.repeat.set(8, 8);
+            return tex;
+        }
+
+        const wallTex = createStoneTexture('#524232', '#33281e');
+        wallTex.repeat.set(6, 2);
+        const pillarTex = createStoneTexture('#6e5842', '#473829');
+        const floorTex = createFloorTexture();
+
+        // --- תאורה עשירה ומאוזנת (בהירה ומזמינה לכיתה ו') ---
+        const ambientLight = new THREE.AmbientLight(0xffe8c2, 0.78);
+        scene.add(ambientLight);
+
+        const hemiLight = new THREE.HemisphereLight(0xfff3d6, 0x4a3b2c, 0.65);
+        hemiLight.position.set(0, 14, 0);
+        scene.add(hemiLight);
+
+        // תאורה מרכזית חמה מכיפת ההיכל
+        const mainLight = new THREE.PointLight(0xffcf70, 1.3, 45);
+        mainLight.position.set(0, 11, 2);
+        mainLight.castShadow = true;
+        scene.add(mainLight);
+
+        // תאורת הדגשה לשער הגדול
+        const gateLight = new THREE.PointLight(0xffb703, 1.2, 22);
+        gateLight.position.set(0, 6, -12);
+        scene.add(gateLight);
+
+        // --- בניית מבנה ההיכל (רצפה, קירות, שטיח מלכותי, עמודים ולפידים) ---
+        const roomWidth = 34;
+        const roomDepth = 34;
+        const roomHeight = 13;
+
+        // רצפת אבן
+        const floorGeo = new THREE.PlaneGeometry(roomWidth, roomDepth);
+        const floorMat = new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.75, metalness: 0.1 });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        // שטיח ארגמן וזהב המוביל אל שער בראשית
+        const carpetGeo = new THREE.PlaneGeometry(4.4, 28);
+        const carpetMat = new THREE.MeshStandardMaterial({ color: 0x7f1d1d, roughness: 0.85 });
+        const carpet = new THREE.Mesh(carpetGeo, carpetMat);
+        carpet.rotation.x = -Math.PI / 2;
+        carpet.position.set(0, 0.015, 0.5);
+        carpet.receiveShadow = true;
+        scene.add(carpet);
+
+        // שולי זהב לשטיח
+        const borderGeo = new THREE.PlaneGeometry(4.8, 28.2);
+        const borderMat = new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.4, metalness: 0.6 });
+        const carpetBorder = new THREE.Mesh(borderGeo, borderMat);
+        carpetBorder.rotation.x = -Math.PI / 2;
+        carpetBorder.position.set(0, 0.01, 0.5);
+        scene.add(carpetBorder);
+
+        // תקרת כוכבים גבוהה מעל ההיכל
+        const ceilingGeo = new THREE.PlaneGeometry(roomWidth, roomDepth);
+        const ceilingMat = new THREE.MeshStandardMaterial({ color: 0x17141f, roughness: 0.9 });
+        const ceiling = new THREE.Mesh(ceilingGeo, ceilingMat);
+        ceiling.rotation.x = Math.PI / 2;
+        ceiling.position.y = roomHeight;
+        scene.add(ceiling);
+
+        // קירות ההיכל
+        const wallMat = new THREE.MeshStandardMaterial({ map: wallTex, roughness: 0.85 });
+        
+        const backWall = new THREE.Mesh(new THREE.BoxGeometry(roomWidth, roomHeight, 1), wallMat);
+        backWall.position.set(0, roomHeight / 2, roomDepth / 2);
+        scene.add(backWall);
+
+        const leftWall = new THREE.Mesh(new THREE.BoxGeometry(1, roomHeight, roomDepth), wallMat);
+        leftWall.position.set(-roomWidth / 2, roomHeight / 2, 0);
+        scene.add(leftWall);
+
+        const rightWall = new THREE.Mesh(new THREE.BoxGeometry(1, roomHeight, roomDepth), wallMat);
+        rightWall.position.set(roomWidth / 2, roomHeight / 2, 0);
+        scene.add(rightWall);
+
+        // קיר חזית משני צידי השער הגדול
+        const frontLeftWall = new THREE.Mesh(new THREE.BoxGeometry(13.5, roomHeight, 1.2), wallMat);
+        frontLeftWall.position.set(-10.25, roomHeight / 2, -roomDepth / 2);
+        scene.add(frontLeftWall);
+
+        const frontRightWall = new THREE.Mesh(new THREE.BoxGeometry(13.5, roomHeight, 1.2), wallMat);
+        frontRightWall.position.set(10.25, roomHeight / 2, -roomDepth / 2);
+        scene.add(frontRightWall);
+
+        // משקוף עליון מעל השער
+        const gateLintle = new THREE.Mesh(new THREE.BoxGeometry(8.5, 5.2, 1.6), new THREE.MeshStandardMaterial({ color: 0x785c3e, roughness: 0.6 }));
+        gateLintle.position.set(0, 10.4, -roomDepth / 2);
+        scene.add(gateLintle);
+
+        // עמודי אבן דקורטיביים לאורך ההיכל עם לפידים
+        const torchFlames = [];
+        const pillarPositions = [
+            [-15, -12], [15, -12],
+            [-15, 0],   [15, 0],
+            [-15, 12],  [15, 12]
+        ];
+
+        const pillarMat = new THREE.MeshStandardMaterial({ map: pillarTex, roughness: 0.7 });
+        const goldMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.7, roughness: 0.25 });
+
+        pillarPositions.forEach(([px, pz]) => {
+            const pGroup = new THREE.Group();
+            pGroup.position.set(px, 0, pz);
+
+            const col = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.85, roomHeight, 16), pillarMat);
+            col.position.y = roomHeight / 2;
+            col.castShadow = true;
+            pGroup.add(col);
+
+            // טבעות זהב
+            const ring1 = new THREE.Mesh(new THREE.TorusGeometry(0.85, 0.1, 8, 24), goldMat);
+            ring1.rotation.x = Math.PI / 2;
+            ring1.position.y = 1.2;
+            pGroup.add(ring1);
+
+            const ring2 = ring1.clone();
+            ring2.position.y = roomHeight - 1.2;
+            pGroup.add(ring2);
+
+            // לפיד בוער על העמוד
+            const torchX = px < 0 ? 0.95 : -0.95;
+            const holder = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.06, 0.7, 8), new THREE.MeshStandardMaterial({ color: 0x3f2e21 }));
+            holder.position.set(torchX, 3.6, 0);
+            holder.rotation.z = px < 0 ? -0.35 : 0.35;
+            pGroup.add(holder);
+
+            const flame = new THREE.Mesh(
+                new THREE.ConeGeometry(0.22, 0.55, 10),
+                new THREE.MeshBasicMaterial({ color: 0xffaa00 })
+            );
+            flame.position.set(torchX * 1.15, 4.1, 0);
+            pGroup.add(flame);
+            torchFlames.push(flame);
+
+            scene.add(pGroup);
+        });
+
+        // ==========================================
+        // 5. בניית 5 המונומנטים התלת-מימדיים של התחנות
+        // ==========================================
+        const interactiveMeshes = []; // אובייקטים שניתן ללחוץ עליהם עם Raycaster
+        const stationGroups = [];
+        const animatedObjects = [];
+
+        function createPedestal(x, z, radius = 2.1, height = 0.7) {
+            const pedGroup = new THREE.Group();
+            pedGroup.position.set(x, 0, z);
+
+            const base = new THREE.Mesh(
+                new THREE.CylinderGeometry(radius, radius + 0.25, height, 24),
+                new THREE.MeshStandardMaterial({ color: 0x4a3b2c, roughness: 0.7 })
+            );
+            base.position.y = height / 2;
+            base.receiveShadow = true;
+            base.castShadow = true;
+            pedGroup.add(base);
+
+            const trim = new THREE.Mesh(
+                new THREE.TorusGeometry(radius + 0.02, 0.08, 8, 32),
+                goldMat
+            );
+            trim.rotation.x = Math.PI / 2;
+            trim.position.y = height;
+            pedGroup.add(trim);
+
+            // טבעת זוהרת על הרצפה שמראה אם התחנה נפתרה או פעילה
+            const statusRing = new THREE.Mesh(
+                new THREE.RingGeometry(radius + 0.35, radius + 0.55, 32),
+                new THREE.MeshBasicMaterial({ color: 0xf59e0b, side: THREE.DoubleSide })
+            );
+            statusRing.rotation.x = -Math.PI / 2;
+            statusRing.position.y = 0.03;
+            pedGroup.add(statusRing);
+            pedGroup.userData.statusRing = statusRing;
+
+            scene.add(pedGroup);
+            return pedGroup;
+        }
+
+        function registerInteractive(mesh, stationId, labelText) {
+            mesh.userData.stationId = stationId;
+            mesh.userData.labelText = labelText;
+            interactiveMeshes.push(mesh);
+        }
+
+        // --- תחנה 0: עמודי הבריאה (7 כדורי הבריאה המרחפים) ---
+        {
+            const st = STATIONS_DATA[0];
+            const ped = createPedestal(st.position.x, st.position.z, 2.3, 0.7);
+            
+            // כדור הארץ המרכזי
+            const earth = new THREE.Mesh(
+                new THREE.SphereGeometry(0.85, 24, 24),
+                new THREE.MeshStandardMaterial({ color: 0x2563eb, emissive: 0x1d4ed8, emissiveIntensity: 0.35, roughness: 0.4 })
+            );
+            earth.position.y = 2.3;
+            ped.add(earth);
+            registerInteractive(earth, 0, "תחנה 1: עמודי הבריאה (לחצו לפתרון)");
+
+            // יבשות ירוקות על כדור הארץ
+            const land = new THREE.Mesh(
+                new THREE.DodecahedronGeometry(0.87, 1),
+                new THREE.MeshStandardMaterial({ color: 0x16a34a, wireframe: true })
+            );
+            earth.add(land);
+
+            // 7 כדורי שבעת ימי הבריאה מסביב
+            const dayColors = [0xfef08a, 0x38bdf8, 0x22c55e, 0xf59e0b, 0x06b6d4, 0xf43f5e, 0xc084fc];
+            const orbsGroup = new THREE.Group();
+            orbsGroup.position.y = 2.3;
+            for (let i = 0; i < 7; i++) {
+                const angle = (i / 7) * Math.PI * 2;
+                const orb = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.24, 16, 16),
+                    new THREE.MeshStandardMaterial({ color: dayColors[i], emissive: dayColors[i], emissiveIntensity: 0.5 })
+                );
+                orb.position.set(Math.cos(angle) * 1.65, Math.sin(i * 1.1) * 0.25, Math.sin(angle) * 1.65);
+                orbsGroup.add(orb);
+                registerInteractive(orb, 0, "תחנה 1: עמודי הבריאה (לחצו לפתרון)");
+            }
+            ped.add(orbsGroup);
+            animatedObjects.push({ obj: orbsGroup, type: 'spinY', speed: 0.01 });
+            animatedObjects.push({ obj: earth, type: 'spinY', speed: -0.008 });
+            stationGroups[0] = ped;
+        }
+
+        // --- תחנה 1: תיבת נח והמבול ---
+        {
+            const st = STATIONS_DATA[1];
+            const ped = createPedestal(st.position.x, st.position.z, 2.3, 0.7);
+
+            // גלי מים כחולים על הבמה
+            const water = new THREE.Mesh(
+                new THREE.CylinderGeometry(2.15, 2.15, 0.15, 24),
+                new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.2, metalness: 0.3 })
+            );
+            water.position.y = 0.78;
+            ped.add(water);
+
+            // גוף תיבת נח מעץ
+            const arkGroup = new THREE.Group();
+            arkGroup.position.y = 1.35;
+            const woodMat = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.75 });
+            const roofMat = new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.65 });
+
+            const hull = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.85, 1.2), woodMat);
+            arkGroup.add(hull);
+            registerInteractive(hull, 1, "תחנה 2: תיבת נח והמבול (לחצו לפתרון)");
+
+            const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.55, 0.9), roofMat);
+            cabin.position.y = 0.68;
+            arkGroup.add(cabin);
+            registerInteractive(cabin, 1, "תחנה 2: תיבת נח והמבול (לחצו לפתרון)");
+
+            // קשת בענן מעל התיבה!
+            const rainbowColors = [0xef4444, 0xf97316, 0xeab308, 0x22c55e, 0x3b82f6, 0xa855f7];
+            rainbowColors.forEach((col, idx) => {
+                const arc = new THREE.Mesh(
+                    new THREE.TorusGeometry(1.65 - idx * 0.1, 0.045, 8, 28, Math.PI),
+                    new THREE.MeshBasicMaterial({ color: col })
+                );
+                arc.position.set(0, 1.6, -0.4);
+                ped.add(arc);
+            });
+
+            ped.add(arkGroup);
+            animatedObjects.push({ obj: arkGroup, type: 'rock', speed: 0.025 });
+            stationGroups[1] = ped;
+        }
+
+        // --- תחנה 2: אוהל אברהם והכוכבים ---
+        {
+            const st = STATIONS_DATA[2];
+            const ped = createPedestal(st.position.x, st.position.z, 2.3, 0.7);
+
+            // אוהל בד קדום פתוח
+            const tentMat = new THREE.MeshStandardMaterial({ color: 0xd6b88d, side: THREE.DoubleSide, roughness: 0.9 });
+            const tent = new THREE.Mesh(new THREE.ConeGeometry(1.65, 1.85, 4, 1, true), tentMat);
+            tent.position.y = 1.65;
+            tent.rotation.y = Math.PI / 4;
+            ped.add(tent);
+            registerInteractive(tent, 2, "תחנה 3: אוהל אברהם והכוכבים (לחצו לפתרון)");
+
+            // שולחן הכנסת אורחים קטן בפתח האוהל
+            const table = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.5, 0.5, 0.45, 16),
+                new THREE.MeshStandardMaterial({ color: 0x92400e })
+            );
+            table.position.set(0, 0.95, 0.5);
+            ped.add(table);
+
+            // כוכבים מרחפים מעל האוהל ("הבט נא השמיימה וספור הכוכבים")
+            const starsGroup = new THREE.Group();
+            starsGroup.position.y = 3.1;
+            for (let i = 0; i < 12; i++) {
+                const star = new THREE.Mesh(
+                    new THREE.OctahedronGeometry(0.14, 0),
+                    new THREE.MeshBasicMaterial({ color: 0xfef08a })
+                );
+                const a = (i / 12) * Math.PI * 2;
+                const r = 0.7 + (i % 3) * 0.35;
+                star.position.set(Math.cos(a) * r, (i % 3) * 0.25, Math.sin(a) * r);
+                starsGroup.add(star);
+                registerInteractive(star, 2, "תחנה 3: אוהל אברהם והכוכבים (לחצו לפתרון)");
+            }
+            ped.add(starsGroup);
+            animatedObjects.push({ obj: starsGroup, type: 'spinY', speed: 0.012 });
+            stationGroups[2] = ped;
+        }
+
+        // --- תחנה 3: סולם יעקב ובאר המים ---
+        {
+            const st = STATIONS_DATA[3];
+            const ped = createPedestal(st.position.x, st.position.z, 2.3, 0.7);
+
+            // באר המים מאבן
+            const well = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.85, 0.95, 0.75, 16, 1, true),
+                new THREE.MeshStandardMaterial({ color: 0x78716c, side: THREE.DoubleSide })
+            );
+            well.position.set(-0.7, 1.08, 0.4);
+            ped.add(well);
+            registerInteractive(well, 3, "תחנה 4: סולם יעקב ובאר המים (לחצו לפתרון)");
+
+            // סולם יעקב הזוהר העולה השמיימה
+            const ladderGroup = new THREE.Group();
+            ladderGroup.position.set(0.4, 2.3, -0.2);
+            ladderGroup.rotation.z = -0.22;
+            const ladderMat = new THREE.MeshStandardMaterial({ color: 0xfbbf24, emissive: 0xd97706, emissiveIntensity: 0.5 });
+
+            const railL = new THREE.Mesh(new THREE.BoxGeometry(0.1, 3.4, 0.1), ladderMat);
+            railL.position.x = -0.4;
+            const railR = railL.clone();
+            railR.position.x = 0.4;
+            ladderGroup.add(railL, railR);
+            registerInteractive(railL, 3, "תחנה 4: סולם יעקב ובאר המים (לחצו לפתרון)");
+            registerInteractive(railR, 3, "תחנה 4: סולם יעקב ובאר המים (לחצו לפתרון)");
+
+            for (let y = -1.3; y <= 1.3; y += 0.52) {
+                const rung = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.08, 0.08), ladderMat);
+                rung.position.y = y;
+                ladderGroup.add(rung);
+                registerInteractive(rung, 3, "תחנה 4: סולם יעקב ובאר המים (לחצו לפתרון)");
+            }
+
+            // כדורי אור (מלאכים עולים ויורדים)
+            const angel1 = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 12), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+            angel1.position.set(0, 0.6, 0.25);
+            ladderGroup.add(angel1);
+            animatedObjects.push({ obj: angel1, type: 'floatY', base: 0.6, amp: 0.7, speed: 0.03 });
+
+            ped.add(ladderGroup);
+            stationGroups[3] = ped;
+        }
+
+        // --- תחנה 4: כתונת הפסים וחלומות יוסף (במרכז ההיכל) ---
+        {
+            const st = STATIONS_DATA[4];
+            const ped = createPedestal(st.position.x, st.position.z, 2.2, 0.7);
+
+            // עמוד תצוגה מעוטר עם פסים צבעוניים (כתונת הפסים) וגביע הכסף
+            const stripeColors = [0xef4444, 0xf59e0b, 0x10b981, 0x3b82f6, 0x8b5cf6];
+            stripeColors.forEach((col, idx) => {
+                const band = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.65 - idx * 0.03, 0.68 - idx * 0.03, 0.28, 20),
+                    new THREE.MeshStandardMaterial({ color: col, roughness: 0.4 })
+                );
+                band.position.y = 0.85 + idx * 0.28;
+                ped.add(band);
+                registerInteractive(band, 4, "תחנה 5: כתונת הפסים וחלומות יוסף (לחצו לפתרון)");
+            });
+
+            // גביע הכסף של יוסף מרחף בראש העמוד
+            const goblet = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.32, 0.14, 0.55, 16),
+                new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.9, roughness: 0.15 })
+            );
+            goblet.position.y = 2.65;
+            ped.add(goblet);
+            registerInteractive(goblet, 4, "תחנה 5: כתונת הפסים וחלומות יוסף (לחצו לפתרון)");
+            animatedObjects.push({ obj: goblet, type: 'floatY', base: 2.65, amp: 0.15, speed: 0.03 });
+
+            stationGroups[4] = ped;
+        }
+
+        // ==========================================
+        // 6. בניית השער הגדול של חומש בראשית (היציאה)
+        // ==========================================
+        const gateGroup = new THREE.Group();
+        gateGroup.position.set(0, 0, -16.6);
+        scene.add(gateGroup);
+
+        const doorMat = new THREE.MeshStandardMaterial({ color: 0x5c4328, roughness: 0.5, metalness: 0.3 });
+        const doorLeft = new THREE.Mesh(new THREE.BoxGeometry(3.5, 7.8, 0.7), doorMat);
+        doorLeft.position.set(-1.76, 3.9, 0);
+        gateGroup.add(doorLeft);
+
+        const doorRight = new THREE.Mesh(new THREE.BoxGeometry(3.5, 7.8, 0.7), doorMat);
+        doorRight.position.set(1.76, 3.9, 0);
+        gateGroup.add(doorRight);
+
+        // 5 חותמות זוהרים על השער הגדול שמראים את ההתקדמות ויזואלית בתלת-מימד!
+        const gateSealMeshes = [];
+        for (let i = 0; i < 5; i++) {
+            const sealOrb = new THREE.Mesh(
+                new THREE.OctahedronGeometry(0.35, 0),
+                new THREE.MeshStandardMaterial({ color: 0x44403c, emissive: 0x000000, metalness: 0.6, roughness: 0.3 })
+            );
+            const xOffset = (i - 2) * 1.15;
+            sealOrb.position.set(xOffset, 4.4, 0.55);
+            gateGroup.add(sealOrb);
+            gateSealMeshes.push(sealOrb);
+        }
+
+        // שלט אור מעבר לשער (נגלה כשהשער נפתח)
+        const portalLightPlane = new THREE.Mesh(
+            new THREE.PlaneGeometry(7.2, 7.8),
+            new THREE.MeshBasicMaterial({ color: 0xfef08a })
+        );
+        portalLightPlane.position.set(0, 3.9, -0.4);
+        gateGroup.add(portalLightPlane);
+
+        // ==========================================
+        // 7. חלקיקי אור מרחפים באוויר (אווירה קסומה)
+        // ==========================================
+        const dustCount = 180;
+        const dustGeo = new THREE.BufferGeometry();
+        const dustPositions = new Float32Array(dustCount * 3);
+        for (let i = 0; i < dustCount * 3; i += 3) {
+            dustPositions[i] = (Math.random() - 0.5) * 30;
+            dustPositions[i + 1] = Math.random() * 11 + 0.5;
+            dustPositions[i + 2] = (Math.random() - 0.5) * 30;
+        }
+        dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPositions, 3));
+        const dustMat = new THREE.PointsMaterial({ color: 0xfde68a, size: 0.14, transparent: true, opacity: 0.75 });
+        const dustParticles = new THREE.Points(dustGeo, dustMat);
+        scene.add(dustParticles);
+
+        // ==========================================
+        // 8. שליטה, תנועה וזיהוי אובייקטים (Raycasting)
+        // ==========================================
+        const keys = {};
+        let isDragging = false;
+        let dragMoved = false;
+        let prevMouse = { x: 0, y: 0 };
+        const raycaster = new THREE.Raycaster();
+        const mouseNDC = new THREE.Vector2(0, 0);
+        let hoveredStationId = null;
+
+        const crosshair = document.getElementById('crosshair');
+        const hoverLabel = document.getElementById('hover-label');
+
+        window.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+        });
+
+        window.addEventListener('keyup', (e) => {
+            keys[e.code] = false;
+        });
+
+        // כפתורי D-Pad על המסך
+        function bindPadButton(btnId, keyCode) {
+            const btn = document.getElementById(btnId);
+            const start = (e) => { e.preventDefault(); keys[keyCode] = true; };
+            const end = (e) => { e.preventDefault(); keys[keyCode] = false; };
+            btn.addEventListener('mousedown', start);
+            btn.addEventListener('mouseup', end);
+            btn.addEventListener('mouseleave', end);
+            btn.addEventListener('touchstart', start, { passive: false });
+            btn.addEventListener('touchend', end);
+        }
+        bindPadButton('pad-up', 'ArrowUp');
+        bindPadButton('pad-down', 'ArrowDown');
+        bindPadButton('pad-left', 'ArrowLeft');
+        bindPadButton('pad-right', 'ArrowRight');
+
+        // גרירת עכבר / מגע לסיבוב המצלמה ולחיצה על תחנות
+        const domElem = renderer.domElement;
+
+        domElem.addEventListener('pointerdown', (e) => {
+            if (!gameState.started || isModalOpen()) return;
+            isDragging = true;
+            dragMoved = false;
+            prevMouse = { x: e.clientX, y: e.clientY };
+        });
+
+        window.addEventListener('pointermove', (e) => {
+            if (!gameState.started || isModalOpen()) return;
+
+            // עדכון קואורדינטות עכבר לזיהוי אובייקט תחת הסמן
+            mouseNDC.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouseNDC.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+            if (isDragging) {
+                const dx = e.clientX - prevMouse.x;
+                const dy = e.clientY - prevMouse.y;
+                if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+                    dragMoved = true;
+                }
+                player.yaw -= dx * 0.0042;
+                player.pitch -= dy * 0.0035;
+                player.pitch = Math.max(-Math.PI / 2.6, Math.min(Math.PI / 2.6, player.pitch));
+                prevMouse = { x: e.clientX, y: e.clientY };
+            }
+        });
+
+        window.addEventListener('pointerup', (e) => {
+            if (!gameState.started || isModalOpen()) {
+                isDragging = false;
+                return;
+            }
+            if (isDragging && !dragMoved) {
+                // השחקן לחץ לחיצה נקייה ללא גרירה - נבדוק אם לחץ על תחנה!
+                mouseNDC.x = (e.clientX / window.innerWidth) * 2 - 1;
+                mouseNDC.y = -(e.clientY / window.innerHeight) * 2 + 1;
+                checkRaycastIntersection(true);
+            }
+            isDragging = false;
+        });
+
+        function checkRaycastIntersection(triggerOpen = false) {
+            raycaster.setFromCamera(mouseNDC, camera);
+            const hits = raycaster.intersectObjects(interactiveMeshes, false);
+
+            if (hits.length > 0 && hits[0].distance < 26) {
+                const hitObj = hits[0].object;
+                const stId = hitObj.userData.stationId;
+                hoveredStationId = stId;
+                crosshair.classList.add('hovered');
+                hoverLabel.textContent = gameState.solvedStations[stId]
+                    ? `✅ ${STATIONS_DATA[stId].name} (הושלם - לחצו לצפייה)`
+                    : hitObj.userData.labelText;
+                hoverLabel.classList.add('visible');
+
+                if (triggerOpen) {
+                    sfx.playClick();
+                    openStationPuzzle(stId);
+                }
+            } else {
+                hoveredStationId = null;
+                crosshair.classList.remove('hovered');
+                hoverLabel.classList.remove('visible');
+            }
+        }
+
+        function updateMovement() {
+            if (!gameState.started || isModalOpen()) return;
+
+            const forward = new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
+            const right = new THREE.Vector3(Math.cos(player.yaw), 0, -Math.sin(player.yaw));
+            const move = new THREE.Vector3();
+
+            if (keys['KeyW'] || keys['ArrowUp']) move.add(forward);
+            if (keys['KeyS'] || keys['ArrowDown']) move.sub(forward);
+            if (keys['KeyD'] || keys['ArrowRight']) move.add(right);
+            if (keys['KeyA'] || keys['ArrowLeft']) move.sub(right);
+
+            if (move.lengthSq() > 0) {
+                move.normalize().multiplyScalar(player.speed);
+                const nextPos = player.pos.clone().add(move);
+
+                // שמירה על גבולות ההיכל (מניעת יציאה דרך קירות)
+                nextPos.x = Math.max(-14.5, Math.min(14.5, nextPos.x));
+                nextPos.z = Math.max(-14.2, Math.min(15.2, nextPos.z));
+
+                // מניעת התנגשות ישירה במרכזי הבמות
+                let blocked = false;
+                for (const st of STATIONS_DATA) {
+                    const dist = Math.hypot(nextPos.x - st.position.x, nextPos.z - st.position.z);
+                    if (dist < 2.55) {
+                        blocked = true;
+                        break;
+                    }
+                }
+                if (!blocked) {
+                    player.pos.copy(nextPos);
+                }
+            }
+
+            camera.position.copy(player.pos);
+            const euler = new THREE.Euler(player.pitch, player.yaw, 0, 'YXZ');
+            camera.quaternion.setFromEuler(euler);
+        }
+
+        // ==========================================
+        // 9. ניהול ממשק המשתמש והחידות (UI & Puzzles)
+        // ==========================================
+        const puzzleModal = document.getElementById('puzzle-modal');
+        const stationsModal = document.getElementById('stations-modal');
+        const victoryModal = document.getElementById('victory-modal');
+
+        function isModalOpen() {
+            return !puzzleModal.classList.contains('hidden') ||
+                   !stationsModal.classList.contains('hidden') ||
+                   !victoryModal.classList.contains('hidden');
+        }
+
+        function showToast(msg) {
+            const banner = document.getElementById('toast-banner');
+            banner.textContent = msg;
+            banner.classList.remove('opacity-0', '-translate-y-4');
+            clearTimeout(banner._timer);
+            banner._timer = setTimeout(() => {
+                banner.classList.add('opacity-0', '-translate-y-4');
+            }, 3400);
+        }
+
+        // פתיחת חלון חידה לתחנה שנבחרה
+        function openStationPuzzle(stationId) {
+            const st = STATIONS_DATA[stationId];
+            gameState.currentStationId = stationId;
+
+            document.getElementById('puzzle-icon').textContent = st.icon;
+            document.getElementById('puzzle-parasha').textContent = st.parasha;
+            document.getElementById('puzzle-title').textContent = st.name;
+            document.getElementById('puzzle-story').textContent = st.story;
+            document.getElementById('puzzle-question').textContent = st.question;
+
+            const hintBox = document.getElementById('puzzle-hint-box');
+            hintBox.classList.add('hidden');
+            hintBox.textContent = `💡 רמז: ${st.hint}`;
+
+            const feedback = document.getElementById('puzzle-feedback');
+            feedback.classList.add('hidden');
+
+            const area = document.getElementById('puzzle-interactive-area');
+            area.innerHTML = '';
+
+            if (st.type === 'mcq') {
+                st.options.forEach((opt, idx) => {
+                    const label = document.createElement('label');
+                    label.className = 'flex items-center gap-3 p-3.5 rounded-2xl bg-stone-800/80 hover:bg-stone-700/90 border border-stone-600 cursor-pointer transition text-stone-100 text-sm sm:text-base';
+                    label.innerHTML = `
+                        <input type="radio" name="mcq-option" value="${idx}" class="w-5 h-5 accent-amber-500">
+                        <span>${opt}</span>
+                    `;
+                    area.appendChild(label);
+                });
+            } else if (st.type === 'order') {
+                // ממשק סידור סדר הבריאה בלחיצה נוחה (מתאים מאוד לכיתה ו')
+                gameState.userOrderSelection = [...st.items].sort(() => Math.random() - 0.5);
+                renderOrderList(area);
+            } else if (st.type === 'code') {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'grid grid-cols-3 gap-3 max-w-md mx-auto pt-2';
+                st.labels.forEach((lbl, idx) => {
+                    const box = document.createElement('div');
+                    box.className = 'bg-stone-800 border border-amber-500/50 rounded-2xl p-3 text-center';
+                    box.innerHTML = `
+                        <div class="text-xs text-amber-300 font-bold mb-2 h-8 flex items-center justify-center">${lbl}</div>
+                        <input type="number" min="0" max="9" maxlength="1" id="code-digit-${idx}" placeholder="?"
+                            class="w-14 h-14 text-center text-2xl font-black bg-stone-950 text-amber-400 border-2 border-stone-600 focus:border-amber-400 rounded-xl outline-none">
+                    `;
+                    wrapper.appendChild(box);
+                });
+                area.appendChild(wrapper);
+            }
+
+            const submitBtn = document.getElementById('btn-submit-answer');
+            if (gameState.solvedStations[stationId]) {
+                submitBtn.textContent = 'התחנה כבר הושלמה ✅';
+                feedback.className = 'rounded-xl p-3.5 font-bold text-center text-base bg-emerald-950/90 border border-emerald-500 text-emerald-300';
+                feedback.textContent = 'כל הכבוד! כבר אספתם את החותם של תחנה זו.';
+                feedback.classList.remove('hidden');
+            } else {
+                submitBtn.textContent = 'בדיקת תשובה ✨';
+            }
+
+            puzzleModal.classList.remove('hidden');
+            puzzleModal.classList.add('flex');
+        }
+
+        function renderOrderList(container) {
+            container.innerHTML = '<div class="text-xs text-amber-300 mb-2">השתמשו בחיצים כדי להעלות או להוריד כל שלב למקומו הנכון מלמעלה למטה:</div>';
+            gameState.userOrderSelection.forEach((item, index) => {
+                const row = document.createElement('div');
+                row.className = 'flex items-center justify-between gap-2 bg-stone-800 border border-stone-600 rounded-2xl p-3 text-stone-100 text-sm sm:text-base';
+                row.innerHTML = `
+                    <div class="flex items-center gap-2.5">
+                        <span class="w-7 h-7 rounded-full bg-amber-500/20 border border-amber-400 text-amber-300 font-black flex items-center justify-center text-sm">${index + 1}</span>
+                        <span>${item.text}</span>
+                    </div>
+                    <div class="flex gap-1 shrink-0">
+                        <button type="button" data-dir="up" data-idx="${index}" class="px-2.5 py-1.5 bg-stone-700 hover:bg-amber-600 rounded-lg font-bold text-xs ${index === 0 ? 'opacity-30 pointer-events-none' : ''}">▲</button>
+                        <button type="button" data-dir="down" data-idx="${index}" class="px-2.5 py-1.5 bg-stone-700 hover:bg-amber-600 rounded-lg font-bold text-xs ${index === gameState.userOrderSelection.length - 1 ? 'opacity-30 pointer-events-none' : ''}">▼</button>
+                    </div>
+                `;
+                container.appendChild(row);
+            });
+
+            container.querySelectorAll('button[data-dir]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    sfx.playClick();
+                    const idx = parseInt(btn.dataset.idx);
+                    const dir = btn.dataset.dir;
+                    const targetIdx = dir === 'up' ? idx - 1 : idx + 1;
+                    const arr = gameState.userOrderSelection;
+                    [arr[idx], arr[targetIdx]] = [arr[targetIdx], arr[idx]];
+                    renderOrderList(container);
+                });
+            });
+        }
+
+        // בדיקת תשובת השחקן
+        document.getElementById('btn-submit-answer').addEventListener('click', () => {
+            const stId = gameState.currentStationId;
+            if (stId === null) return;
+            if (gameState.solvedStations[stId]) {
+                closePuzzleModal();
+                return;
+            }
+
+            const st = STATIONS_DATA[stId];
+            const feedback = document.getElementById('puzzle-feedback');
+            let isCorrect = false;
+
+            if (st.type === 'mcq') {
+                const selected = document.querySelector('input[name="mcq-option"]:checked');
+                if (!selected) {
+                    showToast('בחרו אחת מן האפשרויות לפני הבדיקה!');
+                    return;
+                }
+                isCorrect = parseInt(selected.value) === st.correctIndex;
+            } else if (st.type === 'order') {
+                const currentIds = gameState.userOrderSelection.map(i => i.id);
+                isCorrect = currentIds.every((val, idx) => val === st.correctOrder[idx]);
+            } else if (st.type === 'code') {
+                let code = '';
+                for (let i = 0; i < st.codeLength; i++) {
+                    code += (document.getElementById(`code-digit-${i}`).value || '').trim();
+                }
+                if (code.length < st.codeLength) {
+                    showToast('מלאו את כל שלוש ספרות הקוד!');
+                    return;
+                }
+                isCorrect = code === st.correctCode;
+            }
+
+            feedback.classList.remove('hidden');
+            if (isCorrect) {
+                sfx.playSuccess();
+                gameState.solvedStations[stId] = true;
+                feedback.className = 'rounded-xl p-3.5 font-bold text-center text-base bg-emerald-950/90 border border-emerald-400 text-emerald-200';
+                feedback.textContent = `🎉 תשובה מדויקת! השגתם את "${st.name}"!`;
+
+                updateStationVisualSolved(stId);
+                updateProgressHUD();
+
+                setTimeout(() => {
+                    closePuzzleModal();
+                    checkAllSealsCollected();
+                }, 1350);
+            } else {
+                sfx.playError();
+                gameState.score = Math.max(60, gameState.score - 5);
+                feedback.className = 'rounded-xl p-3.5 font-bold text-center text-base bg-red-950/90 border border-red-400 text-red-200';
+                feedback.textContent = '❌ לא מדויק הפעם... קראו שוב את קטע המקור או היעזרו ברמז!';
+            }
+        });
+
+        function updateStationVisualSolved(stId) {
+            // הפיכת טבעת הבמה לירוק זוהר והדלקת החותם מעל השער הגדול
+            const ped = stationGroups[stId];
+            if (ped && ped.userData.statusRing) {
+                ped.userData.statusRing.material.color.setHex(0x10b981);
+            }
+            const sealOrb = gateSealMeshes[stId];
+            if (sealOrb) {
+                sealOrb.material.color.setHex(0xfbbf24);
+                sealOrb.material.emissive.setHex(0xf59e0b);
+                sealOrb.material.emissiveIntensity = 0.9;
+            }
+        }
+
+        function updateProgressHUD() {
+            const count = gameState.solvedStations.filter(Boolean).length;
+            document.getElementById('seals-count').textContent = count;
+
+            gameState.solvedStations.forEach((solved, idx) => {
+                const badge = document.getElementById(`seal-badge-${idx}`);
+                if (solved) {
+                    badge.classList.remove('opacity-40', 'bg-stone-800', 'border-stone-600');
+                    badge.classList.add('opacity-100', 'bg-amber-500/30', 'border-amber-400', 'seal-active');
+                }
+            });
+        }
+
+        function checkAllSealsCollected() {
+            const allSolved = gameState.solvedStations.every(Boolean);
+            if (allSolved && !gameState.gateUnlocked) {
+                gameState.gateUnlocked = true;
+                sfx.playGateOpen();
+                showToast('🌟 כל 5 החותמות נאספו! שער בראשית הגדול נפתח כעת!');
+
+                // סיבוב המבט של השחקן לעבר השער הנפתח
+                player.yaw = 0;
+                player.pitch = 0.05;
+
+                setTimeout(() => {
+                    clearInterval(gameState.timerInterval);
+                    document.getElementById('final-time').textContent = document.getElementById('timer-display').textContent;
+                    document.getElementById('final-score').textContent = gameState.score;
+                    victoryModal.classList.remove('hidden');
+                    victoryModal.classList.add('flex');
+                }, 2800);
+            } else {
+                const remaining = 5 - gameState.solvedStations.filter(Boolean).length;
+                showToast(`✨ חותם נאסף! נותרו עוד ${remaining} חותמות לפתיחת השער.`);
+            }
+        }
+
+        function closePuzzleModal() {
+            puzzleModal.classList.add('hidden');
+            puzzleModal.classList.remove('flex');
+            gameState.currentStationId = null;
+        }
+
+        document.getElementById('close-puzzle-btn').addEventListener('click', () => {
+            sfx.playClick();
+            closePuzzleModal();
+        });
+
+        document.getElementById('btn-show-hint').addEventListener('click', () => {
+            sfx.playClick();
+            document.getElementById('puzzle-hint-box').classList.remove('hidden');
+        });
+
+        // תפריט מפת תחנות לניווט מהיר
+        document.getElementById('btn-stations-menu').addEventListener('click', () => {
+            sfx.playClick();
+            const list = document.getElementById('stations-list');
+            list.innerHTML = '';
+            STATIONS_DATA.forEach((st, idx) => {
+                const done = gameState.solvedStations[idx];
+                const btn = document.createElement('button');
+                btn.className = `w-full flex items-center justify-between p-3.5 rounded-2xl border transition text-right ${
+                    done
+                        ? 'bg-emerald-950/60 border-emerald-500/60 text-emerald-200'
+                        : 'bg-stone-800 hover:bg-stone-700 border-stone-600 text-white'
+                }`;
+                btn.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <span class="text-2xl">${st.icon}</span>
+                        <div>
+                            <div class="font-bold">${st.name}</div>
+                            <div class="text-xs text-stone-400">${st.parasha}</div>
+                        </div>
+                    </div>
+                    <span class="text-xs font-bold px-3 py-1 rounded-full ${done ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'}">
+                        ${done ? 'הושלם ✅' : 'התמקד בתחנה 👁️'}
+                    </span>
+                `;
+                btn.addEventListener('click', () => {
+                    sfx.playClick();
+                    // הצבת השחקן מול התחנה שנבחרה לנוחות מרבית
+                    const target = st.position;
+                    const offsetZ = target.z < 0 ? 4.2 : -4.2;
+                    player.pos.set(target.x, 2.1, target.z + offsetZ);
+                    const dx = target.x - player.pos.x;
+                    const dz = target.z - player.pos.z;
+                    player.yaw = Math.atan2(-dx, -dz);
+                    player.pitch = -0.05;
+
+                    stationsModal.classList.add('hidden');
+                    stationsModal.classList.remove('flex');
+                    showToast(`הגעתם אל: ${st.name} — לחצו על המוצג לפתיחת החידה!`);
+                });
+                list.appendChild(btn);
+            });
+
+            stationsModal.classList.remove('hidden');
+            stationsModal.classList.add('flex');
+        });
+
+        document.getElementById('close-stations-modal').addEventListener('click', () => {
+            stationsModal.classList.add('hidden');
+            stationsModal.classList.remove('flex');
+        });
+
+        // כפתורי עזרה והשתקה
+        document.getElementById('btn-mute').addEventListener('click', (e) => {
+            sfx.muted = !sfx.muted;
+            e.currentTarget.textContent = sfx.muted ? '🔇' : '🔊';
+        });
+
+        document.getElementById('btn-help').addEventListener('click', () => {
+            sfx.playClick();
+            showToast('גררו את העכבר לסיבוב המבט, לחצו על מוצג זוהר לפתרון חידה, או השתמשו בכפתור "תחנות".');
+        });
+
+        // התחלת המשחק וטיימר
+        function startTimer() {
+            gameState.startTime = Date.now();
+            clearInterval(gameState.timerInterval);
+            gameState.timerInterval = setInterval(() => {
+                gameState.elapsedSeconds = Math.floor((Date.now() - gameState.startTime) / 1000);
+                const mins = String(Math.floor(gameState.elapsedSeconds / 60)).padStart(2, '0');
+                const secs = String(gameState.elapsedSeconds % 60).padStart(2, '0');
+                document.getElementById('timer-display').textContent = `${mins}:${secs}`;
+            }, 1000);
+        }
+
+        document.getElementById('btn-start-game').addEventListener('click', () => {
+            sfx.init();
+            sfx.playClick();
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('hud').classList.remove('hidden');
+            gameState.started = true;
+            startTimer();
+            showToast('ברוכים הבאים! חקרו את 5 התחנות בהיכל כדי לאסוף את חותמות בראשית.');
+        });
+
+        document.getElementById('btn-restart-game').addEventListener('click', () => {
+            location.reload();
+        });
+
+        // ==========================================
+        // 10. לולאת האנימציה והרינדור הראשית
+        // ==========================================
+        let clockTime = 0;
+
+        function animate() {
+            requestAnimationFrame(animate);
+            clockTime += 0.016;
+
+            updateMovement();
+
+            if (gameState.started && !isModalOpen()) {
+                checkRaycastIntersection(false);
+            }
+
+            // אנימציה לאובייקטים בתחנות
+            animatedObjects.forEach(item => {
+                if (item.type === 'spinY') {
+                    item.obj.rotation.y += item.speed;
+                } else if (item.type === 'rock') {
+                    item.obj.rotation.z = Math.sin(clockTime * 2) * 0.08;
+                    item.obj.rotation.x = Math.cos(clockTime * 1.5) * 0.05;
+                } else if (item.type === 'floatY') {
+                    item.obj.position.y = item.base + Math.sin(clockTime * 2.5) * item.amp;
+                }
+            });
+
+            // הבהוב עדין של לפידים
+            torchFlames.forEach((flame, i) => {
+                const s = 1 + Math.sin(clockTime * 10 + i) * 0.12;
+                flame.scale.set(1, s, 1);
+            });
+
+            // תנועת חלקיקי האור באוויר
+            dustParticles.rotation.y += 0.0008;
+
+            // אנימציית פתיחת שער בראשית הגדול בסיום
+            if (gameState.gateUnlocked && gameState.gateOpenProgress < 1) {
+                gameState.gateOpenProgress = Math.min(1, gameState.gateOpenProgress + 0.012);
+                doorLeft.position.x = -1.76 - gameState.gateOpenProgress * 3.2;
+                doorRight.position.x = 1.76 + gameState.gateOpenProgress * 3.2;
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // התאמה לשינוי גודל מסך
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        window.onload = function () {
+            animate();
+        };
+    </script>
+
+<a id="club-back" href="../index.html#products-shelf" style="position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#fff;color:#1d2433;border:2px solid #cfe0f0;border-radius:999px;padding:8px 18px;font:600 15px/1.2 Arial,sans-serif;text-decoration:none;direction:rtl;box-shadow:0 3px 0 #cfe0f0">→ חזרה לאתר החוג</a>
+<script>if (window.top !== window) document.getElementById("club-back").remove();</script>
+</body>
+</html>
