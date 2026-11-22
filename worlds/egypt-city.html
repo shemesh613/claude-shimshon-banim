@@ -1,0 +1,1458 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>שיעבוד מצרים — עולם תלת-מימדי אינטראקטיבי</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Heebo', sans-serif;
+      background-color: #1a120b;
+      color: #fdf6e7;
+      user-select: none;
+    }
+    #canvas-container {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+    }
+    .glass-panel {
+      background: rgba(24, 16, 10, 0.78);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(245, 196, 110, 0.24);
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55);
+    }
+    .gold-accent {
+      color: #f4c466;
+    }
+    .btn-scene {
+      transition: all 0.22s ease;
+    }
+    .btn-scene:hover {
+      transform: translateY(-1px);
+      background: rgba(244, 196, 102, 0.22);
+      border-color: rgba(244, 196, 102, 0.6);
+    }
+    .btn-scene.active {
+      background: linear-gradient(135deg, rgba(217, 155, 56, 0.45), rgba(166, 97, 28, 0.55));
+      border-color: #f4c466;
+      color: #fff8e7;
+      box-shadow: 0 0 18px rgba(244, 196, 102, 0.25);
+    }
+    /* Custom scrollbar for explanation panel */
+    .custom-scroll::-webkit-scrollbar {
+      width: 6px;
+    }
+    .custom-scroll::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.04);
+      border-radius: 9999px;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: rgba(244, 196, 102, 0.35);
+      border-radius: 9999px;
+    }
+    input[type="range"] {
+      accent-color: #f4c466;
+    }
+  </style>
+</head>
+<body>
+  <!-- Three.js Canvas Container -->
+  <div id="canvas-container"></div>
+
+  <!-- Loading Overlay -->
+  <div id="loading-overlay" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#18100a] text-[#fdf6e7] transition-opacity duration-700">
+    <div class="w-14 h-14 rounded-full border-4 border-[#f4c466]/25 border-t-[#f4c466] animate-spin mb-4"></div>
+    <h2 class="text-xl font-bold gold-accent mb-1">בונה את העולם התלת-מימדי...</h2>
+    <p class="text-sm text-[#e8d5b5]/80">מכין את דיונות המדבר, נהר הנילוס ואתר הבנייה העתיק</p>
+  </div>
+
+  <!-- Top Header Bar -->
+  <header class="fixed top-3 right-3 left-3 sm:top-4 sm:right-4 sm:left-4 z-20 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+    <div class="glass-panel pointer-events-auto rounded-2xl px-4 py-2.5 sm:px-5 sm:py-3 flex items-center gap-3 max-w-full">
+      <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-[#d99b38] to-[#8a4b14] flex items-center justify-center text-lg sm:text-xl shadow-inner shrink-0">
+        🏜️
+      </div>
+      <div>
+        <h1 class="text-base sm:text-xl font-extrabold tracking-tight text-[#fff8eb] leading-tight">
+          שיעבוד מצרים — עולם תלת-מימדי אינטראקטיבי
+        </h1>
+        <p class="text-[11px] sm:text-xs text-[#e3cba2]/80 hidden sm:block">
+          המחשה היסטורית וסביבתית של חיי העבודה, ערי המסכנות והנילוס במצרים העתיקה
+        </p>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2 pointer-events-auto">
+      <button id="toggle-story-btn" class="glass-panel rounded-xl px-3.5 py-2 text-xs sm:text-sm font-medium text-[#f9e6c4] hover:border-[#f4c466]/60 transition flex items-center gap-1.5 cursor-pointer">
+        <span>📜</span>
+        <span id="story-btn-label">הסתר הסבר היסטורי</span>
+      </button>
+      <button id="toggle-panel-btn" class="glass-panel rounded-xl px-3.5 py-2 text-xs sm:text-sm font-medium text-[#f9e6c4] hover:border-[#f4c466]/60 transition flex items-center gap-1.5 cursor-pointer">
+        <span>🎛️</span>
+        <span id="panel-btn-label">הסתר בקרה</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Right/Side Control Panel (Scenes, Playback, Lighting/Atmosphere) -->
+  <aside id="control-panel" class="fixed top-20 right-3 sm:top-24 sm:right-4 z-20 w-[calc(100vw-1.5rem)] max-w-[330px] glass-panel rounded-2xl p-3.5 sm:p-4 transition-all duration-300 max-h-[calc(100vh-140px)] overflow-y-auto custom-scroll">
+    <div class="flex items-center justify-between mb-2.5">
+      <h2 class="text-xs sm:text-sm font-bold gold-accent flex items-center gap-1.5">
+        <span>🎥</span>
+        <span>נקודות מבט וסצנות</span>
+      </h2>
+      <span class="text-[11px] text-[#d9be92]/75">לחצו למעבר חלק</span>
+    </div>
+
+    <div class="grid grid-cols-2 gap-2 mb-4">
+      <button data-camera="overview" class="btn-scene active rounded-xl border border-[#f4c466]/25 bg-white/5 px-2.5 py-2 text-right text-xs font-medium text-[#f6e6c9] cursor-pointer">
+        🏗️ מבט-על על אתר הבנייה
+      </button>
+      <button data-camera="hauling" class="btn-scene rounded-xl border border-[#f4c466]/25 bg-white/5 px-2.5 py-2 text-right text-xs font-medium text-[#f6e6c9] cursor-pointer">
+        🪨 גרירת האבן הכבדה
+      </button>
+      <button data-camera="nile" class="btn-scene rounded-xl border border-[#f4c466]/25 bg-white/5 px-2.5 py-2 text-right text-xs font-medium text-[#f6e6c9] cursor-pointer">
+        🌊 גדות הנילוס והפירמידות
+      </button>
+      <button data-camera="sunset" class="btn-scene rounded-xl border border-[#f4c466]/25 bg-white/5 px-2.5 py-2 text-right text-xs font-medium text-[#f6e6c9] cursor-pointer">
+        🌅 שקיעה במדבר
+      </button>
+    </div>
+
+    <!-- Animation & Speed Controls -->
+    <div class="border-t border-[#f4c466]/15 pt-3 mb-3.5">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs font-bold gold-accent">⚙️ הנפשה וקצב עבודה</span>
+        <button id="play-pause-btn" class="rounded-lg bg-[#f4c466]/20 hover:bg-[#f4c466]/35 border border-[#f4c466]/40 px-2.5 py-1 text-xs font-semibold text-[#fff4dc] transition cursor-pointer">
+          ⏸️ השהה
+        </button>
+      </div>
+      <div class="flex items-center justify-between text-xs text-[#e6cfa8] mb-1">
+        <span>מהירות תנועה:</span>
+        <span id="speed-value" class="font-mono text-[#f4c466]">1.0x</span>
+      </div>
+      <input id="speed-slider" type="range" min="0" max="2.5" step="0.1" value="1.0" class="w-full cursor-pointer" />
+    </div>
+
+    <!-- Time of Day / Lighting Selector -->
+    <div class="border-t border-[#f4c466]/15 pt-3 mb-3.5">
+      <div class="flex items-center justify-between text-xs text-[#e6cfa8] mb-1.5">
+        <span class="font-bold gold-accent">☀️ מצב שמש ותאורה</span>
+        <span id="time-label" class="text-[11px] text-[#f4c466]">צהרי מדבר לוהטים</span>
+      </div>
+      <input id="sun-slider" type="range" min="0" max="100" step="1" value="28" class="w-full cursor-pointer" />
+      <div class="flex justify-between text-[10px] text-[#cbb086]/75 mt-1">
+        <span>בוקר זהוב</span>
+        <span>צהריים לוהטים</span>
+        <span>שקיעה דרמטית</span>
+      </div>
+    </div>
+
+    <!-- Ambient Audio Toggle (Web Audio API procedural desert/wind sound) -->
+    <div class="border-t border-[#f4c466]/15 pt-3">
+      <button id="audio-toggle-btn" class="w-full rounded-xl border border-[#f4c466]/25 bg-white/5 hover:bg-white/10 px-3 py-2 text-xs font-medium text-[#f8e7c8] flex items-center justify-between transition cursor-pointer">
+        <span class="flex items-center gap-2">
+          <span>🌬️</span>
+          <span>צלילי רוח ואווירת מדבר</span>
+        </span>
+        <span id="audio-status" class="text-[11px] px-2 py-0.5 rounded-full bg-white/10 text-[#e0c497]">כבוי</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Historical Explanation Card (Left/Bottom-Left) -->
+  <section id="story-card" class="fixed bottom-14 left-3 right-3 sm:bottom-5 sm:left-4 sm:right-auto z-20 sm:max-w-[390px] glass-panel rounded-2xl p-4 transition-all duration-300">
+    <div class="flex items-center justify-between mb-1.5">
+      <span id="story-badge" class="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-[#f4c466]/20 text-[#f7cc78] border border-[#f4c466]/30">
+        מבט-על על אתר הבנייה
+      </span>
+      <span class="text-[11px] text-[#d6bc92]/75">עדות היסטורית ותרבותית</span>
+    </div>
+    <h3 id="story-title" class="text-sm sm:text-base font-bold text-[#fff7e6] mb-1.5">
+      ערי המסכנות, לבני הטיט ועבודת הפרך
+    </h3>
+    <p id="story-body" class="text-xs sm:text-[13px] leading-relaxed text-[#ead6b5]/90">
+      במצרים העתיקה הועסקו בני ישראל בעבודות כפייה קשות — בחציבת אבן, בהכנת לבני טיט ובהקמת מבני שלטון ואחסון ("ערי מסכנות" כפתום ורעמסס). תחת חום השמש והשגחת נוגשים, נדרשו מאמץ קבוצתי כבד ותיאום מתמיד לגרירת גושי אבן עצומים.
+    </p>
+    <div class="mt-2.5 pt-2 border-t border-[#f4c466]/15 flex items-center justify-between text-[11px] text-[#f4c466]/90">
+      <span>🕊️ זיכרון העבדות מלווה בתקווה עמוקה לחירות ולכבוד האדם</span>
+    </div>
+  </section>
+
+  <!-- Bottom Camera Controls Hint Bar -->
+  <footer class="fixed bottom-2.5 left-1/2 -translate-x-1/2 z-20 glass-panel rounded-full px-4 py-1.5 text-[11px] text-[#e8d3b0]/90 whitespace-nowrap pointer-events-none hidden md:flex items-center gap-3">
+    <span>🖱️ גרירה: סיבוב המצלמה</span>
+    <span>•</span>
+    <span>גלגלת / צביטה: זום</span>
+    <span>•</span>
+    <span>לחצן ימני / שתי אצבעות: הזזה</span>
+  </footer>
+
+  <!-- Message Toast Box (No alert/confirm) -->
+  <div id="toast-box" class="fixed top-20 left-1/2 -translate-x-1/2 z-40 glass-panel rounded-xl px-4 py-2 text-xs text-[#fff4dc] opacity-0 pointer-events-none transition-opacity duration-300"></div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      // =========================================================
+      // 1. HISTORICAL NARRATIVES PER CAMERA SCENE
+      // =========================================================
+      const SCENE_DATA = {
+        overview: {
+          badge: 'מבט-על על אתר הבנייה',
+          title: 'ערי המסכנות, לבני הטיט ועבודת הפרך',
+          body: 'במצרים העתיקה הועסקו בני ישראל בעבודות כפייה קשות — בחציבת אבן, בהכנת לבני טיט ובהקמת מבני שלטון ואחסון ("ערי מסכנות" כפתום ורעמסס). תחת חום השמש והשגחת נוגשים, נדרשו מאמץ קבוצתי כבד ותיאום מתמיד לגרירת גושי אבן עצומים.',
+          cameraPos: [26, 17, 29],
+          cameraTarget: [0, 1.5, -2]
+        },
+        hauling: {
+          badge: 'גרירת האבן הכבדה',
+          title: 'כוח הגוף המשותף והשגחת הנוגשים',
+          body: 'ללא מנופים מודרניים, גושי אבן ומזחלות כבדות נגררו על חול ולעיתים על גלילי עץ תוך שיתוף פעולה הדוק של קבוצות עובדים. נוגשים מצריים בלבוש טקסי ובידיהם מטה/שוט פיקחו על הקצב, בעוד העובדים נשאו משאות כבדים בחום המדברי.',
+          cameraPos: [9.5, 4.4, 11.5],
+          cameraTarget: [0.5, 1.3, 2.5]
+        },
+        nile: {
+          badge: 'גדות הנילוס והפירמידות',
+          title: 'עורק החיים של מצרים מול מונומנטים של כוח',
+          body: 'נהר הנילוס העניק למצרים פוריות, גומא וקני סוף, ושימש נתיב תחבורה מרכזי להובלת אבן, תבואה וחומרי בנייה. ברקע ניצבים מקדשים, עמודים ופירמידות — סמלי שלטון אדירים שנבנו בעמל רב של המונים.',
+          cameraPos: [-28, 11, -18],
+          cameraTarget: [4, 3, 2]
+        },
+        sunset: {
+          badge: 'שקיעה במדבר',
+          title: 'סיומו של יום עבודה מפרך ותקווה למחר',
+          body: 'כשהשמש שוקעת מעל הדיונות והנילוס, האור הזהוב-ארגמטי מרכך את נוקשות המדבר. לאורך דורות של שיעבוד, התקווה ליציאה מעבדות לחירות ולחיים של כבוד שמרה על רוח האדם.',
+          cameraPos: [22, 8.5, -24],
+          cameraTarget: [-2, 2.5, 2]
+        }
+      };
+
+      // =========================================================
+      // 2. GLOBALS & THREE.JS SETUP
+      // =========================================================
+      const container = document.getElementById('canvas-container');
+      const scene = new THREE.Scene();
+
+      // Desert fog
+      const fogColor = new THREE.Color(0xe6be82);
+      scene.fog = new THREE.FogExp2(fogColor.getHex(), 0.0115);
+
+      const camera = new THREE.PerspectiveCamera(
+        50,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        350
+      );
+      camera.position.set(...SCENE_DATA.overview.cameraPos);
+
+      const renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        powerPreference: 'high-performance'
+      });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.05;
+      container.appendChild(renderer.domElement);
+
+      const controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.06;
+      controls.maxPolarAngle = Math.PI * 0.485; // Keep camera above ground
+      controls.minDistance = 4;
+      controls.maxDistance = 95;
+      controls.target.set(...SCENE_DATA.overview.cameraTarget);
+      controls.update();
+
+      // Animation state
+      let isPlaying = true;
+      let animSpeed = 1.0;
+      let elapsedSimTime = 0;
+
+      // Camera transition state
+      let cameraTransition = null;
+
+      // =========================================================
+      // 3. LIGHTING, SKY DOME & SUN
+      // =========================================================
+      const hemiLight = new THREE.HemisphereLight(0xfff1cc, 0x9c6b36, 0.85);
+      scene.add(hemiLight);
+
+      const sunLight = new THREE.DirectionalLight(0xffe0a3, 2.2);
+      sunLight.position.set(35, 42, 25);
+      sunLight.castShadow = true;
+      sunLight.shadow.mapSize.width = 2048;
+      sunLight.shadow.mapSize.height = 2048;
+      sunLight.shadow.camera.near = 5;
+      sunLight.shadow.camera.far = 140;
+      const d = 42;
+      sunLight.shadow.camera.left = -d;
+      sunLight.shadow.camera.right = d;
+      sunLight.shadow.camera.top = d;
+      sunLight.shadow.camera.bottom = -d;
+      sunLight.shadow.bias = -0.0005;
+      scene.add(sunLight);
+
+      // Subtle rim / fill light from Nile side
+      const fillLight = new THREE.DirectionalLight(0x88c9d4, 0.45);
+      fillLight.position.set(-30, 18, -25);
+      scene.add(fillLight);
+
+      // Custom Shader Sky Dome for smooth desert sky transitions
+      const skyGeo = new THREE.SphereGeometry(220, 32, 24);
+      const skyMat = new THREE.ShaderMaterial({
+        side: THREE.BackSide,
+        depthWrite: false,
+        uniforms: {
+          topColor: { value: new THREE.Color(0x3b82b8) },
+          midColor: { value: new THREE.Color(0x9fd0e6) },
+          horizonColor: { value: new THREE.Color(0xf5cb84) },
+          sunDirection: { value: new THREE.Vector3(0.5, 0.6, 0.4).normalize() },
+          sunColor: { value: new THREE.Color(0xfff0c2) }
+        },
+        vertexShader: `
+          varying vec3 vWorldPosition;
+          void main() {
+            vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+            vWorldPosition = worldPosition.xyz;
+            gl_Position = projectionMatrix * viewMatrix * worldPosition;
+          }
+        `,
+        fragmentShader: `
+          uniform vec3 topColor;
+          uniform vec3 midColor;
+          uniform vec3 horizonColor;
+          uniform vec3 sunDirection;
+          uniform vec3 sunColor;
+          varying vec3 vWorldPosition;
+
+          void main() {
+            vec3 dir = normalize(vWorldPosition);
+            float h = clamp(dir.y, 0.0, 1.0);
+            vec3 col = mix(horizonColor, midColor, smoothstep(0.0, 0.28, h));
+            col = mix(col, topColor, smoothstep(0.25, 0.85, h));
+
+            float sunAmt = max(dot(dir, sunDirection), 0.0);
+            col += sunColor * pow(sunAmt, 24.0) * 0.45;
+            col += sunColor * smoothstep(0.9985, 0.9996, sunAmt) * 1.6;
+
+            gl_FragColor = vec4(col, 1.0);
+          }
+        `
+      });
+      const skyDome = new THREE.Mesh(skyGeo, skyMat);
+      scene.add(skyDome);
+
+      // Visible Sun Mesh
+      const sunMesh = new THREE.Mesh(
+        new THREE.SphereGeometry(5.5, 24, 24),
+        new THREE.MeshBasicMaterial({ color: 0xffe599 })
+      );
+      scene.add(sunMesh);
+
+      // Function to update lighting based on sun slider (0 = morning, 28 = midday, 100 = sunset)
+      function updateSunLighting(sliderVal) {
+        const t = sliderVal / 100; // 0..1
+        // Angle from high morning/midday to low golden sunset
+        const elevation = THREE.MathUtils.lerp(0.85, 0.11, Math.pow(t, 1.15));
+        const azimuth = THREE.MathUtils.lerp(0.4, 2.35, t);
+
+        const radius = 65;
+        const y = Math.sin(elevation) * radius;
+        const horiz = Math.cos(elevation) * radius;
+        const x = Math.cos(azimuth) * horiz;
+        const z = Math.sin(azimuth) * horiz;
+
+        sunLight.position.set(x, Math.max(y, 4), z);
+        sunMesh.position.set(x * 2.3, Math.max(y * 2.3, 6), z * 2.3);
+
+        const sunDir = sunLight.position.clone().normalize();
+        skyMat.uniforms.sunDirection.value.copy(sunDir);
+
+        // Colors interpolation
+        const morningTop = new THREE.Color(0x4a90c2);
+        const middayTop = new THREE.Color(0x2c75b0);
+        const sunsetTop = new THREE.Color(0x23294d);
+
+        const morningHorizon = new THREE.Color(0xf7d394);
+        const middayHorizon = new THREE.Color(0xf2c679);
+        const sunsetHorizon = new THREE.Color(0xe87a48);
+
+        const morningSun = new THREE.Color(0xffe7b8);
+        const middaySun = new THREE.Color(0xfff4d6);
+        const sunsetSun = new THREE.Color(0xff8c42);
+
+        let topCol = new THREE.Color();
+        let horCol = new THREE.Color();
+        let sCol = new THREE.Color();
+        let labelText = 'צהרי מדבר לוהטים';
+
+        if (t < 0.45) {
+          const k = t / 0.45;
+          topCol.lerpColors(morningTop, middayTop, k);
+          horCol.lerpColors(morningHorizon, middayHorizon, k);
+          sCol.lerpColors(morningSun, middaySun, k);
+          sunLight.intensity = THREE.MathUtils.lerp(1.9, 2.35, k);
+          labelText = k < 0.35 ? 'בוקר מדברי זהוב' : 'צהרי מדבר לוהטים';
+        } else {
+          const k = (t - 0.45) / 0.55;
+          topCol.lerpColors(middayTop, sunsetTop, k);
+          horCol.lerpColors(middayHorizon, sunsetHorizon, k);
+          sCol.lerpColors(middaySun, sunsetSun, k);
+          sunLight.intensity = THREE.MathUtils.lerp(2.35, 1.55, k);
+          labelText = k > 0.65 ? 'שקיעה ארגמנית במדבר' : 'אחר הצהריים החם';
+        }
+
+        skyMat.uniforms.topColor.value.copy(topCol);
+        skyMat.uniforms.midColor.value.lerpColors(topCol, horCol, 0.55);
+        skyMat.uniforms.horizonColor.value.copy(horCol);
+        skyMat.uniforms.sunColor.value.copy(sCol);
+        sunLight.color.copy(sCol);
+        sunMesh.material.color.copy(sCol);
+
+        scene.fog.color.copy(horCol).lerp(new THREE.Color(0xd9a45c), 0.35);
+        document.getElementById('time-label').textContent = labelText;
+      }
+
+      // =========================================================
+      // 4. DESERT TERRAIN & NILE RIVER
+      // =========================================================
+      // Helper to determine river curve z at a given x
+      function getNileZ(x) {
+        return -24 + Math.sin(x * 0.045) * 6.5 + Math.cos(x * 0.02) * 3.0;
+      }
+
+      function getTerrainHeight(x, z) {
+        const riverCenterZ = getNileZ(x);
+        const distToRiver = Math.abs(z - riverCenterZ);
+
+        // Riverbed dip
+        if (distToRiver < 7.5) {
+          const t = distToRiver / 7.5;
+          return THREE.MathUtils.lerp(-2.2, 0.2, t * t);
+        }
+
+        // Flatten work site area around (0, 2)
+        const distWork = Math.hypot(x - 0, z - 2);
+        const workFlatten = THREE.MathUtils.smoothstep(distWork, 11, 24);
+
+        // Rolling golden dunes
+        const dune1 = Math.sin(x * 0.065 + z * 0.03) * 1.45;
+        const dune2 = Math.cos(x * 0.04 - z * 0.075) * 1.05;
+        const ripples = Math.sin(x * 0.35 + z * 0.22) * 0.08;
+
+        const bankRise = THREE.MathUtils.smoothstep(distToRiver, 7.5, 16) * 0.85;
+        const rawH = 0.25 + bankRise + (dune1 + dune2 + ripples) * workFlatten;
+        return rawH;
+      }
+
+      const terrainSize = 240;
+      const terrainSegs = 150;
+      const terrainGeo = new THREE.PlaneGeometry(terrainSize, terrainSize, terrainSegs, terrainSegs);
+      terrainGeo.rotateX(-Math.PI / 2);
+
+      const posAttr = terrainGeo.attributes.position;
+      const colors = [];
+      const sandLight = new THREE.Color(0xe9be77);
+      const sandWarm = new THREE.Color(0xd69e52);
+      const workEarth = new THREE.Color(0xc28a48);
+      const riverBedCol = new THREE.Color(0x6e5332);
+
+      for (let i = 0; i < posAttr.count; i++) {
+        const vx = posAttr.getX(i);
+        const vz = posAttr.getZ(i);
+        const vy = getTerrainHeight(vx, vz);
+        posAttr.setY(i, vy);
+
+        const riverDist = Math.abs(vz - getNileZ(vx));
+        const workDist = Math.hypot(vx, vz - 2);
+        const c = new THREE.Color();
+
+        if (riverDist < 7.2) {
+          c.copy(riverBedCol);
+        } else if (workDist < 15) {
+          c.lerpColors(workEarth, sandWarm, THREE.MathUtils.smoothstep(workDist, 6, 15));
+        } else {
+          const n = 0.5 + 0.5 * Math.sin(vx * 0.12 + vz * 0.09);
+          c.lerpColors(sandWarm, sandLight, n);
+        }
+        colors.push(c.r, c.g, c.b);
+      }
+
+      terrainGeo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+      terrainGeo.computeVertexNormals();
+
+      const terrainMat = new THREE.MeshStandardMaterial({
+        vertexColors: true,
+        roughness: 0.92,
+        metalness: 0.02
+      });
+      const terrainMesh = new THREE.Mesh(terrainGeo, terrainMat);
+      terrainMesh.receiveShadow = true;
+      scene.add(terrainMesh);
+
+      // Nile River Water Surface
+      const nileGeo = new THREE.PlaneGeometry(230, 22, 120, 12);
+      nileGeo.rotateX(-Math.PI / 2);
+      const nilePos = nileGeo.attributes.position;
+      for (let i = 0; i < nilePos.count; i++) {
+        const nx = nilePos.getX(i);
+        const nzOffset = nilePos.getZ(i);
+        nilePos.setZ(i, getNileZ(nx) + nzOffset * 0.65);
+        nilePos.setY(i, -0.35);
+      }
+      nileGeo.computeVertexNormals();
+
+      const nileMat = new THREE.MeshStandardMaterial({
+        color: 0x1d8a99,
+        emissive: 0x082c33,
+        roughness: 0.18,
+        metalness: 0.35,
+        transparent: true,
+        opacity: 0.88
+      });
+      const nileMesh = new THREE.Mesh(nileGeo, nileMat);
+      nileMesh.receiveShadow = true;
+      scene.add(nileMesh);
+
+      // =========================================================
+      // 5. PALM TREES & REEDS ALONG THE NILE
+      // =========================================================
+      const palmTrunks = [];
+      const palmCrowns = [];
+
+      function createPalmTree(x, z, scale = 1, leanX = 0.3) {
+        const group = new THREE.Group();
+        const groundY = getTerrainHeight(x, z) - 0.15;
+        group.position.set(x, groundY, z);
+        group.scale.setScalar(scale);
+
+        // Segmented curved trunk
+        const trunkGroup = new THREE.Group();
+        const segCount = 7;
+        let curY = 0;
+        let curX = 0;
+        for (let i = 0; i < segCount; i++) {
+          const rBot = THREE.MathUtils.lerp(0.36, 0.18, i / segCount);
+          const rTop = THREE.MathUtils.lerp(0.32, 0.15, (i + 1) / segCount);
+          const h = 0.95;
+          const seg = new THREE.Mesh(
+            new THREE.CylinderGeometry(rTop, rBot, h, 8),
+            new THREE.MeshStandardMaterial({ color: 0x7c5836, roughness: 0.9 })
+          );
+          curX += leanX * (i / segCount) * 0.25;
+          seg.position.set(curX, curY + h * 0.5, 0);
+          seg.rotation.z = -leanX * (i / segCount) * 0.12;
+          seg.castShadow = true;
+          seg.receiveShadow = true;
+          trunkGroup.add(seg);
+          curY += h * 0.92;
+        }
+        group.add(trunkGroup);
+
+        // Frond crown
+        const crownGroup = new THREE.Group();
+        crownGroup.position.set(curX, curY, 0);
+        const frondMat = new THREE.MeshStandardMaterial({
+          color: 0x3f7a38,
+          roughness: 0.7,
+          side: THREE.DoubleSide
+        });
+
+        const frondCount = 10;
+        for (let f = 0; f < frondCount; f++) {
+          const angle = (f / frondCount) * Math.PI * 2;
+          const frondPivot = new THREE.Group();
+          frondPivot.rotation.y = angle;
+          frondPivot.rotation.z = 0.55 + (f % 2) * 0.15;
+
+          const leaf = new THREE.Mesh(
+            new THREE.ConeGeometry(0.42, 2.8, 4),
+            frondMat
+          );
+          leaf.rotation.x = Math.PI * 0.42;
+          leaf.position.set(1.25, -0.25, 0);
+          leaf.scale.set(1, 1, 0.18);
+          leaf.castShadow = true;
+          frondPivot.add(leaf);
+          crownGroup.add(frondPivot);
+        }
+
+        group.add(crownGroup);
+        scene.add(group);
+        palmCrowns.push({ crown: crownGroup, phase: Math.random() * Math.PI * 2 });
+      }
+
+      // Place palm trees along Nile banks and oasis spots
+      const palmCoords = [
+        [-22, -16, 1.15, 0.5],
+        [-16, -15, 0.95, -0.4],
+        [-9, -18, 1.25, 0.3],
+        [4, -19, 1.1, 0.6],
+        [12, -18, 1.0, -0.3],
+        [20, -21, 1.3, 0.4],
+        [-32, -29, 1.2, 0.2],
+        [28, -28, 1.15, -0.5],
+        [-18, -33, 1.05, 0.3],
+        [15, -34, 1.2, 0.2]
+      ];
+      palmCoords.forEach(([px, pz, sc, ln]) => createPalmTree(px, pz, sc, ln));
+
+      // Reeds / Papyrus clusters near the Nile water edge
+      const reedClusters = [];
+      const reedMat = new THREE.MeshStandardMaterial({ color: 0x5d823b, roughness: 0.8 });
+      for (let i = 0; i < 42; i++) {
+        const rx = -55 + i * 2.6;
+        const side = i % 2 === 0 ? 1 : -1;
+        const rz = getNileZ(rx) + side * (6.2 + (i % 3) * 0.8);
+        const ry = getTerrainHeight(rx, rz);
+
+        const cluster = new THREE.Group();
+        cluster.position.set(rx, ry, rz);
+        for (let b = 0; b < 5; b++) {
+          const h = 0.9 + (b % 3) * 0.35;
+          const stalk = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.025, 0.045, h, 5),
+            reedMat
+          );
+          stalk.position.set((b - 2) * 0.12, h * 0.5, ((b % 2) - 0.5) * 0.14);
+          stalk.rotation.z = ((b - 2) * 0.06);
+          cluster.add(stalk);
+        }
+        scene.add(cluster);
+        reedClusters.push({ cluster, phase: i * 0.5 });
+      }
+
+      // =========================================================
+      // 6. PYRAMIDS, TEMPLE PILLARS & MUD-BRICK GATEWAY
+      // =========================================================
+      const sandstoneMat = new THREE.MeshStandardMaterial({
+        color: 0xdcb06b,
+        roughness: 0.88,
+        metalness: 0.04
+      });
+      const darkStoneMat = new THREE.MeshStandardMaterial({
+        color: 0xb88948,
+        roughness: 0.92
+      });
+      const mudBrickMat = new THREE.MeshStandardMaterial({
+        color: 0xa66c38,
+        roughness: 0.95
+      });
+
+      // Stepped / classic pyramids in background
+      function createPyramid(x, z, baseSize, height, stepped = false) {
+        const group = new THREE.Group();
+        const groundY = getTerrainHeight(x, z) - 0.3;
+        group.position.set(x, groundY, z);
+
+        if (!stepped) {
+          const pyr = new THREE.Mesh(
+            new THREE.ConeGeometry(baseSize * 0.72, height, 4),
+            sandstoneMat
+          );
+          pyr.rotation.y = Math.PI / 4;
+          pyr.position.y = height * 0.5;
+          pyr.castShadow = true;
+          pyr.receiveShadow = true;
+          group.add(pyr);
+        } else {
+          const tiers = 6;
+          for (let t = 0; t < tiers; t++) {
+            const ratio = 1 - t / (tiers + 0.5);
+            const w = baseSize * ratio;
+            const tierH = height / tiers;
+            const stepMesh = new THREE.Mesh(
+              new THREE.BoxGeometry(w, tierH, w),
+              t % 2 === 0 ? sandstoneMat : darkStoneMat
+            );
+            stepMesh.position.y = t * tierH + tierH * 0.5;
+            stepMesh.castShadow = true;
+            stepMesh.receiveShadow = true;
+            group.add(stepMesh);
+          }
+        }
+        scene.add(group);
+      }
+
+      createPyramid(-38, -58, 28, 21, false);
+      createPyramid(-14, -68, 22, 16, false);
+      createPyramid(24, -62, 24, 15, true);
+
+      // Ancient Egyptian Temple / Colonnade Pillars
+      const templeGroup = new THREE.Group();
+      const tX = -15;
+      const tZ = -10;
+      templeGroup.position.set(tX, getTerrainHeight(tX, tZ) - 0.1, tZ);
+      templeGroup.rotation.y = 0.35;
+
+      // Stone platform
+      const baseSlab = new THREE.Mesh(
+        new THREE.BoxGeometry(11, 0.6, 7),
+        darkStoneMat
+      );
+      baseSlab.position.y = 0.3;
+      baseSlab.receiveShadow = true;
+      baseSlab.castShadow = true;
+      templeGroup.add(baseSlab);
+
+      // Rows of pillars with lotus/papyrus capitals
+      for (let row = 0; row < 2; row++) {
+        for (let col = 0; col < 4; col++) {
+          const px = -4.2 + col * 2.8;
+          const pz = -2.2 + row * 4.4;
+          const colGroup = new THREE.Group();
+          colGroup.position.set(px, 0.6, pz);
+
+          const shaft = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.42, 0.5, 4.6, 12),
+            sandstoneMat
+          );
+          shaft.position.y = 2.3;
+          shaft.castShadow = true;
+          shaft.receiveShadow = true;
+          colGroup.add(shaft);
+
+          const capital = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.75, 0.38, 0.65, 12),
+            darkStoneMat
+          );
+          capital.position.y = 4.8;
+          capital.castShadow = true;
+          colGroup.add(capital);
+
+          templeGroup.add(colGroup);
+        }
+      }
+
+      // Architrave beam
+      const beam = new THREE.Mesh(
+        new THREE.BoxGeometry(10.5, 0.75, 1.1),
+        sandstoneMat
+      );
+      beam.position.set(0, 6.1, 2.2);
+      beam.castShadow = true;
+      templeGroup.add(beam);
+
+      scene.add(templeGroup);
+
+      // Mud-brick Gateway ("Store-City" / Fortress Gate)
+      const gateGroup = new THREE.Group();
+      const gX = 14;
+      const gZ = -7;
+      gateGroup.position.set(gX, getTerrainHeight(gX, gZ) - 0.1, gZ);
+      gateGroup.rotation.y = -0.5;
+
+      // Two massive mud-brick pylons
+      [-2.8, 2.8].forEach((offsetX) => {
+        const pylon = new THREE.Mesh(
+          new THREE.BoxGeometry(2.6, 5.2, 2.8),
+          mudBrickMat
+        );
+        pylon.position.set(offsetX, 2.6, 0);
+        pylon.castShadow = true;
+        pylon.receiveShadow = true;
+        gateGroup.add(pylon);
+      });
+
+      // Lintel bridge over gate
+      const lintel = new THREE.Mesh(
+        new THREE.BoxGeometry(8.4, 1.3, 2.5),
+        mudBrickMat
+      );
+      lintel.position.set(0, 4.5, 0);
+      lintel.castShadow = true;
+      gateGroup.add(lintel);
+
+      scene.add(gateGroup);
+
+      // =========================================================
+      // 7. WORK SITE: EXCAVATION PIT, BRICK STACKS, SCAFFOLD & WALL
+      // =========================================================
+      // Excavation / clay pit
+      const pitGroup = new THREE.Group();
+      pitGroup.position.set(8.5, getTerrainHeight(8.5, 5.5), 5.5);
+      const pitRim = new THREE.Mesh(
+        new THREE.RingGeometry(2.6, 3.6, 20),
+        new THREE.MeshStandardMaterial({ color: 0x8f5d2c, roughness: 0.95, side: THREE.DoubleSide })
+      );
+      pitRim.rotation.x = -Math.PI / 2;
+      pitRim.position.y = 0.04;
+      pitGroup.add(pitRim);
+
+      const clayPool = new THREE.Mesh(
+        new THREE.CircleGeometry(2.55, 20),
+        new THREE.MeshStandardMaterial({ color: 0x6e441e, roughness: 0.45, metalness: 0.1 })
+      );
+      clayPool.rotation.x = -Math.PI / 2;
+      clayPool.position.y = -0.05;
+      pitGroup.add(clayPool);
+      scene.add(pitGroup);
+
+      // Sun-dried brick piles
+      const brickGeo = new THREE.BoxGeometry(0.46, 0.2, 0.24);
+      function createBrickPile(px, pz, rows, cols, layers) {
+        const pile = new THREE.Group();
+        pile.position.set(px, getTerrainHeight(px, pz), pz);
+        for (let l = 0; l < layers; l++) {
+          for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+              const brick = new THREE.Mesh(brickGeo, mudBrickMat);
+              brick.position.set(
+                (c - (cols - 1) * 0.5) * 0.5,
+                l * 0.21 + 0.1,
+                (r - (rows - 1) * 0.5) * 0.28
+              );
+              brick.rotation.y = ((l + r) % 2) * 0.06;
+              brick.castShadow = true;
+              brick.receiveShadow = true;
+              pile.add(brick);
+            }
+          }
+        }
+        scene.add(pile);
+      }
+
+      createBrickPile(5.2, 7.2, 4, 4, 4);
+      createBrickPile(11.2, 2.2, 3, 5, 3);
+      createBrickPile(-6.5, 7.5, 4, 3, 3);
+
+      // Stone Structure Under Construction + Wooden Scaffolding Ramp
+      const wallGroup = new THREE.Group();
+      const wX = -2.5;
+      const wZ = -3.5;
+      wallGroup.position.set(wX, getTerrainHeight(wX, wZ) - 0.05, wZ);
+      wallGroup.rotation.y = 0.2;
+
+      for (let layer = 0; layer < 4; layer++) {
+        const count = 6 - Math.floor(layer * 0.5);
+        for (let i = 0; i < count; i++) {
+          const block = new THREE.Mesh(
+            new THREE.BoxGeometry(1.45, 0.65, 1.15),
+            (layer + i) % 2 === 0 ? sandstoneMat : darkStoneMat
+          );
+          block.position.set(
+            (i - (count - 1) * 0.5) * 1.52,
+            layer * 0.66 + 0.32,
+            0
+          );
+          block.castShadow = true;
+          block.receiveShadow = true;
+          wallGroup.add(block);
+        }
+      }
+
+      // Wooden scaffolding posts & ramp
+      const woodMat = new THREE.MeshStandardMaterial({ color: 0x7a4e26, roughness: 0.85 });
+      [-3.5, -1.2, 1.2, 3.5].forEach((sx) => {
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.09, 3.2, 6), woodMat);
+        post.position.set(sx, 1.6, 1.1);
+        post.castShadow = true;
+        wallGroup.add(post);
+      });
+
+      const ramp = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.14, 5.2), woodMat);
+      ramp.position.set(2.8, 1.2, 1.8);
+      ramp.rotation.x = 0.42;
+      ramp.castShadow = true;
+      wallGroup.add(ramp);
+
+      scene.add(wallGroup);
+
+      // =========================================================
+      // 8. HEAVY STONE SLEDGE & DRAGGING ROPES
+      // =========================================================
+      const sledgeGroup = new THREE.Group();
+      sledgeGroup.position.set(0, getTerrainHeight(0, 2.5), 2.5);
+      sledgeGroup.rotation.y = 0.35;
+
+      // Wooden runners
+      [-0.85, 0.85].forEach((rz) => {
+        const runner = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.22, 0.26), woodMat);
+        runner.position.set(0, 0.11, rz);
+        runner.castShadow = true;
+        runner.receiveShadow = true;
+        sledgeGroup.add(runner);
+      });
+
+      // Cross beams
+      [-1.1, 0, 1.1].forEach((bx) => {
+        const cross = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.18, 2.0), woodMat);
+        cross.position.set(bx, 0.22, 0);
+        cross.castShadow = true;
+        sledgeGroup.add(cross);
+      });
+
+      // Heavy carved stone block on sledge
+      const heavyStone = new THREE.Mesh(
+        new THREE.BoxGeometry(2.1, 1.15, 1.45),
+        new THREE.MeshStandardMaterial({ color: 0xcfa059, roughness: 0.85 })
+      );
+      heavyStone.position.set(-0.15, 0.86, 0);
+      heavyStone.castShadow = true;
+      heavyStone.receiveShadow = true;
+      sledgeGroup.add(heavyStone);
+
+      // Pulling ropes extending forward (-X in local sledge space)
+      const ropeMat = new THREE.MeshStandardMaterial({ color: 0xb89662, roughness: 0.9 });
+      [-0.45, 0.45].forEach((rz) => {
+        const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 4.2, 6), ropeMat);
+        rope.rotation.z = Math.PI * 0.48;
+        rope.position.set(-3.3, 0.65, rz);
+        rope.castShadow = true;
+        sledgeGroup.add(rope);
+      });
+
+      scene.add(sledgeGroup);
+
+      // =========================================================
+      // 9. CHARACTERS: HEBREW WORKERS & EGYPTIAN OVERSEERS
+      // =========================================================
+      const animatedWorkers = [];
+      const animatedCarriers = [];
+      const animatedOverseers = [];
+
+      function createStylizedFigure({ skinColor, tunicColor, headType = 'plain', hasStaff = false, carryingBrick = false }) {
+        const root = new THREE.Group();
+
+        const skinMat = new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.75 });
+        const clothMat = new THREE.MeshStandardMaterial({ color: tunicColor, roughness: 0.85 });
+
+        // Pivot for whole body lean/bob
+        const bodyPivot = new THREE.Group();
+        root.add(bodyPivot);
+
+        // Torso
+        const torso = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.78, 0.3), clothMat);
+        torso.position.y = 1.12;
+        torso.castShadow = true;
+        torso.receiveShadow = true;
+        bodyPivot.add(torso);
+
+        // Head
+        const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 12), skinMat);
+        head.position.y = 1.74;
+        head.castShadow = true;
+        bodyPivot.add(head);
+
+        if (headType === 'overseer') {
+          // Egyptian Nemes / headdress & collar
+          const nemes = new THREE.Mesh(
+            new THREE.BoxGeometry(0.56, 0.34, 0.42),
+            new THREE.MeshStandardMaterial({ color: 0x1e568c, roughness: 0.6 })
+          );
+          nemes.position.set(0, 1.78, -0.04);
+          nemes.castShadow = true;
+          bodyPivot.add(nemes);
+
+          const goldBand = new THREE.Mesh(
+            new THREE.BoxGeometry(0.58, 0.08, 0.44),
+            new THREE.MeshStandardMaterial({ color: 0xf2c14e, roughness: 0.35, metalness: 0.5 })
+          );
+          goldBand.position.set(0, 1.92, -0.04);
+          bodyPivot.add(goldBand);
+        } else {
+          // Simple headcloth / hair
+          const hair = new THREE.Mesh(
+            new THREE.SphereGeometry(0.23, 10, 10),
+            new THREE.MeshStandardMaterial({ color: 0x382515, roughness: 0.9 })
+          );
+          hair.position.set(0, 1.77, -0.03);
+          hair.scale.set(1, 0.9, 1);
+          bodyPivot.add(hair);
+        }
+
+        // Legs
+        const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.75, 0.22), skinMat);
+        leftLeg.position.set(-0.14, 0.38, 0);
+        leftLeg.castShadow = true;
+        root.add(leftLeg);
+
+        const rightLeg = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.75, 0.22), skinMat);
+        rightLeg.position.set(0.14, 0.38, 0);
+        rightLeg.castShadow = true;
+        root.add(rightLeg);
+
+        // Arms
+        const leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.65, 0.16), skinMat);
+        leftArm.position.set(-0.35, 1.25, 0);
+        leftArm.castShadow = true;
+        bodyPivot.add(leftArm);
+
+        const rightArm = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.65, 0.16), skinMat);
+        rightArm.position.set(0.35, 1.25, 0);
+        rightArm.castShadow = true;
+        bodyPivot.add(rightArm);
+
+        // Optional overseer staff / whip
+        if (hasStaff) {
+          const staff = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.03, 0.03, 1.95, 6),
+            new THREE.MeshStandardMaterial({ color: 0x5c3615, roughness: 0.7 })
+          );
+          staff.position.set(0.42, 0.95, 0.25);
+          staff.rotation.x = 0.15;
+          staff.castShadow = true;
+          bodyPivot.add(staff);
+        }
+
+        // Optional brick carried on shoulder
+        if (carryingBrick) {
+          const brick = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.22, 0.26), mudBrickMat);
+          brick.position.set(0, 1.62, 0.12);
+          brick.castShadow = true;
+          bodyPivot.add(brick);
+        }
+
+        return { root, bodyPivot, leftLeg, rightLeg, leftArm, rightArm };
+      }
+
+      // 1) Pulling workers in front of the sledge
+      const pullerOffsets = [
+        [-2.4, -0.55, 0],
+        [-2.4, 0.55, 0.7],
+        [-4.1, -0.55, 1.4],
+        [-4.1, 0.55, 2.1],
+        [-5.6, 0.0, 2.8]
+      ];
+      pullerOffsets.forEach(([ox, oz, phase]) => {
+        const fig = createStylizedFigure({
+          skinColor: 0xb87d4b,
+          tunicColor: 0x8c857b,
+          headType: 'plain'
+        });
+        fig.root.position.set(ox, getTerrainHeight(ox, oz), oz);
+        // Lean forward pulling
+        fig.bodyPivot.rotation.x = 0.35;
+        fig.leftArm.rotation.x = -0.9;
+        fig.rightArm.rotation.x = -0.9;
+        sledgeGroup.add(fig.root);
+        animatedWorkers.push({ ...fig, phase });
+      });
+
+      // 2) Brick carriers walking along a path between the brick pile and construction wall
+      const carrierPath = [
+        new THREE.Vector3(5.2, 0, 7.2),
+        new THREE.Vector3(2.5, 0, 5.5),
+        new THREE.Vector3(-0.5, 0, 1.0),
+        new THREE.Vector3(-2.5, 0, -2.2)
+      ];
+
+      for (let c = 0; c < 4; c++) {
+        const fig = createStylizedFigure({
+          skinColor: 0xc28652,
+          tunicColor: 0x7d6b58,
+          carryingBrick: true
+        });
+        scene.add(fig.root);
+        animatedCarriers.push({
+          ...fig,
+          t: c * 0.25
+        });
+      }
+
+      // 3) Egyptian overseers supervising with staffs
+      const overseerConfigs = [
+        { x: 1.5, z: -0.5, rotY: 0.6, phase: 0.2 },
+        { x: 6.8, z: 3.2, rotY: -0.8, phase: 1.9 },
+        { x: -5.5, z: 1.8, rotY: 1.2, phase: 3.4 }
+      ];
+      overseerConfigs.forEach((cfg) => {
+        const fig = createStylizedFigure({
+          skinColor: 0xa66b3c,
+          tunicColor: 0xf2e6cf,
+          headType: 'overseer',
+          hasStaff: true
+        });
+        fig.root.position.set(cfg.x, getTerrainHeight(cfg.x, cfg.z), cfg.z);
+        fig.root.rotation.y = cfg.rotY;
+        scene.add(fig.root);
+        animatedOverseers.push({ ...fig, phase: cfg.phase });
+      });
+
+      // =========================================================
+      // 10. AMBIENT DUST / SAND PARTICLES
+      // =========================================================
+      const particleCount = 450;
+      const pPositions = new Float32Array(particleCount * 3);
+      for (let i = 0; i < particleCount; i++) {
+        pPositions[i * 3] = (Math.random() - 0.5) * 90;
+        pPositions[i * 3 + 1] = 0.3 + Math.random() * 10;
+        pPositions[i * 3 + 2] = (Math.random() - 0.5) * 90;
+      }
+      const pGeo = new THREE.BufferGeometry();
+      pGeo.setAttribute('position', new THREE.BufferAttribute(pPositions, 3));
+      const pMat = new THREE.PointsMaterial({
+        color: 0xf7d79c,
+        size: 0.22,
+        transparent: true,
+        opacity: 0.55,
+        depthWrite: false
+      });
+      const dustPoints = new THREE.Points(pGeo, pMat);
+      scene.add(dustPoints);
+
+      // =========================================================
+      // 11. PROCEDURAL DESERT WIND SOUND (WEB AUDIO API)
+      // =========================================================
+      let audioCtx = null;
+      let isAudioOn = false;
+
+      function toggleAmbientAudio() {
+        const statusEl = document.getElementById('audio-status');
+        if (!isAudioOn) {
+          try {
+            if (!audioCtx) {
+              const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+              audioCtx = new AudioContextClass();
+
+              // Create 3-second noise buffer
+              const bufferSize = audioCtx.sampleRate * 3;
+              const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+              const output = noiseBuffer.getChannelData(0);
+              let lastOut = 0;
+              for (let i = 0; i < bufferSize; i++) {
+                const white = Math.random() * 2 - 1;
+                output[i] = (lastOut + 0.02 * white) / 1.02;
+                lastOut = output[i];
+                output[i] *= 2.5;
+              }
+
+              const whiteNoise = audioCtx.createBufferSource();
+              whiteNoise.buffer = noiseBuffer;
+              whiteNoise.loop = true;
+
+              const filter = audioCtx.createBiquadFilter();
+              filter.type = 'bandpass';
+              filter.frequency.value = 320;
+              filter.Q.value = 1.4;
+
+              // Slow LFO modulating wind filter frequency
+              const lfo = audioCtx.createOscillator();
+              lfo.type = 'sine';
+              lfo.frequency.value = 0.14;
+              const lfoGain = audioCtx.createGain();
+              lfoGain.gain.value = 160;
+              lfo.connect(lfoGain);
+              lfoGain.connect(filter.frequency);
+
+              const gainNode = audioCtx.createGain();
+              gainNode.gain.value = 0.08;
+
+              whiteNoise.connect(filter);
+              filter.connect(gainNode);
+              gainNode.connect(audioCtx.destination);
+
+              whiteNoise.start(0);
+              lfo.start(0);
+            } else if (audioCtx.state === 'suspended') {
+              audioCtx.resume();
+            }
+            isAudioOn = true;
+            statusEl.textContent = 'פעיל';
+            statusEl.className = 'text-[11px] px-2 py-0.5 rounded-full bg-[#f4c466]/30 text-[#fff3d6]';
+            showToast('🌬️ צלילי רוח המדבר הופעלו');
+          } catch (err) {
+            showToast('לא ניתן להפעיל אודיו בדפדפן זה');
+          }
+        } else {
+          if (audioCtx && audioCtx.state === 'running') {
+            audioCtx.suspend();
+          }
+          isAudioOn = false;
+          statusEl.textContent = 'כבוי';
+          statusEl.className = 'text-[11px] px-2 py-0.5 rounded-full bg-white/10 text-[#e0c497]';
+          showToast('צלילי האווירה הושתקו');
+        }
+      }
+
+      // =========================================================
+      // 12. UI INTERACTIONS & CAMERA PRESETS
+      // =========================================================
+      function showToast(msg) {
+        const toast = document.getElementById('toast-box');
+        toast.textContent = msg;
+        toast.style.opacity = '1';
+        clearTimeout(showToast._timer);
+        showToast._timer = setTimeout(() => {
+          toast.style.opacity = '0';
+        }, 2400);
+      }
+
+      function setCameraScene(sceneKey) {
+        const data = SCENE_DATA[sceneKey];
+        if (!data) return;
+
+        // Update active button state
+        document.querySelectorAll('.btn-scene').forEach((btn) => {
+          btn.classList.toggle('active', btn.dataset.camera === sceneKey);
+        });
+
+        // Update story card content
+        document.getElementById('story-badge').textContent = data.badge;
+        document.getElementById('story-title').textContent = data.title;
+        document.getElementById('story-body').textContent = data.body;
+
+        // Smooth camera interpolation
+        cameraTransition = {
+          startPos: camera.position.clone(),
+          endPos: new THREE.Vector3(...data.cameraPos),
+          startTarget: controls.target.clone(),
+          endTarget: new THREE.Vector3(...data.cameraTarget),
+          progress: 0,
+          duration: 1.35
+        };
+
+        // Adjust sun slider automatically for Sunset preset
+        if (sceneKey === 'sunset') {
+          const sunSlider = document.getElementById('sun-slider');
+          sunSlider.value = 92;
+          updateSunLighting(92);
+        } else if (sceneKey === 'overview' && Number(document.getElementById('sun-slider').value) > 85) {
+          const sunSlider = document.getElementById('sun-slider');
+          sunSlider.value = 28;
+          updateSunLighting(28);
+        }
+      }
+
+      document.querySelectorAll('.btn-scene').forEach((btn) => {
+        btn.addEventListener('click', () => setCameraScene(btn.dataset.camera));
+      });
+
+      // Play / Pause button
+      const playPauseBtn = document.getElementById('play-pause-btn');
+      const speedSlider = document.getElementById('speed-slider');
+      const speedValue = document.getElementById('speed-value');
+
+      playPauseBtn.addEventListener('click', () => {
+        isPlaying = !isPlaying;
+        if (isPlaying) {
+          playPauseBtn.textContent = '⏸️ השהה';
+          if (Number(speedSlider.value) === 0) {
+            speedSlider.value = '1.0';
+            animSpeed = 1.0;
+            speedValue.textContent = '1.0x';
+          }
+        } else {
+          playPauseBtn.textContent = '▶️ המשך';
+        }
+      });
+
+      speedSlider.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        animSpeed = val;
+        speedValue.textContent = `${val.toFixed(1)}x`;
+        if (val === 0) {
+          isPlaying = false;
+          playPauseBtn.textContent = '▶️ המשך';
+        } else if (!isPlaying) {
+          isPlaying = true;
+          playPauseBtn.textContent = '⏸️ השהה';
+        }
+      });
+
+      // Sun slider
+      const sunSlider = document.getElementById('sun-slider');
+      sunSlider.addEventListener('input', (e) => {
+        updateSunLighting(Number(e.target.value));
+      });
+      updateSunLighting(Number(sunSlider.value));
+
+      // Audio toggle
+      document.getElementById('audio-toggle-btn').addEventListener('click', toggleAmbientAudio);
+
+      // Toggle panels
+      const controlPanel = document.getElementById('control-panel');
+      const panelBtnLabel = document.getElementById('panel-btn-label');
+      let panelOpen = true;
+      document.getElementById('toggle-panel-btn').addEventListener('click', () => {
+        panelOpen = !panelOpen;
+        controlPanel.style.opacity = panelOpen ? '1' : '0';
+        controlPanel.style.pointerEvents = panelOpen ? 'auto' : 'none';
+        controlPanel.style.transform = panelOpen ? 'translateX(0)' : 'translateX(20px)';
+        panelBtnLabel.textContent = panelOpen ? 'הסתר בקרה' : 'הצג בקרה';
+      });
+
+      const storyCard = document.getElementById('story-card');
+      const storyBtnLabel = document.getElementById('story-btn-label');
+      let storyOpen = true;
+      document.getElementById('toggle-story-btn').addEventListener('click', () => {
+        storyOpen = !storyOpen;
+        storyCard.style.opacity = storyOpen ? '1' : '0';
+        storyCard.style.pointerEvents = storyOpen ? 'auto' : 'none';
+        storyCard.style.transform = storyOpen ? 'translateY(0)' : 'translateY(16px)';
+        storyBtnLabel.textContent = storyOpen ? 'הסתר הסבר היסטורי' : 'הצג הסבר היסטורי';
+      });
+
+      // Cancel camera preset transition if user manually drags camera
+      controls.addEventListener('start', () => {
+        cameraTransition = null;
+      });
+
+      // Handle window resize
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      });
+
+      // =========================================================
+      // 13. MAIN ANIMATION LOOP
+      // =========================================================
+      const clock = new THREE.Clock();
+
+      function animate() {
+        requestAnimationFrame(animate);
+        const dt = Math.min(clock.getDelta(), 0.05);
+
+        // Smooth camera preset transition (runs even when simulation is paused)
+        if (cameraTransition) {
+          cameraTransition.progress += dt / cameraTransition.duration;
+          const rawT = Math.min(cameraTransition.progress, 1);
+          // Cubic ease-in-out
+          const easeT = rawT < 0.5
+            ? 4 * rawT * rawT * rawT
+            : 1 - Math.pow(-2 * rawT + 2, 3) / 2;
+
+          camera.position.lerpVectors(cameraTransition.startPos, cameraTransition.endPos, easeT);
+          controls.target.lerpVectors(cameraTransition.startTarget, cameraTransition.endTarget, easeT);
+
+          if (rawT >= 1) {
+            cameraTransition = null;
+          }
+        }
+
+        if (isPlaying && animSpeed > 0) {
+          elapsedSimTime += dt * animSpeed;
+
+          // 1) Subtle rhythmic tug on the heavy stone sledge
+          const pullCycle = Math.sin(elapsedSimTime * 2.4);
+          const baseSledgeX = Math.sin(elapsedSimTime * 0.35) * 1.4;
+          const baseSledgeZ = 2.5 - Math.cos(elapsedSimTime * 0.35) * 0.7;
+          sledgeGroup.position.x = baseSledgeX + pullCycle * 0.06;
+          sledgeGroup.position.z = baseSledgeZ;
+          sledgeGroup.position.y = getTerrainHeight(sledgeGroup.position.x, sledgeGroup.position.z);
+          sledgeGroup.rotation.z = pullCycle * 0.015;
+
+          // 2) Pulling workers leg & effort animation
+          animatedWorkers.forEach((w) => {
+            const p = elapsedSimTime * 4.5 + w.phase;
+            w.leftLeg.rotation.x = Math.sin(p) * 0.38;
+            w.rightLeg.rotation.x = -Math.sin(p) * 0.38;
+            w.bodyPivot.position.y = Math.abs(Math.cos(p)) * 0.05;
+          });
+
+          // 3) Brick carriers walking along path
+          animatedCarriers.forEach((car) => {
+            const u = (elapsedSimTime * 0.08 + car.t) % 1;
+            const totalSegs = carrierPath.length - 1;
+            const scaled = u * totalSegs;
+            const idx = Math.min(Math.floor(scaled), totalSegs - 1);
+            const localT = scaled - idx;
+
+            const pA = carrierPath[idx];
+            const pB = carrierPath[idx + 1];
+            const curX = THREE.MathUtils.lerp(pA.x, pB.x, localT);
+            const curZ = THREE.MathUtils.lerp(pA.z, pB.z, localT);
+            const curY = getTerrainHeight(curX, curZ);
+
+            car.root.position.set(curX, curY, curZ);
+            const angle = Math.atan2(pB.x - pA.x, pB.z - pA.z);
+            car.root.rotation.y = angle;
+
+            const stride = elapsedSimTime * 7.5 + car.t * 12;
+            car.leftLeg.rotation.x = Math.sin(stride) * 0.48;
+            car.rightLeg.rotation.x = -Math.sin(stride) * 0.48;
+            car.bodyPivot.position.y = Math.abs(Math.sin(stride)) * 0.06;
+          });
+
+          // 4) Overseers subtle posture & staff gesture
+          animatedOverseers.forEach((ov) => {
+            const s = elapsedSimTime * 1.8 + ov.phase;
+            ov.bodyPivot.rotation.z = Math.sin(s) * 0.05;
+            ov.rightArm.rotation.x = Math.sin(s * 0.8) * 0.14;
+          });
+
+          // 5) Palm crowns & reeds swaying gently in desert breeze
+          palmCrowns.forEach((item) => {
+            item.crown.rotation.z = Math.sin(elapsedSimTime * 1.2 + item.phase) * 0.045;
+            item.crown.rotation.x = Math.cos(elapsedSimTime * 1.0 + item.phase) * 0.035;
+          });
+
+          reedClusters.forEach((r) => {
+            r.cluster.rotation.z = Math.sin(elapsedSimTime * 2.1 + r.phase) * 0.08;
+          });
+
+          // 6) Gentle water shimmer
+          nileMat.emissiveIntensity = 0.75 + Math.sin(elapsedSimTime * 2.2) * 0.2;
+
+          // 7) Floating desert dust particles
+          const pArr = dustPoints.geometry.attributes.position.array;
+          for (let i = 0; i < particleCount; i++) {
+            pArr[i * 3] += dt * animSpeed * 0.9;
+            pArr[i * 3 + 1] += Math.sin(elapsedSimTime * 1.5 + i) * dt * 0.25;
+            if (pArr[i * 3] > 45) {
+              pArr[i * 3] = -45;
+            }
+          }
+          dustPoints.geometry.attributes.position.needsUpdate = true;
+        }
+
+        controls.update();
+        renderer.render(scene, camera);
+      }
+
+      // Hide loading screen once initialized
+      window.addEventListener('load', () => {
+        const loader = document.getElementById('loading-overlay');
+        setTimeout(() => {
+          loader.style.opacity = '0';
+          setTimeout(() => {
+            loader.style.display = 'none';
+          }, 700);
+        }, 350);
+        animate();
+      });
+
+      // Fallback start in case load event already fired
+      if (document.readyState === 'complete') {
+        const loader = document.getElementById('loading-overlay');
+        if (loader) loader.style.display = 'none';
+        animate();
+      }
+    })();
+  </script>
+
+<a id="club-back" href="../index.html#products-shelf" style="position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#fff;color:#1d2433;border:2px solid #cfe0f0;border-radius:999px;padding:8px 18px;font:600 15px/1.2 Arial,sans-serif;text-decoration:none;direction:rtl;box-shadow:0 3px 0 #cfe0f0">→ חזרה לאתר החוג</a>
+<script>if (window.top !== window) document.getElementById("club-back").remove();</script>
+</body>
+</html>

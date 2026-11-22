@@ -1,0 +1,1451 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>שיעבוד מצרים - עולם תלת-ממדי היסטורי</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      user-select: none;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Heebo', sans-serif;
+      background-color: #1c1209;
+      color: #fdf6e7;
+    }
+    #canvas-container {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+    }
+    /* Custom scrollbar for info drawer */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(35, 22, 10, 0.4);
+      border-radius: 999px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(217, 155, 67, 0.65);
+      border-radius: 999px;
+    }
+    /* Custom range slider */
+    input[type="range"].desert-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      background: linear-gradient(90deg, #ff9d2e 0%, #ffd275 50%, #5b4b8a 100%);
+      height: 7px;
+      border-radius: 999px;
+      outline: none;
+    }
+    input[type="range"].desert-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #fff3d6;
+      border: 2px solid #b45309;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.45);
+      cursor: pointer;
+      transition: transform 0.15s ease;
+    }
+    input[type="range"].desert-slider::-webkit-slider-thumb:hover {
+      transform: scale(1.15);
+    }
+    .glass-panel {
+      background: rgba(24, 15, 7, 0.72);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(235, 185, 105, 0.24);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+    }
+    .hotspot-marker {
+      position: fixed;
+      transform: translate(-50%, -50%);
+      z-index: 15;
+      pointer-events: auto;
+      transition: transform 0.2s ease, opacity 0.25s ease;
+    }
+    .hotspot-marker:hover {
+      transform: translate(-50%, -50%) scale(1.12);
+    }
+    @keyframes pulseRing {
+      0% { transform: scale(0.9); opacity: 0.85; }
+      70% { transform: scale(1.75); opacity: 0; }
+      100% { transform: scale(1.75); opacity: 0; }
+    }
+    .pulse-ring {
+      position: absolute;
+      inset: 0;
+      border-radius: 999px;
+      border: 2px solid #fbbf24;
+      animation: pulseRing 2.2s infinite;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <!-- 3D WebGL Canvas Container -->
+  <div id="canvas-container" aria-label="סצנה תלת-ממדית של אתר בנייה במצרים העתיקה"></div>
+
+  <!-- 3D Projected Information Hotspots -->
+  <div id="hotspots-layer" class="fixed inset-0 pointer-events-none z-10"></div>
+
+  <!-- Top Bar: Title & HUD Toggle -->
+  <header class="fixed top-3 right-3 left-3 z-20 flex items-start justify-between gap-3 pointer-events-none">
+    <div id="hud-header" class="glass-panel rounded-2xl px-4 py-3 pointer-events-auto max-w-md transition-all duration-300">
+      <div class="flex items-center gap-2.5">
+        <span class="inline-flex items-center justify-center w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-400/40 text-amber-300 text-lg">𓂀</span>
+        <div>
+          <h1 class="text-base sm:text-lg font-extrabold tracking-tight text-amber-100 leading-tight">
+            שיעבוד מצרים — אתר הבנייה המלכותי
+          </h1>
+          <p class="text-xs text-amber-200/75 leading-snug">
+            דיורמה היסטורית אינטראקטיבית • גרור לסיבוב, גלגלת לזום, לחיצה ימנית להזזה
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2 pointer-events-auto">
+      <button
+        id="toggle-hud-btn"
+        type="button"
+        class="glass-panel hover:bg-amber-900/50 active:scale-95 text-amber-100 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-semibold flex items-center gap-2 transition cursor-pointer"
+        title="הסתר או הצג ממשק"
+      >
+        <span id="toggle-hud-icon">👁️</span>
+        <span id="toggle-hud-text">הסתר ממשק</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Floating Historical Info Card (Right/Center-Right Drawer) -->
+  <aside
+    id="info-card"
+    class="fixed top-24 right-3 z-30 w-[calc(100vw-1.5rem)] sm:w-96 max-h-[62vh] overflow-y-auto glass-panel rounded-2xl p-5 hidden transition-all duration-300"
+    role="dialog"
+    aria-live="polite"
+  >
+    <div class="flex items-start justify-between gap-2 mb-3">
+      <div>
+        <span id="info-badge" class="inline-block text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-500/25 text-amber-300 border border-amber-400/30 mb-1.5">
+          נקודת עיון היסטורית
+        </span>
+        <h2 id="info-title" class="text-lg font-extrabold text-amber-100"></h2>
+      </div>
+      <button
+        id="close-info-btn"
+        type="button"
+        class="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 text-amber-100 flex items-center justify-center text-sm font-bold transition cursor-pointer shrink-0"
+        aria-label="סגור כרטיס מידע"
+      >
+        ✕
+      </button>
+    </div>
+    <p id="info-body" class="text-sm text-amber-50/90 leading-relaxed mb-3.5"></p>
+    <div id="info-fact-box" class="rounded-xl bg-amber-950/60 border border-amber-400/20 p-3 text-xs text-amber-200/90 leading-relaxed">
+      <span class="font-bold text-amber-300 block mb-1">💡 היבט היסטורי וארכאולוגי:</span>
+      <span id="info-fact"></span>
+    </div>
+  </aside>
+
+  <!-- Bottom Control Deck -->
+  <footer id="hud-bottom" class="fixed bottom-3 right-3 left-3 z-20 flex flex-col gap-2.5 pointer-events-none transition-all duration-300">
+    <!-- Historical Topics Quick Bar -->
+    <div class="flex items-center justify-center sm:justify-start gap-1.5 overflow-x-auto pb-0.5 pointer-events-auto">
+      <span class="text-[11px] text-amber-200/75 font-semibold px-2 py-1 shrink-0 hidden md:inline">נושאי עיון:</span>
+      <button data-topic="bricks" class="topic-btn glass-panel hover:bg-amber-800/60 text-amber-100 rounded-xl px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition cursor-pointer">
+        🧱 לבני בוץ ותבן
+      </button>
+      <button data-topic="ramps" class="topic-btn glass-panel hover:bg-amber-800/60 text-amber-100 rounded-xl px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition cursor-pointer">
+        📐 רמפות ומנופים
+      </button>
+      <button data-topic="monuments" class="topic-btn glass-panel hover:bg-amber-800/60 text-amber-100 rounded-xl px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition cursor-pointer">
+        🏛️ הפירמידות והמבנים
+      </button>
+      <button data-topic="nile" class="topic-btn glass-panel hover:bg-amber-800/60 text-amber-100 rounded-xl px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition cursor-pointer">
+        🌊 הנילוס והמדבר
+      </button>
+    </div>
+
+    <!-- Main Control Bar: Camera Presets + Lighting & Time of Day -->
+    <div class="glass-panel rounded-2xl p-3 sm:px-4 sm:py-3 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 pointer-events-auto">
+      <!-- Camera Viewpoints -->
+      <div class="flex flex-wrap items-center gap-1.5">
+        <span class="text-xs font-bold text-amber-300/90 ml-1">📷 זוויות צילום:</span>
+        <button data-cam="overview" class="cam-btn bg-amber-500/30 border border-amber-400/50 text-amber-100 rounded-xl px-3 py-1.5 text-xs font-semibold transition cursor-pointer">
+          מבט כללי על אתר הבנייה
+        </button>
+        <button data-cam="ramp" class="cam-btn bg-white/5 hover:bg-amber-700/40 border border-amber-300/20 text-amber-100 rounded-xl px-3 py-1.5 text-xs font-semibold transition cursor-pointer">
+          מעלה הרמפה והלבנים
+        </button>
+        <button data-cam="nile" class="cam-btn bg-white/5 hover:bg-amber-700/40 border border-amber-300/20 text-amber-100 rounded-xl px-3 py-1.5 text-xs font-semibold transition cursor-pointer">
+          נוף הנילוס והמדבר
+        </button>
+      </div>
+
+      <!-- Time of Day Presets & Sun Slider -->
+      <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 lg:border-r lg:border-amber-300/20 lg:pr-4">
+        <div class="flex items-center gap-1.5">
+          <span class="text-xs font-bold text-amber-300/90">☀️ תאורה:</span>
+          <button data-time="noon" class="time-btn bg-amber-500/30 border border-amber-400/50 text-amber-100 rounded-lg px-2.5 py-1 text-xs font-semibold transition cursor-pointer">
+            צהריים לוהטים
+          </button>
+          <button data-time="golden" class="time-btn bg-white/5 hover:bg-amber-700/40 border border-amber-300/20 text-amber-100 rounded-lg px-2.5 py-1 text-xs font-semibold transition cursor-pointer">
+            אחר הצהריים הזהוב
+          </button>
+          <button data-time="dusk" class="time-btn bg-white/5 hover:bg-amber-700/40 border border-amber-300/20 text-amber-100 rounded-lg px-2.5 py-1 text-xs font-semibold transition cursor-pointer">
+            דמדומים
+          </button>
+        </div>
+
+        <div class="flex items-center gap-2 min-w-[165px]">
+          <span id="time-label" class="text-[11px] text-amber-200/85 font-medium w-14 text-center">12:30</span>
+          <input
+            id="sun-slider"
+            type="range"
+            min="0"
+            max="100"
+            value="38"
+            class="desert-slider flex-1"
+            aria-label="מיקום השמש ושעת היום"
+          />
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Toast / Status Notification (replaces alert) -->
+  <div
+    id="status-toast"
+    class="fixed top-20 left-1/2 -translate-x-1/2 z-40 glass-panel px-4 py-2 rounded-full text-xs font-semibold text-amber-100 opacity-0 pointer-events-none transition-opacity duration-300"
+  ></div>
+
+  <script>
+    /**
+     * ============================================================================
+     * סצנה תלת-ממדית: שיעבוד מצרים — דיורמה היסטורית אינטראקטיבית
+     * מבוסס על Three.js (r128) ו-OrbitControls
+     * ============================================================================
+     */
+
+    // נתונים היסטוריים עבור נקודות העיון וכרטיסי המידע
+    const HISTORICAL_TOPICS = {
+      bricks: {
+        badge: "חומרי בניין ועבודת כפיים",
+        title: "לבני בוץ ותבן (לְבֵנִים)",
+        body: "במצרים העתיקה יוצרו מיליוני לבני בוץ (אדובי) מטיט הנילוס המעורב בתבן קצוץ או חול לחיזוק המבנה. הלבנים הוטבעו בתבניות עץ ויובשו בשמש הקופחת, ושימשו לבניית חומות, מגדלים, מבני עזר, רמפות וערי מסכנות.",
+        fact: "במקרא מתוארת ההחמרה בעבודת בני ישראל כאשר נדרשו לאסוף תבן בעצמם מבלי שהופחתה מכסת הלבנים היומית — משימה שדרשה מאמץ רב בשטח ובחום הכבד.",
+        worldPos: new THREE.Vector3(-7.5, 2.2, 6.5),
+        label: "לבני בוץ ותבן"
+      },
+      ramps: {
+        badge: "הנדסה עתיקה ותחבורה",
+        title: "רמפות, מזחלות עץ ומנופי שאדוף",
+        body: "בהיעדר מנופים מודרניים, הועלו אבנים כבדות ולבנים לגובה באמצעות רמפות משופעות מבוץ, חול ואבן, ונגררו על מזחלות עץ — לעיתים תוך הרטבת החול בקדמת המזחלה להפחתת החיכוך. לצד התעלות והבארות הופעלו מנופי 'שאדוף' להרמת מים.",
+        fact: "רמפות בנייה הותקנו בצורות מגוונות — ישרות, ספירליות או תומכות — ופוזרו או שולבו במבנה ככל שהבנייה התקדמה כלפי מעלה.",
+        worldPos: new THREE.Vector3(2.8, 4.4, 2.2),
+        label: "רמפות ושינוע"
+      },
+      monuments: {
+        badge: "אדריכלות מונומנטלית",
+        title: "פירמידה בלתי גמורה, פילון ופיגומים",
+        body: "אתרי הבנייה המלכותיים במצרים שילבו ליבת לבני בוץ או נדבכי אבן מדורגים עם חיפוי אבן גיר חלקה ופיגומי עץ וחבלים. נוגשים מצריים חמושים במקלות פיקוח השגיחו על קצב העבודה של פלוגות העובדים.",
+        fact: "בנייה בקנה מידה כזה דרשה תכנון ריכוזי, חלוקה לפלוגות עבודה, אספקת מזון ומים שוטפת ופיקוח הדוק של פקידי המנהל המצריים.",
+        worldPos: new THREE.Vector3(0.0, 7.2, -4.5),
+        label: "מבנה מונומנטלי"
+      },
+      nile: {
+        badge: "גאוגרפיה ואקלים",
+        title: "נהר הנילוס, רצועת הפוריות והמדבר",
+        body: "הנילוס הזין את רצועת החקלאות והיישוב הצרה לאורך עמק הנהר, בעוד שמעבר לה השתרע המדבר הצחיח והחם. הנהר שימש גם עורק תחבורה מרכזי להובלת בלוקים ממחצבות אבן ומקור חיוני למי שתייה ולטיט.",
+        fact: "הניגוד החד בין המים החיים והדקלים של עמק הנילוס לבין החום והאבק של המדבר עיצב את חיי היומיום והעבודה במצרים העתיקה.",
+        worldPos: new THREE.Vector3(-19.0, 2.5, -16.0),
+        label: "הנילוס והמדבר"
+      }
+    };
+
+    // נקודות מבט מוגדרות מראש למצלמה
+    const CAMERA_PRESETS = {
+      overview: {
+        pos: new THREE.Vector3(18.5, 13.5, 21.5),
+        target: new THREE.Vector3(-1.0, 2.5, -1.5),
+        toast: "מבט כללי על אתר הבנייה המצרי"
+      },
+      ramp: {
+        pos: new THREE.Vector3(9.5, 7.2, 8.8),
+        target: new THREE.Vector3(0.5, 3.6, 0.5),
+        toast: "מעלה הרמפה, שינוע האבנים והפיגומים"
+      },
+      nile: {
+        pos: new THREE.Vector3(-11.0, 8.5, 14.5),
+        target: new THREE.Vector3(-14.0, 1.0, -14.0),
+        toast: "מבט אל נהר הנילוס, הדקלים ומרחבי המדבר"
+      }
+    };
+
+    // הגדרות מצבי תאורה (שעת יום)
+    const TIME_PRESETS = {
+      noon: { value: 38, label: "12:30" },
+      golden: { value: 72, label: "16:45" },
+      dusk: { value: 94, label: "18:55" }
+    };
+
+    // משתני סצנה גלובליים
+    let scene, camera, renderer, controls;
+    let sunLight, hemiLight, fillLight, sunMesh, skyDome;
+    let dustPoints, dustVelocities;
+    let cloudGroup;
+    const palmCrowns = [];
+    const haulingWorkers = [];
+    const brickCarts = [];
+    const quarryBlocks = [];
+    const hotspotElements = {};
+    let activeTopicKey = null;
+
+    // מצב אנימציית מצלמה חלקה
+    let camTransition = {
+      active: false,
+      startPos: new THREE.Vector3(),
+      endPos: new THREE.Vector3(),
+      startTarget: new THREE.Vector3(),
+      endTarget: new THREE.Vector3(),
+      progress: 0
+    };
+
+    // עזר להצגת הודעה קצרה במקום alert
+    function showToast(message) {
+      const toast = document.getElementById("status-toast");
+      if (!toast) return;
+      toast.textContent = message;
+      toast.classList.remove("opacity-0");
+      toast.classList.add("opacity-100");
+      clearTimeout(showToast._timer);
+      showToast._timer = setTimeout(() => {
+        toast.classList.remove("opacity-100");
+        toast.classList.add("opacity-0");
+      }, 2400);
+    }
+
+    // פונקציה לחישוב צבעים וזוויות תאורה לפי ערך סליידר (0 עד 100)
+    function applyLightingFromSlider(val) {
+      const t = Math.max(0, Math.min(100, Number(val))) / 100; // 0 = בוקר חם, ~0.38 = צהריים, ~0.72 = זהב, ~0.95 = דמדומים
+
+      // זווית השמש בשמיים
+      const elevationAngle = THREE.MathUtils.lerp(Math.PI * 0.44, Math.PI * 0.06, Math.pow(t, 1.15));
+      const azimuthAngle = THREE.MathUtils.lerp(0.55, 1.35, t);
+      const radius = 65;
+
+      const sunX = Math.cos(elevationAngle) * Math.cos(azimuthAngle) * radius;
+      const sunY = Math.max(4.5, Math.sin(elevationAngle) * radius);
+      const sunZ = Math.cos(elevationAngle) * Math.sin(azimuthAngle) * radius;
+
+      if (sunLight) {
+        sunLight.position.set(sunX, sunY, sunZ);
+      }
+      if (sunMesh) {
+        sunMesh.position.set(sunX * 1.15, sunY * 1.15, sunZ * 1.15);
+      }
+
+      // אינטרפולציה של צבעי שמש, תאורה סביבתית וערפל מדברי
+      const noonSun = new THREE.Color(0xfff1cc);
+      const goldenSun = new THREE.Color(0xff9a3c);
+      const duskSun = new THREE.Color(0xd95b43);
+
+      const noonSky = new THREE.Color(0x8ecae6);
+      const goldenSky = new THREE.Color(0xf4a261);
+      const duskSky = new THREE.Color(0x2b244d);
+
+      const noonFog = new THREE.Color(0xe6c48c);
+      const goldenFog = new THREE.Color(0xe39b5b);
+      const duskFog = new THREE.Color(0x4a3548);
+
+      const currentSunColor = new THREE.Color();
+      const currentSkyColor = new THREE.Color();
+      const currentFogColor = new THREE.Color();
+
+      if (t < 0.5) {
+        const k = t / 0.5;
+        currentSunColor.lerpColors(noonSun, goldenSun, k);
+        currentSkyColor.lerpColors(noonSky, goldenSky, k);
+        currentFogColor.lerpColors(noonFog, goldenFog, k);
+      } else {
+        const k = (t - 0.5) / 0.5;
+        currentSunColor.lerpColors(goldenSun, duskSun, k);
+        currentSkyColor.lerpColors(goldenSky, duskSky, k);
+        currentFogColor.lerpColors(goldenFog, duskFog, k);
+      }
+
+      if (sunLight) {
+        sunLight.color.copy(currentSunColor);
+        sunLight.intensity = THREE.MathUtils.lerp(2.1, 0.85, Math.pow(t, 1.2));
+      }
+      if (sunMesh && sunMesh.material) {
+        sunMesh.material.color.copy(currentSunColor);
+      }
+      if (hemiLight) {
+        hemiLight.color.copy(currentSkyColor);
+        hemiLight.groundColor.setHex(0x8c5a2b);
+        hemiLight.intensity = THREE.MathUtils.lerp(0.95, 0.42, t);
+      }
+      if (fillLight) {
+        fillLight.color.copy(currentFogColor);
+        fillLight.intensity = THREE.MathUtils.lerp(0.45, 0.25, t);
+      }
+      if (scene && scene.fog) {
+        scene.fog.color.copy(currentFogColor);
+      }
+      if (skyDome && skyDome.material) {
+        skyDome.material.color.copy(currentSkyColor);
+      }
+      if (renderer) {
+        renderer.setClearColor(currentFogColor, 1);
+      }
+
+      // עדכון תצוגת שעה משוערת
+      const totalMinutes = Math.round(THREE.MathUtils.lerp(11 * 60 + 30, 19 * 60 + 10, t));
+      const hh = String(Math.floor(totalMinutes / 60)).padStart(2, "0");
+      const mm = String(totalMinutes % 60).padStart(2, "0");
+      const timeLabel = document.getElementById("time-label");
+      if (timeLabel) {
+        timeLabel.textContent = `${hh}:${mm}`;
+      }
+    }
+
+    // יצירת קרקע מדברית עם דיונות וערוץ הנילוס
+    function createDesertAndNile() {
+      const group = new THREE.Group();
+
+      // משטח מדבר ראשי עם תבליט דיונות
+      const planeSize = 140;
+      const segments = 120;
+      const geo = new THREE.PlaneGeometry(planeSize, planeSize, segments, segments);
+      geo.rotateX(-Math.PI / 2);
+
+      const pos = geo.attributes.position;
+      const colors = new Float32Array(pos.count * 3);
+
+      const sandLow = new THREE.Color(0xd7a866);
+      const sandHigh = new THREE.Color(0xebb972);
+      const riverBank = new THREE.Color(0x7c8a46);
+      const tmpColor = new THREE.Color();
+
+      for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i);
+        const z = pos.getZ(i);
+
+        // קו מתפתל של נהר הנילוס בצפון-מערב
+        const riverCenterZ = -17 + Math.sin(x * 0.085) * 4.5 - x * 0.15;
+        const distToRiver = Math.abs(z - riverCenterZ);
+
+        // גלי דיונות טבעיים
+        let duneHeight =
+          Math.sin(x * 0.07 + z * 0.05) * 1.35 +
+          Math.cos(x * 0.14 - z * 0.11) * 0.55 +
+          Math.sin(x * 0.035 + z * 0.04) * 1.8;
+
+        // שטיחות יחסית במרכז אתר הבנייה
+        const distFromCenter = Math.hypot(x + 1, z + 1);
+        const flattenFactor = THREE.MathUtils.smoothstep(distFromCenter, 5, 18);
+        duneHeight *= flattenFactor;
+
+        // שקע ערוץ הנילוס
+        if (distToRiver < 5.5) {
+          const riverFactor = 1 - THREE.MathUtils.smoothstep(distToRiver, 0.5, 5.5);
+          duneHeight = THREE.MathUtils.lerp(duneHeight, -1.35, riverFactor);
+          tmpColor.lerpColors(sandLow, riverBank, riverFactor * 0.72);
+        } else {
+          const hNorm = THREE.MathUtils.clamp((duneHeight + 1.5) / 4.5, 0, 1);
+          tmpColor.lerpColors(sandLow, sandHigh, hNorm);
+        }
+
+        pos.setY(i, duneHeight);
+        colors[i * 3] = tmpColor.r;
+        colors[i * 3 + 1] = tmpColor.g;
+        colors[i * 3 + 2] = tmpColor.b;
+      }
+
+      geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+      geo.computeVertexNormals();
+
+      const desertMat = new THREE.MeshStandardMaterial({
+        vertexColors: true,
+        roughness: 0.92,
+        metalness: 0.02,
+        flatShading: true
+      });
+      const desertMesh = new THREE.Mesh(geo, desertMat);
+      desertMesh.receiveShadow = true;
+      group.add(desertMesh);
+
+      // רצועת המים של נהר הנילוס
+      const riverGeo = new THREE.PlaneGeometry(planeSize, 9.5, 80, 12);
+      riverGeo.rotateX(-Math.PI / 2);
+      const rPos = riverGeo.attributes.position;
+      for (let i = 0; i < rPos.count; i++) {
+        const rx = rPos.getX(i);
+        const rz = rPos.getZ(i);
+        const centerZ = -17 + Math.sin(rx * 0.085) * 4.5 - rx * 0.15;
+        rPos.setZ(i, centerZ + rz);
+        rPos.setY(i, -0.35 + Math.sin(rx * 0.35 + rz * 0.8) * 0.05);
+      }
+      riverGeo.computeVertexNormals();
+
+      const waterMat = new THREE.MeshStandardMaterial({
+        color: 0x1e6f86,
+        roughness: 0.22,
+        metalness: 0.35,
+        transparent: true,
+        opacity: 0.88
+      });
+      const waterMesh = new THREE.Mesh(riverGeo, waterMat);
+      waterMesh.receiveShadow = true;
+      group.add(waterMesh);
+
+      // גבעות מדבר רחוקות באופק לעומק קומפוזיציוני
+      const hillMat = new THREE.MeshStandardMaterial({
+        color: 0xc9934d,
+        roughness: 0.95,
+        flatShading: true
+      });
+      const hillPositions = [
+        [-36, 3.2, -35, 16, 8],
+        [34, 4.0, -32, 18, 9.5],
+        [38, 2.5, 22, 14, 6.5],
+        [-35, 2.8, 26, 15, 7]
+      ];
+      hillPositions.forEach(([hx, hy, hz, radius, height]) => {
+        const hGeo = new THREE.ConeGeometry(radius, height, 9);
+        const hill = new THREE.Mesh(hGeo, hillMat);
+        hill.position.set(hx, hy, hz);
+        hill.castShadow = true;
+        hill.receiveShadow = true;
+        group.add(hill);
+      });
+
+      return group;
+    }
+
+    // יצירת עץ דקל מסוגנן שמתנועע ברוח
+    function createPalmTree(x, y, z, scale = 1) {
+      const tree = new THREE.Group();
+      tree.position.set(x, y, z);
+      tree.scale.setScalar(scale);
+
+      const trunkMat = new THREE.MeshStandardMaterial({
+        color: 0x6b4423,
+        roughness: 0.9,
+        flatShading: true
+      });
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.32, 4.8, 7), trunkMat);
+      trunk.position.y = 2.4;
+      trunk.rotation.z = 0.05;
+      trunk.castShadow = true;
+      trunk.receiveShadow = true;
+      tree.add(trunk);
+
+      const crown = new THREE.Group();
+      crown.position.set(0.12, 4.8, 0);
+
+      const frondMat = new THREE.MeshStandardMaterial({
+        color: 0x4b7c2e,
+        roughness: 0.72,
+        side: THREE.DoubleSide,
+        flatShading: true
+      });
+
+      const frondCount = 8;
+      for (let i = 0; i < frondCount; i++) {
+        const angle = (i / frondCount) * Math.PI * 2;
+        const frondPivot = new THREE.Group();
+        frondPivot.rotation.y = angle;
+
+        const frondGeo = new THREE.ConeGeometry(0.45, 2.4, 4);
+        frondGeo.scale(1, 1, 0.16);
+        frondGeo.translate(0, 1.1, 0);
+        const frond = new THREE.Mesh(frondGeo, frondMat);
+        frond.rotation.x = Math.PI * 0.36;
+        frond.castShadow = true;
+
+        frondPivot.add(frond);
+        crown.add(frondPivot);
+      }
+
+      tree.add(crown);
+      palmCrowns.push({ crown, phase: Math.random() * Math.PI * 2 });
+      return tree;
+    }
+
+    // יצירת מבנים מונומנטליים: פירמידה חלקית / מקדש ופילון אבן
+    function createMonumentsAndConstruction() {
+      const group = new THREE.Group();
+
+      const limestoneMat = new THREE.MeshStandardMaterial({
+        color: 0xe3be82,
+        roughness: 0.85,
+        flatShading: true
+      });
+      const darkStoneMat = new THREE.MeshStandardMaterial({
+        color: 0xc49a5b,
+        roughness: 0.88,
+        flatShading: true
+      });
+      const mudbrickMat = new THREE.MeshStandardMaterial({
+        color: 0x9c6234,
+        roughness: 0.92,
+        flatShading: true
+      });
+      const woodMat = new THREE.MeshStandardMaterial({
+        color: 0x5e3a1e,
+        roughness: 0.85
+      });
+
+      // 1. פירמידה מדורגת / מבנה מונומנטלי בבנייה במרכז-אחורי
+      const pyramidBase = new THREE.Group();
+      pyramidBase.position.set(-1.5, 0, -5.5);
+
+      const tiers = 5;
+      for (let i = 0; i < tiers; i++) {
+        const size = 12.5 - i * 2.1;
+        const height = 1.35;
+        const tierGeo = new THREE.BoxGeometry(size, height, size);
+        // שימוש בלבני בוץ בחלק הפנימי/העליון ובאבן גיר בבסיס
+        const mat = i >= 3 ? mudbrickMat : i % 2 === 0 ? limestoneMat : darkStoneMat;
+        const tierMesh = new THREE.Mesh(tierGeo, mat);
+        tierMesh.position.y = i * height + height / 2;
+        tierMesh.castShadow = true;
+        tierMesh.receiveShadow = true;
+        pyramidBase.add(tierMesh);
+      }
+
+      // נדבכים חסרים בצד הימני כדי להדגיש בנייה פעילה
+      const partialBlock = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.35, 2.2), mudbrickMat);
+      partialBlock.position.set(5.4, 0.675, 1.2);
+      partialBlock.castShadow = true;
+      partialBlock.receiveShadow = true;
+      pyramidBase.add(partialBlock);
+
+      group.add(pyramidBase);
+
+      // 2. פילון מקדש (שער אבן משופע) מימין לפירמידה
+      const pylonGroup = new THREE.Group();
+      pylonGroup.position.set(10.5, 0, -4.0);
+      pylonGroup.rotation.y = -0.35;
+
+      const towerGeo = new THREE.CylinderGeometry(1.45, 2.05, 7.8, 4);
+      towerGeo.rotateY(Math.PI / 4);
+      towerGeo.scale(1.15, 1, 0.85);
+
+      const leftTower = new THREE.Mesh(towerGeo, limestoneMat);
+      leftTower.position.set(-2.5, 3.9, 0);
+      leftTower.castShadow = true;
+      leftTower.receiveShadow = true;
+
+      const rightTower = new THREE.Mesh(towerGeo, limestoneMat);
+      rightTower.position.set(2.5, 3.9, 0);
+      rightTower.castShadow = true;
+      rightTower.receiveShadow = true;
+
+      const lintel = new THREE.Mesh(new THREE.BoxGeometry(3.4, 2.2, 2.2), darkStoneMat);
+      lintel.position.set(0, 5.2, 0);
+      lintel.castShadow = true;
+      lintel.receiveShadow = true;
+
+      pylonGroup.add(leftTower, rightTower, lintel);
+      group.add(pylonGroup);
+
+      // 3. רמפת בנייה משופעת מהקרקע אל מפלס הבנייה
+      const rampGroup = new THREE.Group();
+      rampGroup.position.set(2.8, 0, 2.2);
+      rampGroup.rotation.y = -0.58;
+
+      const rampLength = 11.5;
+      const rampWidth = 3.2;
+      const rampHeight = 4.1;
+      const slopeAngle = Math.atan2(rampHeight, rampLength);
+
+      const rampDeck = new THREE.Mesh(
+        new THREE.BoxGeometry(rampWidth, 0.35, rampLength),
+        mudbrickMat
+      );
+      rampDeck.position.set(0, rampHeight / 2, 0);
+      rampDeck.rotation.x = slopeAngle;
+      rampDeck.castShadow = true;
+      rampDeck.receiveShadow = true;
+      rampGroup.add(rampDeck);
+
+      // דפנות תמך לרמפה
+      [-rampWidth / 2 - 0.15, rampWidth / 2 + 0.15].forEach((sideX) => {
+        const wall = new THREE.Mesh(
+          new THREE.BoxGeometry(0.3, rampHeight * 0.75, rampLength * 0.92),
+          darkStoneMat
+        );
+        wall.position.set(sideX, rampHeight * 0.36, 0);
+        wall.rotation.x = slopeAngle;
+        wall.castShadow = true;
+        wall.receiveShadow = true;
+        rampGroup.add(wall);
+      });
+
+      group.add(rampGroup);
+
+      // 4. פיגומי עץ וחבלים לצד המבנה
+      const scaffoldGroup = new THREE.Group();
+      scaffoldGroup.position.set(4.6, 0, -2.2);
+
+      const poleCoords = [
+        [-1.2, -1.2],
+        [1.2, -1.2],
+        [-1.2, 1.2],
+        [1.2, 1.2]
+      ];
+      poleCoords.forEach(([px, pz]) => {
+        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 6.2, 6), woodMat);
+        pole.position.set(px, 3.1, pz);
+        pole.castShadow = true;
+        scaffoldGroup.add(pole);
+      });
+
+      [1.6, 3.2, 4.8].forEach((levelY) => {
+        const beamX1 = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.12, 0.12), woodMat);
+        beamX1.position.set(0, levelY, -1.2);
+        beamX1.castShadow = true;
+
+        const beamX2 = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.12, 0.12), woodMat);
+        beamX2.position.set(0, levelY, 1.2);
+        beamX2.castShadow = true;
+
+        const plank = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.1, 2.5), woodMat);
+        plank.position.set(0, levelY + 0.08, 0);
+        plank.castShadow = true;
+        plank.receiveShadow = true;
+
+        scaffoldGroup.add(beamX1, beamX2, plank);
+      });
+      group.add(scaffoldGroup);
+
+      // 5. ערימות לבני בוץ (אדובי) ובלוקי חציבה
+      const brickStackGroup = new THREE.Group();
+      brickStackGroup.position.set(-7.5, 0, 6.5);
+
+      for (let row = 0; row < 4; row++) {
+        for (let col = 0; col < 5; col++) {
+          for (let layer = 0; layer < 3; layer++) {
+            const brick = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.24, 0.34), mudbrickMat);
+            brick.position.set(col * 0.72, layer * 0.26 + 0.12, row * 0.46);
+            brick.castShadow = true;
+            brick.receiveShadow = true;
+            brickStackGroup.add(brick);
+          }
+        }
+      }
+      group.add(brickStackGroup);
+
+      // בלוקי אבן חצובים באזור המחצבה
+      const quarryCoords = [
+        [-11.5, 0.45, 2.2, 1.4, 0.9, 1.0],
+        [-12.8, 0.45, 3.8, 1.5, 0.9, 1.1],
+        [-10.2, 0.45, 4.5, 1.3, 0.9, 0.95],
+        [-12.0, 1.35, 3.0, 1.35, 0.9, 1.0]
+      ];
+      quarryCoords.forEach(([qx, qy, qz, w, h, d]) => {
+        const block = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), limestoneMat);
+        block.position.set(qx, qy, qz);
+        block.rotation.y = (Math.random() - 0.5) * 0.35;
+        block.castShadow = true;
+        block.receiveShadow = true;
+        group.add(block);
+        quarryBlocks.push(block);
+      });
+
+      return group;
+    }
+
+    // יצירת דמות עובד או נוגש בסגנון דיורמה היסטורי מכבד ומסוגנן
+    function createHumanFigure({ isOverseer = false, carryingBlock = false }) {
+      const person = new THREE.Group();
+
+      const skinMat = new THREE.MeshStandardMaterial({
+        color: isOverseer ? 0xc68652 : 0xb57645,
+        roughness: 0.78,
+        flatShading: true
+      });
+      const tunicMat = new THREE.MeshStandardMaterial({
+        color: isOverseer ? 0xf3e5ab : 0xd9cbb8,
+        roughness: 0.85,
+        flatShading: true
+      });
+      const accentMat = new THREE.MeshStandardMaterial({
+        color: isOverseer ? 0x1d4e89 : 0x8d5524,
+        roughness: 0.8,
+        flatShading: true
+      });
+
+      // גוף / חצאית מצרית קצרה
+      const torso = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.72, 0.28), skinMat);
+      torso.position.y = 0.96;
+      torso.castShadow = true;
+      person.add(torso);
+
+      const kilt = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.42, 0.32), tunicMat);
+      kilt.position.y = 0.52;
+      kilt.castShadow = true;
+      person.add(kilt);
+
+      // ראש
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.34, 0.32), skinMat);
+      head.position.y = 1.52;
+      head.castShadow = true;
+      person.add(head);
+
+      // כיסוי ראש / כתר פשוט לנוגש
+      if (isOverseer) {
+        const cap = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.14, 0.36), accentMat);
+        cap.position.y = 1.71;
+        cap.castShadow = true;
+        person.add(cap);
+      }
+
+      // רגליים
+      const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.52, 0.18), skinMat);
+      leftLeg.position.set(-0.12, 0.26, 0);
+      leftLeg.castShadow = true;
+
+      const rightLeg = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.52, 0.18), skinMat);
+      rightLeg.position.set(0.12, 0.26, 0);
+      rightLeg.castShadow = true;
+
+      person.add(leftLeg, rightLeg);
+
+      // ידיים
+      const leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.54, 0.14), skinMat);
+      leftArm.position.set(-0.3, 1.12, 0.12);
+      leftArm.rotation.x = carryingBlock ? -0.95 : -0.35;
+      leftArm.castShadow = true;
+
+      const rightArm = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.54, 0.14), skinMat);
+      rightArm.position.set(0.3, 1.12, 0.12);
+      rightArm.rotation.x = carryingBlock ? -0.95 : -0.35;
+      rightArm.castShadow = true;
+
+      person.add(leftArm, rightArm);
+
+      if (carryingBlock) {
+        const brick = new THREE.Mesh(
+          new THREE.BoxGeometry(0.46, 0.24, 0.3),
+          new THREE.MeshStandardMaterial({ color: 0x9c6234, roughness: 0.9 })
+        );
+        brick.position.set(0, 1.38, 0.32);
+        brick.castShadow = true;
+        person.add(brick);
+      }
+
+      if (isOverseer) {
+        // מטה פיקוח ארוך לנוגש (הצגה היסטורית מכבדת)
+        const staff = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.03, 0.035, 2.05, 6),
+          new THREE.MeshStandardMaterial({ color: 0x4a2c11, roughness: 0.85 })
+        );
+        staff.position.set(0.36, 1.0, 0.25);
+        staff.rotation.x = 0.12;
+        staff.castShadow = true;
+        person.add(staff);
+      }
+
+      person.userData = { leftLeg, rightLeg, leftArm, rightArm };
+      return person;
+    }
+
+    // יצירת קבוצות עובדים גוררים, נושאי לבנים ונוגשים
+    function createWorkersAndOverseers() {
+      const group = new THREE.Group();
+
+      // מסלול גרירה לאורך הרמפה והרחבה הקדמית
+      const haulCurve = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(6.8, 0.0, 8.2),
+        new THREE.Vector3(5.2, 0.4, 5.6),
+        new THREE.Vector3(3.1, 1.4, 2.5),
+        new THREE.Vector3(1.1, 2.7, -0.5),
+        new THREE.Vector3(-0.6, 3.9, -3.0)
+      ]);
+
+      // מזחלת עץ עם בלוק אבן הנגררת במעלה הרמפה
+      const sled = new THREE.Group();
+      const sledMat = new THREE.MeshStandardMaterial({ color: 0x5c3818, roughness: 0.88 });
+      const runner1 = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 1.7), sledMat);
+      runner1.position.set(-0.42, 0.08, 0);
+      runner1.castShadow = true;
+
+      const runner2 = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 1.7), sledMat);
+      runner2.position.set(0.42, 0.08, 0);
+      runner2.castShadow = true;
+
+      const deck = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.12, 1.5), sledMat);
+      deck.position.set(0, 0.2, 0);
+      deck.castShadow = true;
+
+      const stoneBlock = new THREE.Mesh(
+        new THREE.BoxGeometry(0.85, 0.65, 0.95),
+        new THREE.MeshStandardMaterial({ color: 0xe3be82, roughness: 0.85, flatShading: true })
+      );
+      stoneBlock.position.set(0, 0.58, 0);
+      stoneBlock.castShadow = true;
+
+      sled.add(runner1, runner2, deck, stoneBlock);
+      group.add(sled);
+
+      brickCarts.push({ mesh: sled, curve: haulCurve, offset: 0.12 });
+
+      // פלוגת עובדים הנגררים בשיירה
+      for (let i = 0; i < 4; i++) {
+        const worker = createHumanFigure({ isOverseer: false, carryingBlock: i % 2 === 1 });
+        worker.scale.setScalar(0.92);
+        group.add(worker);
+        haulingWorkers.push({
+          mesh: worker,
+          curve: haulCurve,
+          offset: 0.24 + i * 0.13,
+          phase: i * 1.4
+        });
+      }
+
+      // עובדים נוספים ליד ערימות הלבנים והמחצבה
+      const stationarySpots = [
+        [-5.8, 0, 6.8, 0.7],
+        [-6.4, 0, 5.4, -0.4],
+        [-9.2, 0, 3.2, 1.1],
+        [2.2, 0, -1.8, 0.4]
+      ];
+      stationarySpots.forEach(([wx, wy, wz, rotY], idx) => {
+        const w = createHumanFigure({ isOverseer: false, carryingBlock: idx % 2 === 0 });
+        w.position.set(wx, wy, wz);
+        w.rotation.y = rotY;
+        w.scale.setScalar(0.9);
+        group.add(w);
+      });
+
+      // נוגשים מצריים משגיחים בשטח
+      const overseerSpots = [
+        [5.8, 0, 4.2, -0.7],
+        [-4.2, 0, 4.5, 0.6],
+        [6.5, 0, -1.5, -1.1]
+      ];
+      overseerSpots.forEach(([ox, oy, oz, rotY]) => {
+        const overseer = createHumanFigure({ isOverseer: true, carryingBlock: false });
+        overseer.position.set(ox, oy, oz);
+        overseer.rotation.y = rotY;
+        overseer.scale.setScalar(0.96);
+        group.add(overseer);
+      });
+
+      return group;
+    }
+
+    // יצירת עננים רכים וחלקיקי אבק/חול מדברי
+    function createCloudsAndDust() {
+      cloudGroup = new THREE.Group();
+      const cloudMat = new THREE.MeshStandardMaterial({
+        color: 0xfff3dc,
+        roughness: 1,
+        transparent: true,
+        opacity: 0.55,
+        flatShading: true
+      });
+
+      for (let i = 0; i < 7; i++) {
+        const puffCluster = new THREE.Group();
+        const puffs = 3 + (i % 2);
+        for (let p = 0; p < puffs; p++) {
+          const puff = new THREE.Mesh(
+            new THREE.DodecahedronGeometry(1.8 + p * 0.55, 0),
+            cloudMat
+          );
+          puff.position.set(p * 1.7, (p % 2) * 0.35, (p - 1) * 0.6);
+          puff.scale.set(1.3, 0.55, 0.9);
+          puffCluster.add(puff);
+        }
+        puffCluster.position.set(
+          (i - 3) * 14,
+          17 + (i % 3) * 2.5,
+          -22 - (i % 2) * 10
+        );
+        puffCluster.userData.speed = 0.25 + (i % 3) * 0.08;
+        cloudGroup.add(puffCluster);
+      }
+      scene.add(cloudGroup);
+
+      // חלקיקי אבק וחול מרחפים
+      const dustCount = 420;
+      const dustGeo = new THREE.BufferGeometry();
+      const positions = new Float32Array(dustCount * 3);
+      dustVelocities = new Float32Array(dustCount * 3);
+
+      for (let i = 0; i < dustCount; i++) {
+        positions[i * 3] = (Math.random() - 0.5) * 52;
+        positions[i * 3 + 1] = Math.random() * 11 + 0.3;
+        positions[i * 3 + 2] = (Math.random() - 0.5) * 52;
+
+        dustVelocities[i * 3] = 0.35 + Math.random() * 0.45;
+        dustVelocities[i * 3 + 1] = (Math.random() - 0.5) * 0.08;
+        dustVelocities[i * 3 + 2] = (Math.random() - 0.5) * 0.25;
+      }
+
+      dustGeo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+      const dustMat = new THREE.PointsMaterial({
+        color: 0xf7d794,
+        size: 0.16,
+        transparent: true,
+        opacity: 0.62
+      });
+
+      dustPoints = new THREE.Points(dustGeo, dustMat);
+      scene.add(dustPoints);
+    }
+
+    // יצירת סמני נקודות עניין אינטראקטיביות (Hotspots) בממשק
+    function initHotspots() {
+      const layer = document.getElementById("hotspots-layer");
+      if (!layer) return;
+      layer.innerHTML = "";
+
+      Object.entries(HISTORICAL_TOPICS).forEach(([key, data]) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "hotspot-marker group flex items-center gap-1.5 glass-panel hover:bg-amber-800/80 text-amber-100 px-2.5 py-1.5 rounded-full text-xs font-bold cursor-pointer";
+        btn.dataset.topic = key;
+        btn.innerHTML = `
+          <span class="relative flex items-center justify-center w-4 h-4 rounded-full bg-amber-400 text-amber-950 text-[10px] font-extrabold">
+            <span class="pulse-ring"></span>
+            i
+          </span>
+          <span class="hidden sm:inline">${data.label}</span>
+        `;
+        btn.addEventListener("click", () => openTopicCard(key));
+        layer.appendChild(btn);
+        hotspotElements[key] = btn;
+      });
+    }
+
+    // פתיחת כרטיס מידע היסטורי והדגשת הנושא
+    function openTopicCard(topicKey) {
+      const topic = HISTORICAL_TOPICS[topicKey];
+      if (!topic) return;
+
+      activeTopicKey = topicKey;
+      const card = document.getElementById("info-card");
+      const badge = document.getElementById("info-badge");
+      const title = document.getElementById("info-title");
+      const body = document.getElementById("info-body");
+      const fact = document.getElementById("info-fact");
+
+      if (badge) badge.textContent = topic.badge;
+      if (title) title.textContent = topic.title;
+      if (body) body.textContent = topic.body;
+      if (fact) fact.textContent = topic.fact;
+
+      if (card) {
+        card.classList.remove("hidden");
+      }
+
+      // הדגשת כפתור הנושא הפעיל
+      document.querySelectorAll(".topic-btn").forEach((b) => {
+        const isSelected = b.dataset.topic === topicKey;
+        b.classList.toggle("bg-amber-500/35", isSelected);
+        b.classList.toggle("border-amber-400/70", isSelected);
+      });
+    }
+
+    // סגירת כרטיס המידע
+    function closeTopicCard() {
+      activeTopicKey = null;
+      const card = document.getElementById("info-card");
+      if (card) card.classList.add("hidden");
+      document.querySelectorAll(".topic-btn").forEach((b) => {
+        b.classList.remove("bg-amber-500/35", "border-amber-400/70");
+      });
+    }
+
+    // מעבר חלק של המצלמה לנקודת מבט מוגדרת מראש
+    function setCameraPreset(presetKey) {
+      const preset = CAMERA_PRESETS[presetKey];
+      if (!preset || !camera || !controls) return;
+
+      camTransition.active = true;
+      camTransition.startPos.copy(camera.position);
+      camTransition.endPos.copy(preset.pos);
+      camTransition.startTarget.copy(controls.target);
+      camTransition.endTarget.copy(preset.target);
+      camTransition.progress = 0;
+
+      document.querySelectorAll(".cam-btn").forEach((btn) => {
+        const active = btn.dataset.cam === presetKey;
+        btn.classList.toggle("bg-amber-500/30", active);
+        btn.classList.toggle("border-amber-400/50", active);
+        btn.classList.toggle("bg-white/5", !active);
+        btn.classList.toggle("border-amber-300/20", !active);
+      });
+
+      showToast(preset.toast);
+    }
+
+    // חיבור מאזיני ממשק משתמש
+    function bindUIEvents() {
+      // כפתורי נושאי עיון היסטוריים
+      document.querySelectorAll(".topic-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const key = btn.dataset.topic;
+          if (activeTopicKey === key) {
+            closeTopicCard();
+          } else {
+            openTopicCard(key);
+          }
+        });
+      });
+
+      const closeBtn = document.getElementById("close-info-btn");
+      if (closeBtn) {
+        closeBtn.addEventListener("click", closeTopicCard);
+      }
+
+      // כפתורי זוויות מצלמה
+      document.querySelectorAll(".cam-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          setCameraPreset(btn.dataset.cam);
+        });
+      });
+
+      // כפתורי שעת יום ותאורה
+      const slider = document.getElementById("sun-slider");
+      document.querySelectorAll(".time-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const timeKey = btn.dataset.time;
+          const cfg = TIME_PRESETS[timeKey];
+          if (!cfg) return;
+
+          if (slider) slider.value = cfg.value;
+          applyLightingFromSlider(cfg.value);
+
+          document.querySelectorAll(".time-btn").forEach((b) => {
+            const active = b.dataset.time === timeKey;
+            b.classList.toggle("bg-amber-500/30", active);
+            b.classList.toggle("border-amber-400/50", active);
+            b.classList.toggle("bg-white/5", !active);
+            b.classList.toggle("border-amber-300/20", !active);
+          });
+        });
+      });
+
+      if (slider) {
+        slider.addEventListener("input", (e) => {
+          applyLightingFromSlider(e.target.value);
+          document.querySelectorAll(".time-btn").forEach((b) => {
+            b.classList.remove("bg-amber-500/30", "border-amber-400/50");
+            b.classList.add("bg-white/5", "border-amber-300/20");
+          });
+        });
+      }
+
+      // הסתרה / הצגה של הממשק (HUD) לצפייה במסך מלא
+      const toggleHudBtn = document.getElementById("toggle-hud-btn");
+      const hudHeader = document.getElementById("hud-header");
+      const hudBottom = document.getElementById("hud-bottom");
+      const hotspotsLayer = document.getElementById("hotspots-layer");
+      const toggleText = document.getElementById("toggle-hud-text");
+      const toggleIcon = document.getElementById("toggle-hud-icon");
+      let hudHidden = false;
+
+      if (toggleHudBtn) {
+        toggleHudBtn.addEventListener("click", () => {
+          hudHidden = !hudHidden;
+          if (hudHeader) hudHeader.classList.toggle("opacity-0", hudHidden);
+          if (hudHeader) hudHeader.classList.toggle("pointer-events-none", hudHidden);
+          if (hudBottom) hudBottom.classList.toggle("opacity-0", hudHidden);
+          if (hudBottom) hudBottom.classList.toggle("pointer-events-none", hudHidden);
+          if (hotspotsLayer) hotspotsLayer.classList.toggle("opacity-0", hudHidden);
+          if (hotspotsLayer) hotspotsLayer.classList.toggle("pointer-events-none", hudHidden);
+
+          if (hudHidden) {
+            closeTopicCard();
+            if (toggleText) toggleText.textContent = "הצג ממשק";
+            if (toggleIcon) toggleIcon.textContent = "✨";
+            showToast("מצב צפייה נקייה — גרור לסיבוב חופשי");
+          } else {
+            if (toggleText) toggleText.textContent = "הסתר ממשק";
+            if (toggleIcon) toggleIcon.textContent = "👁️";
+          }
+        });
+      }
+
+      // שינוי גודל חלון רספונסיבי
+      window.addEventListener("resize", onWindowResize);
+    }
+
+    function onWindowResize() {
+      const container = document.getElementById("canvas-container");
+      if (!container || !camera || !renderer) return;
+      const width = container.clientWidth || window.innerWidth;
+      const height = container.clientHeight || window.innerHeight;
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+      renderer.setSize(width, height);
+    }
+
+    // עדכון מיקומי נקודות העניין (2D על גבי המסך מנקודות 3D)
+    function updateHotspotsScreenPositions() {
+      if (!camera) return;
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+
+      Object.entries(HISTORICAL_TOPICS).forEach(([key, topic]) => {
+        const el = hotspotElements[key];
+        if (!el) return;
+
+        const projected = topic.worldPos.clone().project(camera);
+        const isBehind = projected.z > 1;
+        const x = (projected.x * 0.5 + 0.5) * width;
+        const y = (-projected.y * 0.5 + 0.5) * height;
+
+        if (isBehind || x < -40 || x > width + 40 || y < -40 || y > height + 40) {
+          el.style.opacity = "0";
+          el.style.pointerEvents = "none";
+        } else {
+          el.style.opacity = "1";
+          el.style.pointerEvents = "auto";
+          el.style.left = `${x}px`;
+          el.style.top = `${y}px`;
+        }
+      });
+    }
+
+    // אתחול ראשי של הסצנה התלת-ממדית
+    function initScene() {
+      try {
+        const container = document.getElementById("canvas-container");
+        if (!container || typeof THREE === "undefined") {
+          showToast("שגיאה בטעינת מנוע התלת-ממד");
+          return;
+        }
+
+        scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0xe6c48c, 0.0115);
+
+        const width = container.clientWidth || window.innerWidth;
+        const height = container.clientHeight || window.innerHeight;
+
+        camera = new THREE.PerspectiveCamera(48, width / height, 0.2, 260);
+        camera.position.copy(CAMERA_PRESETS.overview.pos);
+
+        renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+        renderer.setSize(width, height);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.05;
+
+        container.innerHTML = "";
+        container.appendChild(renderer.domElement);
+
+        // בקרת מצלמה OrbitControls
+        controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.target.copy(CAMERA_PRESETS.overview.target);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.065;
+        controls.minDistance = 4.5;
+        controls.maxDistance = 58;
+        controls.maxPolarAngle = Math.PI * 0.485; // מניעת ירידה מתחת לקרקע
+
+        // הפסקת מעבר מצלמה אוטומטי אם המשתמש שולט ידנית
+        controls.addEventListener("start", () => {
+          camTransition.active = false;
+        });
+
+        // כיפת שמיים וגלגל שמש ויזואלי
+        const skyGeo = new THREE.SphereGeometry(150, 24, 16);
+        const skyMat = new THREE.MeshBasicMaterial({ color: 0x8ecae6, side: THREE.BackSide });
+        skyDome = new THREE.Mesh(skyGeo, skyMat);
+        scene.add(skyDome);
+
+        sunMesh = new THREE.Mesh(
+          new THREE.SphereGeometry(3.2, 16, 16),
+          new THREE.MeshBasicMaterial({ color: 0xfff1cc })
+        );
+        scene.add(sunMesh);
+
+        // תאורה מדברית חמה וצללים רכים
+        hemiLight = new THREE.HemisphereLight(0x8ecae6, 0x8c5a2b, 0.9);
+        scene.add(hemiLight);
+
+        sunLight = new THREE.DirectionalLight(0xfff1cc, 2.0);
+        sunLight.castShadow = true;
+        sunLight.shadow.mapSize.width = 2048;
+        sunLight.shadow.mapSize.height = 2048;
+        sunLight.shadow.camera.near = 5;
+        sunLight.shadow.camera.far = 140;
+        const d = 28;
+        sunLight.shadow.camera.left = -d;
+        sunLight.shadow.camera.right = d;
+        sunLight.shadow.camera.top = d;
+        sunLight.shadow.camera.bottom = -d;
+        sunLight.shadow.bias = -0.0005;
+        scene.add(sunLight);
+
+        fillLight = new THREE.DirectionalLight(0xf4a261, 0.4);
+        fillLight.position.set(-25, 14, -20);
+        scene.add(fillLight);
+
+        // הוספת המדבר, הנילוס, המבנים, הדקלים, העובדים והחלקיקים
+        scene.add(createDesertAndNile());
+        scene.add(createMonumentsAndConstruction());
+        scene.add(createWorkersAndOverseers());
+
+        // פיזור עצי דקל לאורך הנילוס ובקצות האתר
+        const palmCoords = [
+          [-16.5, -0.2, -13.0, 1.15],
+          [-12.0, -0.2, -15.5, 0.95],
+          [-7.5, -0.2, -17.0, 1.25],
+          [-21.5, -0.2, -11.5, 1.05],
+          [14.5, 0.0, -11.0, 1.1],
+          [-14.8, 0.0, 9.5, 0.92]
+        ];
+        palmCoords.forEach(([px, py, pz, sc]) => {
+          scene.add(createPalmTree(px, py, pz, sc));
+        });
+
+        createCloudsAndDust();
+        initHotspots();
+        bindUIEvents();
+
+        const slider = document.getElementById("sun-slider");
+        applyLightingFromSlider(slider ? slider.value : 38);
+      } catch (err) {
+        console.error("שגיאה באתחול הסצנה:", err);
+        showToast("אירעה שגיאה בטעינת הסצנה התלת-ממדית");
+      }
+    }
+
+    // לולאת האנימציה הראשית
+    const clock = new THREE.Clock();
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      const elapsed = clock.getElapsedTime();
+      const delta = Math.min(clock.getDelta(), 0.05);
+
+      // 1. מעבר מצלמה חלק בין נקודות מבט
+      if (camTransition.active && camera && controls) {
+        camTransition.progress += delta * 1.45;
+        const k = Math.min(1, camTransition.progress);
+        const ease = 1 - Math.pow(1 - k, 3);
+
+        camera.position.lerpVectors(camTransition.startPos, camTransition.endPos, ease);
+        controls.target.lerpVectors(camTransition.startTarget, camTransition.endTarget, ease);
+
+        if (k >= 1) {
+          camTransition.active = false;
+        }
+      }
+
+      if (controls) {
+        controls.update();
+      }
+
+      // 2. תנועה עדינה של ענפי הדקל ברוח המדבר
+      palmCrowns.forEach(({ crown, phase }) => {
+        crown.rotation.z = Math.sin(elapsed * 1.35 + phase) * 0.045;
+        crown.rotation.x = Math.cos(elapsed * 1.05 + phase) * 0.03;
+      });
+
+      // 3. שינוע מזחלות ועובדים לאורך הרמפה
+      brickCarts.forEach((cart) => {
+        const t = (elapsed * 0.045 + cart.offset) % 1;
+        const pos = cart.curve.getPointAt(t);
+        const tangent = cart.curve.getTangentAt(t).normalize();
+        cart.mesh.position.copy(pos);
+        cart.mesh.lookAt(pos.clone().add(tangent));
+      });
+
+      haulingWorkers.forEach((w) => {
+        const t = (elapsed * 0.045 + w.offset) % 1;
+        const pos = w.curve.getPointAt(t);
+        const tangent = w.curve.getTangentAt(t).normalize();
+        w.mesh.position.copy(pos);
+        w.mesh.lookAt(pos.clone().add(tangent));
+
+        // תנועת רגליים וידיים מחזורית בזמן הליכה וגרירה
+        const stride = Math.sin(elapsed * 7.5 + w.phase) * 0.45;
+        if (w.mesh.userData.leftLeg && w.mesh.userData.rightLeg) {
+          w.mesh.userData.leftLeg.rotation.x = stride;
+          w.mesh.userData.rightLeg.rotation.x = -stride;
+        }
+      });
+
+      // 4. תנועת עננים וחלקיקי אבק/חול
+      if (cloudGroup) {
+        cloudGroup.children.forEach((puffCluster) => {
+          puffCluster.position.x += (puffCluster.userData.speed || 0.25) * delta;
+          if (puffCluster.position.x > 55) {
+            puffCluster.position.x = -55;
+          }
+        });
+      }
+
+      if (dustPoints && dustVelocities) {
+        const dPos = dustPoints.geometry.attributes.position;
+        for (let i = 0; i < dPos.count; i++) {
+          let x = dPos.getX(i) + dustVelocities[i * 3] * delta * 3.2;
+          let y = dPos.getY(i) + Math.sin(elapsed * 1.8 + i) * delta * 0.15;
+          let z = dPos.getZ(i) + dustVelocities[i * 3 + 2] * delta * 2.2;
+
+          if (x > 26) x = -26;
+          if (z > 26) z = -26;
+          if (z < -26) z = 26;
+
+          dPos.setXYZ(i, x, y, z);
+        }
+        dPos.needsUpdate = true;
+      }
+
+      // 5. עדכון מיקומי נקודות העניין על גבי המסך
+      updateHotspotsScreenPositions();
+
+      if (renderer && scene && camera) {
+        renderer.render(scene, camera);
+      }
+    }
+
+    // הפעלת הסצנה לאחר טעינת העמוד
+    window.onload = function () {
+      initScene();
+      animate();
+    };
+  </script>
+
+<a id="club-back" href="../index.html#products-shelf" style="position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#fff;color:#1d2433;border:2px solid #cfe0f0;border-radius:999px;padding:8px 18px;font:600 15px/1.2 Arial,sans-serif;text-decoration:none;direction:rtl;box-shadow:0 3px 0 #cfe0f0">→ חזרה לאתר החוג</a>
+<script>if (window.top !== window) document.getElementById("club-back").remove();</script>
+</body>
+</html>

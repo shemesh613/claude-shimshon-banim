@@ -34,6 +34,15 @@
 
   fill("lessons", SITE.lessons, linkCard, SITE.lessons.length ? "" : "השיעורים יעלו כאן בהמשך.");
   fill("tools", SITE.tools, linkCard);
+  fill("worlds", SITE.worlds || [], (it) => `<a class="card book world" href="${esc(it.href)}" aria-label="כניסה לעולם ${esc(it.title)}"><img src="${esc(it.cover)}" alt="${esc(it.title)}" loading="lazy"><span class="book-open">${esc(it.title)}</span><span class="world-go">▶ להיכנס לעולם</span></a>`);
+  const subTabs = [["subtab-worlds", "sub-worlds"], ["subtab-songs", "sub-songs"]];
+  subTabs.forEach(([t, p]) => {
+    const btn = document.getElementById(t);
+    if (btn) btn.addEventListener("click", () => subTabs.forEach(([t2, p2]) => {
+      document.getElementById(t2).setAttribute("aria-selected", String(t2 === t));
+      document.getElementById(p2).hidden = p2 !== p;
+    }));
+  });
 
   const refs = document.getElementById("refs");
   if (refs && SITE.refs) refs.innerHTML = SITE.refs.map((it) =>

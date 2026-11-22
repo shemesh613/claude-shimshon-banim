@@ -1,0 +1,1652 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ירושלים, הכותל המערבי ורחבת עזרת ישראל 3D</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Rubik', sans-serif;
+            user-select: none;
+            background-color: #090d16;
+        }
+        #canvas-container {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            cursor: grab;
+            z-index: 1;
+        }
+        #canvas-container:active {
+            cursor: grabbing;
+        }
+        #canvas-container canvas {
+            display: block;
+            width: 100% !important;
+            height: 100% !important;
+        }
+        .glass-panel {
+            background: rgba(13, 20, 36, 0.72);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+        }
+        .btn-active {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            color: #ffffff;
+            border-color: rgba(255, 255, 255, 0.45);
+            box-shadow: 0 0 18px rgba(245, 158, 11, 0.55);
+        }
+        .btn-ezrat {
+            background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+            color: #ffffff;
+            border-color: rgba(186, 230, 253, 0.5);
+            box-shadow: 0 0 16px rgba(14, 165, 233, 0.45);
+        }
+        .btn-hover:hover:not(.btn-active):not(.btn-ezrat) {
+            background: rgba(255, 255, 255, 0.14);
+            transform: translateY(-1px);
+        }
+        .hotspot-label {
+            position: absolute;
+            transform: translate(-50%, -100%);
+            pointer-events: auto;
+            cursor: pointer;
+            transition: transform 0.2s ease, opacity 0.25s ease;
+            z-index: 10;
+        }
+        .hotspot-label:hover {
+            transform: translate(-50%, -108%) scale(1.06);
+            z-index: 20;
+        }
+        .hotspot-badge {
+            background: rgba(15, 23, 42, 0.88);
+            backdrop-filter: blur(8px);
+            border: 1.5px solid rgba(251, 191, 36, 0.85);
+            color: #fff;
+            padding: 5px 11px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 500;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45), 0 0 12px rgba(245, 158, 11, 0.35);
+        }
+        .hotspot-badge.ezrat-badge {
+            border-color: rgba(56, 189, 248, 0.95);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45), 0 0 14px rgba(14, 165, 233, 0.45);
+        }
+        .hotspot-pin {
+            width: 2px;
+            height: 15px;
+            background: linear-gradient(to bottom, rgba(251, 191, 36, 0.95), transparent);
+            margin: 0 auto;
+        }
+        .hotspot-pin.ezrat-pin {
+            background: linear-gradient(to bottom, rgba(56, 189, 248, 0.95), transparent);
+        }
+        @keyframes pulse-ring {
+            0% { transform: scale(0.85); opacity: 0.95; }
+            100% { transform: scale(1.85); opacity: 0; }
+        }
+        .pulse-dot {
+            position: relative;
+            width: 8px;
+            height: 8px;
+            background: #fbbf24;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .pulse-dot.ezrat-dot {
+            background: #38bdf8;
+        }
+        .pulse-dot::after {
+            content: '';
+            position: absolute;
+            inset: -3px;
+            border-radius: 50%;
+            border: 2px solid currentColor;
+            animation: pulse-ring 1.6s infinite ease-out;
+        }
+        .ui-hidden {
+            opacity: 0 !important;
+            pointer-events: none !important;
+            transform: translateY(-10px);
+        }
+        input[type="range"] {
+            accent-color: #f59e0b;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- מיכל הקנבס התלת-ממדי ומיכל התגיות הצפות -->
+    <div id="canvas-container"></div>
+    <div id="hotspots-container" class="fixed inset-0 pointer-events-none overflow-hidden z-10"></div>
+
+    <!-- הודעת שגיאה אם WebGL אינו נתמך -->
+    <div id="webgl-fallback" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-950/95 p-6 text-center text-white">
+        <div class="glass-panel max-w-md rounded-2xl p-6">
+            <div class="text-4xl mb-3">🏛️</div>
+            <h2 class="text-xl font-bold text-amber-300 mb-2">דפדפן זה אינו תומך כרגע ב-WebGL</h2>
+            <p class="text-sm text-slate-300 leading-relaxed">
+                כדי להפעיל את הדמיית התלת-ממד של ירושלים, הכותל המערבי ורחבת עזרת ישראל, יש לאפשר האצת חומרה / WebGL בדפדפן או לפתוח את הקובץ בדפדפן מודרני תומך.
+            </p>
+        </div>
+    </div>
+
+    <!-- כפתור הצגה/הסתרה של הממשק -->
+    <button id="btn-toggle-ui" onclick="toggleUI()" title="הסתר/הצג ממשק" class="fixed top-3 left-3 z-30 glass-panel btn-hover w-10 h-10 rounded-xl text-white flex items-center justify-center cursor-pointer transition-all">
+        <span id="ui-toggle-icon">👁️</span>
+    </button>
+
+    <!-- כרטיס מידע ראשי על המקום -->
+    <header id="ui-header" class="fixed top-3 right-3 z-20 w-[92%] max-w-sm pointer-events-auto transition-all duration-300">
+        <div class="glass-panel rounded-2xl p-3.5 sm:p-4 text-white">
+            <div class="flex items-start justify-between gap-2.5">
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-400/35 text-amber-300 text-[11px] font-medium">ירושלים • אגן העיר העתיקה</span>
+                        <span id="live-clock" class="text-[11px] text-slate-300 font-mono">12:00</span>
+                    </div>
+                    <h1 id="location-title" class="text-lg sm:text-xl font-bold text-white mt-1 leading-tight">הכותל המערבי ורחבת עזרת ישראל</h1>
+                </div>
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500/30 to-sky-500/20 border border-amber-400/40 flex items-center justify-center text-xl shrink-0">
+                    <span id="location-emoji">🕍</span>
+                </div>
+            </div>
+
+            <p id="location-desc" class="text-xs sm:text-[13px] text-slate-200 mt-2 leading-relaxed">
+                סיור תלת-ממדי בכותל המערבי, ברחבה המרכזית וברחבת עזרת ישראל המדורגת בדרום הכותל לצד המדרגות הדרומיות וגן דוידסון.
+            </p>
+
+            <!-- כפתור ייעודי לקפיצה מיידית לרחבת עזרת ישראל / דרום הכותל -->
+            <button onclick="flyTo('ezrat')" class="mt-2.5 w-full btn-ezrat hover:brightness-110 text-white text-xs font-semibold py-2 px-3 rounded-xl border transition-all flex items-center justify-center gap-2 cursor-pointer">
+                <span>🧭</span>
+                <span>עבור אל רחבת עזרת ישראל (דרום הכותל והמדרגות הדרומיות)</span>
+            </button>
+
+            <div id="location-fact" class="mt-2.5 pt-2 border-t border-white/10 flex items-start gap-2 text-[11px] text-amber-200/90">
+                <span class="shrink-0">💡</span>
+                <span id="fact-text">רחבת עזרת ישראל ממוקמת מדרום לרחבת הכותל המרכזית, למרגלות הכותל הדרומי ובסמוך למדרגות הדרומיות.</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- פקדי שעה, שמש, חשיפה ורחפן -->
+    <aside id="ui-controls" class="fixed top-16 left-3 z-20 pointer-events-auto flex flex-col gap-2 max-h-[68vh] overflow-y-auto transition-all duration-300">
+        <div class="glass-panel rounded-2xl p-2 flex flex-col gap-1 text-white text-xs font-medium w-40">
+            <div class="px-2 py-1 text-slate-400 text-[11px] text-center border-b border-white/10">שעת יום ותאורה</div>
+            <button id="btn-sunrise" onclick="setLighting('sunrise')" class="btn-hover flex items-center gap-2 px-2.5 py-1.5 rounded-xl border border-transparent transition-all cursor-pointer">
+                <span>🌄</span><span>זריחה בהר הזיתים</span>
+            </button>
+            <button id="btn-morning" onclick="setLighting('morning')" class="btn-active flex items-center gap-2 px-2.5 py-1.5 rounded-xl border border-transparent transition-all cursor-pointer">
+                <span>☀️</span><span>צהריים ירושלמיים</span>
+            </button>
+            <button id="btn-sunset" onclick="setLighting('sunset')" class="btn-hover flex items-center gap-2 px-2.5 py-1.5 rounded-xl border border-transparent transition-all cursor-pointer">
+                <span>🌅</span><span>שקיעת זהב</span>
+            </button>
+            <button id="btn-night" onclick="setLighting('night')" class="btn-hover flex items-center gap-2 px-2.5 py-1.5 rounded-xl border border-transparent transition-all cursor-pointer">
+                <span>✨</span><span>לילה מואר</span>
+            </button>
+
+            <div class="mt-1 pt-1.5 border-t border-white/10 px-1.5 space-y-1.5 text-[11px]">
+                <div>
+                    <div class="flex justify-between text-slate-300 mb-0.5">
+                        <span>גובה שמש</span>
+                        <span id="sun-val">55°</span>
+                    </div>
+                    <input id="slider-sun" type="range" min="5" max="85" value="55" oninput="updateSunSlider(this.value)" class="w-full h-1.5 bg-white/15 rounded-lg">
+                </div>
+                <div>
+                    <div class="flex justify-between text-slate-300 mb-0.5">
+                        <span>חשיפה</span>
+                        <span id="exp-val">1.08</span>
+                    </div>
+                    <input id="slider-exp" type="range" min="0.65" max="1.65" step="0.05" value="1.08" oninput="updateExposureSlider(this.value)" class="w-full h-1.5 bg-white/15 rounded-lg">
+                </div>
+            </div>
+        </div>
+
+        <div class="glass-panel rounded-2xl p-2 flex flex-col gap-1 text-white text-xs font-medium w-40">
+            <button id="btn-tour" onclick="toggleAutoTour()" class="btn-hover rounded-xl px-2.5 py-1.5 flex items-center gap-2 transition-all cursor-pointer">
+                <span id="tour-icon">🚁</span><span id="tour-text">סיור אווירי</span>
+            </button>
+            <button id="btn-drone" onclick="toggleDroneMode()" class="btn-hover rounded-xl px-2.5 py-1.5 flex items-center gap-2 transition-all cursor-pointer">
+                <span>🎮</span><span id="drone-text">רחפן (WASD)</span>
+            </button>
+        </div>
+
+        <div id="drone-hud" class="hidden glass-panel rounded-2xl p-2.5 text-white text-[11px] w-40">
+            <div class="font-bold text-amber-400 mb-1">טיסת רחפן פעילה</div>
+            <div class="text-slate-300 space-y-0.5">
+                <div>• <kbd class="bg-white/15 px-1 rounded">W/S</kbd> קדימה/אחורה</div>
+                <div>• <kbd class="bg-white/15 px-1 rounded">A/D</kbd> ימינה/שמאלה</div>
+                <div>• <kbd class="bg-white/15 px-1 rounded">E/Q</kbd> גובה מעלה/מטה</div>
+                <div>• גרירת עכבר: מבט</div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- סרגל ניווט תחתון לנקודות העניין -->
+    <nav id="ui-nav" class="fixed bottom-3 left-1/2 -translate-x-1/2 z-20 w-[96%] max-w-4xl pointer-events-auto transition-all duration-300">
+        <div class="glass-panel rounded-2xl p-1.5 flex flex-wrap sm:flex-nowrap items-center justify-center gap-1 text-white text-xs font-medium">
+            <button id="cam-overview" onclick="flyTo('overview')" class="btn-active flex-1 py-2 px-2 rounded-xl border border-transparent transition-all flex items-center justify-center gap-1 cursor-pointer whitespace-nowrap">
+                <span>🏙️</span><span>מבט כללי</span>
+            </button>
+            <button id="cam-kotel" onclick="flyTo('kotel')" class="btn-hover flex-1 py-2 px-2 rounded-xl border border-transparent transition-all flex items-center justify-center gap-1 cursor-pointer whitespace-nowrap">
+                <span>🕍</span><span>רחבת הכותל</span>
+            </button>
+            <button id="cam-ezrat" onclick="flyTo('ezrat')" class="btn-hover flex-1 py-2 px-2 rounded-xl border border-transparent transition-all flex items-center justify-center gap-1 cursor-pointer whitespace-nowrap">
+                <span>🧭</span><span>עזרת ישראל ודרום הכותל</span>
+            </button>
+            <button id="cam-temple" onclick="flyTo('temple')" class="btn-hover flex-1 py-2 px-2 rounded-xl border border-transparent transition-all flex items-center justify-center gap-1 cursor-pointer whitespace-nowrap">
+                <span>🕌</span><span>הר הבית והכיפה</span>
+            </button>
+            <button id="cam-gate" onclick="flyTo('gate')" class="btn-hover flex-1 py-2 px-2 rounded-xl border border-transparent transition-all flex items-center justify-center gap-1 cursor-pointer whitespace-nowrap">
+                <span>🏰</span><span>חומות ושער האשפות</span>
+            </button>
+            <button id="cam-olives" onclick="flyTo('olives')" class="btn-hover flex-1 py-2 px-2 rounded-xl border border-transparent transition-all flex items-center justify-center gap-1 cursor-pointer whitespace-nowrap">
+                <span>🫒</span><span>הר הזיתים</span>
+            </button>
+        </div>
+    </nav>
+
+    <script>
+        /**
+         * הדמיית תלת-ממד אינטראקטיבית של ירושלים, הכותל המערבי ורחבת עזרת ישראל.
+         * משתמש ב-Three.js עם טעינת ספריות אוטומטית (קלאסית או ES module) כך שיעבוד בבטחה בכל חלון.
+         */
+
+        const THREE_CDN_URLS = [
+            'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js',
+            'https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js',
+            'https://unpkg.com/three@0.128.0/build/three.min.js'
+        ];
+        const ORBIT_CDN_URLS = [
+            'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js',
+            'https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js'
+        ];
+
+        function loadScriptSequential(urls) {
+            return new Promise((resolve, reject) => {
+                let idx = 0;
+                function tryNext() {
+                    if (idx >= urls.length) {
+                        reject(new Error('Failed to load script from all CDNs'));
+                        return;
+                    }
+                    const s = document.createElement('script');
+                    s.src = urls[idx++];
+                    s.async = true;
+                    s.onload = () => resolve();
+                    s.onerror = () => tryNext();
+                    document.head.appendChild(s);
+                }
+                tryNext();
+            });
+        }
+
+        function ensureThreeAndControls() {
+            return new Promise((resolve, reject) => {
+                if (window.THREE && window.THREE.OrbitControls) {
+                    resolve();
+                    return;
+                }
+                const threePromise = window.THREE
+                    ? Promise.resolve()
+                    : loadScriptSequential(THREE_CDN_URLS);
+
+                threePromise
+                    .then(() => {
+                        if (window.THREE && window.THREE.OrbitControls) {
+                            resolve();
+                            return;
+                        }
+                        return loadScriptSequential(ORBIT_CDN_URLS).then(() => {
+                            if (window.THREE && window.THREE.OrbitControls) {
+                                resolve();
+                            } else {
+                                // ניסיון טעינה כמודול ES אם סקריפט קלאסי נחסם
+                                import('https://esm.sh/three@0.128.0')
+                                    .then(async (mod) => {
+                                        const ctrlMod = await import('https://esm.sh/three@0.128.0/examples/jsm/controls/OrbitControls.js');
+                                        window.THREE = Object.assign({}, mod);
+                                        window.THREE.OrbitControls = ctrlMod.OrbitControls;
+                                        resolve();
+                                    })
+                                    .catch(reject);
+                            }
+                        });
+                    })
+                    .catch(reject);
+            });
+        }
+
+        // מצב הסצנה והמצלמה
+        let scene, camera, renderer, controls;
+        let ambientLight, sunLight, hemiLight, sunSphere, wallFloodLight, skyDomeMesh, skyUniforms;
+        let pigeons = [], figures = [], windowMats = [], plazaLights = [], starsMesh;
+        let currentMode = 'morning';
+        let sunAzimuth = 0.65;
+        let sunElevationDeg = 55;
+        let isAutoTour = false;
+        let isDroneMode = false;
+        let isUIHidden = false;
+        let tourAngle = 0.45;
+
+        const keys = { w: false, a: false, s: false, d: false, q: false, e: false, ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
+
+        // מיקומי מצלמה ונקודות עניין (מאותחלים לאחר טעינת THREE ב-initLocations)
+        let locations = {};
+        let targetCamPos = null;
+        let targetLookAt = null;
+        let isTransitioning = false;
+        const hotspotElements = {};
+
+        function getTHREE() {
+            return window.THREE;
+        }
+
+        function initLocations() {
+            const THREE = getTHREE();
+            locations = {
+                overview: {
+                    title: "ירושלים: הכותל, עזרת ישראל והר הבית",
+                    emoji: "🏙️",
+                    pos: new THREE.Vector3(-82, 58, 76),
+                    lookAt: new THREE.Vector3(6, 10, -4),
+                    hotspotPos: null,
+                    isEzrat: false,
+                    desc: "מבט כולל על הכותל המערבי, הרחבה המרכזית, רחבת עזרת ישראל המדורגת בדרום הכותל, הר הבית וכיפת הסלע, חומות העיר העתיקה והר הזיתים.",
+                    fact: "רחבת עזרת ישראל נמצאת בקצה הדרומי של הכותל המערבי, במעבר שבין רחבת התפילה המרכזית למדרגות הדרומיות."
+                },
+                kotel: {
+                    title: "הכותל המערבי והרחבה המרכזית",
+                    emoji: "🕍",
+                    pos: new THREE.Vector3(-34, 13.5, -14),
+                    lookAt: new THREE.Vector3(-6, 8.5, -15),
+                    hotspotPos: new THREE.Vector3(-6, 15.5, -15),
+                    isEzrat: false,
+                    desc: "נדבכי אבני הגזית ההרודיאניות, פתקי התפילה שבין האבנים, שיחי הצלף, רחבת התפילה עם המחיצה והסטנדרים, ואנדרטת מנורת הזהב.",
+                    fact: "אבני הרודס בכותל המערבי נחצבו לפני כ-2,000 שנה ומאופיינות בסיתות שוליים שקוע ('פן מסותת')."
+                },
+                ezrat: {
+                    title: "רחבת עזרת ישראל והמדרגות הדרומיות",
+                    emoji: "🧭",
+                    pos: new THREE.Vector3(-36, 16, 44),
+                    lookAt: new THREE.Vector3(-6, 4.5, 25),
+                    hotspotPos: new THREE.Vector3(-12, 8.5, 25),
+                    isEzrat: true,
+                    desc: "הרחבה המדורגת הממוקמת מדרום לרחבת הכותל המרכזית ('מאחורי' / דרום הכותל), המשיקה לקצה הדרומי של הכותל, למדרגות הדרומיות העתיקות ולגן הארכיאולוגי.",
+                    fact: "כדי להגיע אליה מהרחבה המרכזית, מתקדמים דרומה דרך המעבר המדורג לכיוון הכותל הדרומי והמדרגות הדרומיות."
+                },
+                temple: {
+                    title: "הר הבית וכיפת הסלע",
+                    emoji: "🕌",
+                    pos: new THREE.Vector3(44, 28, -28),
+                    lookAt: new THREE.Vector3(14, 15, -14),
+                    hotspotPos: new THREE.Vector3(14, 24, -14),
+                    isEzrat: false,
+                    desc: "הר הבית המתנשא מעל הכותל המערבי, ובראשו כיפת הסלע המתומנת המעוטרת בפסיפס טורקיז-זהב וכיפה מוזהבת, לצד מסגד אל-אקצא.",
+                    fact: "הכותל המערבי הוא אחד מקירות התמך החיצוניים של מתחם הר הבית הקדום."
+                },
+                gate: {
+                    title: "חומות העיר העתיקה ושער האשפות",
+                    emoji: "🏰",
+                    pos: new THREE.Vector3(-42, 22, 56),
+                    lookAt: new THREE.Vector3(-12, 9, 36),
+                    hotspotPos: new THREE.Vector3(-12, 14, 38),
+                    isEzrat: false,
+                    desc: "חומות האבן העות'מאניות של העיר העתיקה, שער האשפות המוביל אל רחבת הכותל והרובע היהודי, ומורדות גיא בן הינום והמדרגות הדרומיות.",
+                    fact: "שער האשפות משמש כשער הגישה המרכזי מכיוון דרום ומזרח אל הכותל המערבי ואל עזרת ישראל."
+                },
+                olives: {
+                    title: "הר הזיתים ונחל קדרון",
+                    emoji: "🫒",
+                    pos: new THREE.Vector3(88, 34, 12),
+                    lookAt: new THREE.Vector3(58, 14, -6),
+                    hotspotPos: new THREE.Vector3(62, 20, -6),
+                    isEzrat: false,
+                    desc: "רכס הר הזיתים המשקיף מזרחה על הר הבית, הכותל המערבי ועמק נחל קדרון, עם טרסות אבן ועצי זית וברוש.",
+                    fact: "מהר הזיתים נשקפת אחת הפנורמות ההיסטוריות המוכרות ביותר של ירושלים."
+                }
+            };
+            targetCamPos = locations.overview.pos.clone();
+            targetLookAt = locations.overview.lookAt.clone();
+        }
+
+        /**
+         * גובה פני הקרקע הטבעי במודל (x, z)
+         */
+        function getBaseGroundHeight(x, z) {
+            const THREE = getTHREE();
+            // גבעת הר הבית והעיר העתיקה בצפון-מזרח / מזרח
+            let h = 2.0;
+
+            // מדרון לעבר עמק קדרון והר הזיתים בצד המזרחי הרחוק (x > 34)
+            if (x > 26 && x < 44) {
+                const t = (x - 26) / 18;
+                h = THREE.MathUtils.lerp(11.0, 2.5, t);
+            } else if (x >= 44) {
+                const rise = Math.min(22, (x - 44) * 0.42);
+                h = 2.5 + rise + Math.sin(z * 0.04) * 2.2;
+            } else if (x > -6) {
+                // רחבת הר הבית הגבוהה מעל רחבת הכותל
+                h = 11.0;
+            } else {
+                // אזור הכותל המערבי, הרחבה המרכזית ורחבת עזרת ישראל (x <= -6)
+                const distFromPlaza = Math.hypot(x + 22, z - 4);
+                const slope = Math.max(0, (distFromPlaza - 44) * 0.14);
+                h = 2.0 + slope;
+            }
+
+            // ירידה מתונה דרומה לכיוון המדרגות הדרומיות / גן דוידסון (z > 32)
+            if (z > 32 && x > -28 && x < 24) {
+                h -= Math.min(2.2, (z - 32) * 0.08);
+            }
+
+            return h;
+        }
+
+        /**
+         * טקסטורה פרוצדורלית לאבני גזית הרודיאניות עם סיתות שוליים
+         */
+        function createHerodianStoneTextures() {
+            const cColor = document.createElement('canvas');
+            cColor.width = 512;
+            cColor.height = 512;
+            const ctx = cColor.getContext('2d');
+
+            const cBump = document.createElement('canvas');
+            cBump.width = 512;
+            cBump.height = 512;
+            const bCtx = cBump.getContext('2d');
+
+            ctx.fillStyle = '#d9c39e';
+            ctx.fillRect(0, 0, 512, 512);
+            bCtx.fillStyle = '#404040';
+            bCtx.fillRect(0, 0, 512, 512);
+
+            const rows = 8;
+            const rowH = 512 / rows;
+            const palette = ['#ebd7b5', '#e2caa3', '#d5bc92', '#f0dec0', '#ccb288'];
+
+            for (let r = 0; r < rows; r++) {
+                const y = r * rowH;
+                let x = (r % 2 === 0) ? 0 : -48;
+                while (x < 512) {
+                    const w = 92 + ((r * 37 + Math.abs(Math.floor(x))) % 56);
+                    const baseCol = palette[(r + Math.floor(Math.abs(x) / 50)) % palette.length];
+
+                    // אבן חיצונית
+                    ctx.fillStyle = baseCol;
+                    ctx.fillRect(x + 2, y + 2, w - 4, rowH - 4);
+
+                    // סיתות שוליים פנימי אופייני לאבני הכותל
+                    const border = 9;
+                    ctx.strokeStyle = 'rgba(130, 102, 68, 0.32)';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(x + border, y + border, w - border * 2, rowH - border * 2);
+
+                    // טקסטורת גרגירי אבן ונקבוביות
+                    for (let i = 0; i < 45; i++) {
+                        const gx = x + 4 + ((i * 29 + r * 13) % Math.max(8, w - 8));
+                        const gy = y + 4 + ((i * 19 + r * 7) % Math.max(8, rowH - 8));
+                        ctx.fillStyle = (i % 2 === 0) ? 'rgba(255,250,240,0.14)' : 'rgba(95,72,45,0.12)';
+                        ctx.fillRect(gx, gy, 3, 2);
+                    }
+
+                    // Bump map: מרכז בולט ושוליים שקועים
+                    bCtx.fillStyle = '#808080';
+                    bCtx.fillRect(x + 3, y + 3, w - 6, rowH - 6);
+                    bCtx.fillStyle = '#d8d8d8';
+                    bCtx.fillRect(x + border, y + border, w - border * 2, rowH - border * 2);
+
+                    x += w;
+                }
+            }
+
+            const THREE = getTHREE();
+            const map = new THREE.CanvasTexture(cColor);
+            map.wrapS = map.wrapT = THREE.RepeatWrapping;
+            map.repeat.set(6, 2);
+
+            const bumpMap = new THREE.CanvasTexture(cBump);
+            bumpMap.wrapS = bumpMap.wrapT = THREE.RepeatWrapping;
+            bumpMap.repeat.set(6, 2);
+
+            const roughMap = new THREE.CanvasTexture(cBump);
+            roughMap.wrapS = roughMap.wrapT = THREE.RepeatWrapping;
+            roughMap.repeat.set(6, 2);
+
+            return { map, bumpMap, roughMap };
+        }
+
+        /**
+         * כיפת שמיים אטמוספרית מדורגת עם הילה סביב השמש
+         */
+        function createSkyDome() {
+            const THREE = getTHREE();
+            skyUniforms = {
+                topColor: { value: new THREE.Color(0x2b6cb0) },
+                horizonColor: { value: new THREE.Color(0xcbe7f5) },
+                bottomColor: { value: new THREE.Color(0xd8cbb4) },
+                sunDir: { value: new THREE.Vector3(0.4, 0.7, 0.5).normalize() },
+                sunColor: { value: new THREE.Color(0xfff4d2) },
+                sunGlowIntensity: { value: 0.35 }
+            };
+
+            const skyMat = new THREE.ShaderMaterial({
+                side: THREE.BackSide,
+                depthWrite: false,
+                uniforms: skyUniforms,
+                vertexShader: `
+                    varying vec3 vWorldPos;
+                    void main() {
+                        vec4 wp = modelMatrix * vec4(position, 1.0);
+                        vWorldPos = wp.xyz;
+                        gl_Position = projectionMatrix * viewMatrix * wp;
+                    }
+                `,
+                fragmentShader: `
+                    uniform vec3 topColor;
+                    uniform vec3 horizonColor;
+                    uniform vec3 bottomColor;
+                    uniform vec3 sunDir;
+                    uniform vec3 sunColor;
+                    uniform float sunGlowIntensity;
+                    varying vec3 vWorldPos;
+                    void main() {
+                        vec3 dir = normalize(vWorldPos);
+                        float h = clamp(dir.y, -0.25, 1.0);
+                        vec3 col = h >= 0.0
+                            ? mix(horizonColor, topColor, pow(h, 0.55))
+                            : mix(horizonColor, bottomColor, clamp(-h * 4.0, 0.0, 1.0));
+                        float sunAmt = max(dot(dir, normalize(sunDir)), 0.0);
+                        col += sunColor * pow(sunAmt, 14.0) * sunGlowIntensity;
+                        col += sunColor * smoothstep(0.9985, 0.9997, sunAmt) * 1.4;
+                        gl_FragColor = vec4(col, 1.0);
+                    }
+                `
+            });
+
+            skyDomeMesh = new THREE.Mesh(new THREE.SphereGeometry(420, 32, 24), skyMat);
+            scene.add(skyDomeMesh);
+        }
+
+        /**
+         * טקסטורת ריצוף אבן ירושלמית לרחבות ולשבילים
+         */
+        function createPavingTexture(repeatX = 14, repeatY = 14, tint = '#e5d5b7') {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = tint;
+            ctx.fillRect(0, 0, 256, 256);
+
+            const cols = 8;
+            const rows = 8;
+            const cw = 256 / cols;
+            const rh = 256 / rows;
+
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    const shade = ((r * 7 + c * 13) % 5 - 2) * 5;
+                    ctx.fillStyle = shade > 0 ? `rgba(255,252,245,${shade / 80})` : `rgba(110,92,68,${-shade / 80})`;
+                    ctx.fillRect(c * cw + 1.5, r * rh + 1.5, cw - 3, rh - 3);
+                }
+            }
+
+            const THREE = getTHREE();
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+            tex.repeat.set(repeatX, repeatY);
+            return tex;
+        }
+
+        /**
+         * אתחול הסצנה, התאורה, הקרקע והאתרים
+         */
+        function initScene() {
+            const THREE = getTHREE();
+            if (!THREE || !THREE.OrbitControls) {
+                document.getElementById('webgl-fallback').classList.remove('hidden');
+                return;
+            }
+            initLocations();
+            const container = document.getElementById('canvas-container');
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87c6eb);
+            scene.fog = new THREE.FogExp2(0x9bd0ec, 0.0024);
+
+            camera = new THREE.PerspectiveCamera(44, Math.max(1, window.innerWidth) / Math.max(1, window.innerHeight), 0.4, 900);
+            camera.position.copy(locations.overview.pos);
+
+            try {
+                renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+            } catch (err) {
+                document.getElementById('webgl-fallback').classList.remove('hidden');
+                return;
+            }
+
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.08;
+            container.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.065;
+            controls.maxPolarAngle = Math.PI / 2 - 0.025;
+            controls.minDistance = 6;
+            controls.maxDistance = 190;
+            controls.target.copy(locations.overview.lookAt);
+
+            controls.addEventListener('start', () => {
+                isTransitioning = false;
+                if (isAutoTour) toggleAutoTour(false);
+            });
+            createSkyDome();
+            setupLighting();
+            buildTerrain();
+            buildWesternWallAndCentralPlaza();
+            buildEzratYisraelAndSouthernSteps();
+            buildTempleMount();
+            buildOldCityWallsAndDungGate();
+            buildMountOfOlives();
+            buildAtmosphereAndLife();
+            createHotspots();
+            setLighting('morning');
+
+            window.addEventListener('resize', onResize);
+            window.addEventListener('keydown', (e) => {
+                if (e.key in keys) keys[e.key] = true;
+            });
+            window.addEventListener('keyup', (e) => {
+                if (e.key in keys) keys[e.key] = false;
+            });
+
+            animate();
+        }
+
+        function setupLighting() {
+            const THREE = window.THREE;
+            hemiLight = new THREE.HemisphereLight(0xfff6e5, 0x7a6b52, 0.72);
+            scene.add(hemiLight);
+
+            ambientLight = new THREE.AmbientLight(0xffffff, 0.22);
+            scene.add(ambientLight);
+
+            sunLight = new THREE.DirectionalLight(0xfff1d0, 1.55);
+            sunLight.castShadow = true;
+            sunLight.shadow.mapSize.width = 2048;
+            sunLight.shadow.mapSize.height = 2048;
+            sunLight.shadow.camera.near = 10;
+            sunLight.shadow.camera.far = 320;
+            const b = 105;
+            sunLight.shadow.camera.left = -b;
+            sunLight.shadow.camera.right = b;
+            sunLight.shadow.camera.top = b;
+            sunLight.shadow.camera.bottom = -b;
+            sunLight.shadow.bias = -0.0004;
+            scene.add(sunLight);
+
+            // תאורת הצפה חמה ייעודית לקיר הכותל ולרחבת עזרת ישראל בשעות הערב והלילה
+            wallFloodLight = new THREE.PointLight(0xffb85c, 0, 75, 1.4);
+            wallFloodLight.position.set(-18, 12, -8);
+            scene.add(wallFloodLight);
+
+            sunSphere = new THREE.Mesh(
+                new THREE.SphereGeometry(7, 24, 24),
+                new THREE.MeshBasicMaterial({ color: 0xfff3b0 })
+            );
+            scene.add(sunSphere);
+        }
+
+        function updateSunPosition() {
+            const THREE = getTHREE();
+            const elev = THREE.MathUtils.degToRad(sunElevationDeg);
+            const r = 135;
+            const y = Math.sin(elev) * r;
+            const horiz = Math.cos(elev) * r;
+            const x = Math.cos(sunAzimuth) * horiz;
+            const z = Math.sin(sunAzimuth) * horiz;
+
+            sunLight.position.set(x, Math.max(8, y), z);
+            if (sunSphere) {
+                sunSphere.position.set(x * 1.5, Math.max(12, y * 1.5), z * 1.5);
+                sunSphere.visible = false;
+            }
+            if (skyUniforms) {
+                skyUniforms.sunDir.value.set(x, Math.max(4, y), z).normalize();
+            }
+        }
+
+        function buildTerrain() {
+            const THREE = getTHREE();
+            const size = 280;
+            const segs = 140;
+            const geo = new THREE.PlaneGeometry(size, size, segs, segs);
+            geo.rotateX(-Math.PI / 2);
+
+            const pos = geo.attributes.position;
+            const colors = [];
+            const col = new THREE.Color();
+
+            for (let i = 0; i < pos.count; i++) {
+                const x = pos.getX(i);
+                const z = pos.getZ(i);
+                const y = getBaseGroundHeight(x, z);
+                pos.setY(i, y);
+
+                if (x > 46) {
+                    col.setHex(y > 14 ? 0x9b8d6f : 0x73854d);
+                } else if (x > 26 && x <= 46) {
+                    col.setHex(0x8c7b5b);
+                } else if (x > -6 && z > -46 && z < 36) {
+                    col.setHex(0xd6c4a3);
+                } else if (x <= -6 && x > -52 && z > -38 && z < 48) {
+                    col.setHex(0xdfd0b2);
+                } else {
+                    col.setHex(0x9a896a);
+                }
+                colors.push(col.r, col.g, col.b);
+            }
+
+            geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+            geo.computeVertexNormals();
+
+            const terrain = new THREE.Mesh(
+                geo,
+                new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0.03 })
+            );
+            terrain.receiveShadow = true;
+            scene.add(terrain);
+        }
+
+        /**
+         * הכותל המערבי, אבני הרודס, פתקי תפילה, שיחי צלף, רחבת התפילה המרכזית, מחיצה ומנורת הזהב
+         */
+        function buildWesternWallAndCentralPlaza() {
+            const THREE = getTHREE();
+            const { map, bumpMap, roughMap } = createHerodianStoneTextures();
+            const wallMat = new THREE.MeshStandardMaterial({
+                map,
+                bumpMap,
+                bumpScale: 0.32,
+                roughnessMap: roughMap,
+                roughness: 0.88,
+                metalness: 0.02
+            });
+
+            // קיר הכותל המערבי הראשי (לאורך x = -6, z מ--42 עד +22)
+            const mainWall = new THREE.Mesh(new THREE.BoxGeometry(2.6, 15.5, 64), wallMat);
+            mainWall.position.set(-6, 9.5, -10);
+            mainWall.castShadow = true;
+            mainWall.receiveShadow = true;
+            scene.add(mainWall);
+
+            // פס כהות בסיס קלה לריאליזם של לחות ואבן עתיקה בתחתית הקיר
+            const baseTrim = new THREE.Mesh(
+                new THREE.BoxGeometry(2.68, 1.4, 64.1),
+                new THREE.MeshStandardMaterial({ color: 0xb59e78, roughness: 0.95 })
+            );
+            baseTrim.position.set(-6, 2.45, -10);
+            baseTrim.receiveShadow = true;
+            scene.add(baseTrim);
+
+            // קיר מערבי עליון / קשת וילסון בחלק הצפוני
+            const northVault = new THREE.Mesh(new THREE.BoxGeometry(8, 6.5, 11), wallMat);
+            northVault.position.set(-10, 5.2, -37);
+            northVault.castShadow = true;
+            northVault.receiveShadow = true;
+            scene.add(northVault);
+
+            // פתקי תפילה לבנים בנדבכים התחתונים של הכותל
+            const noteGeo = new THREE.BoxGeometry(0.14, 0.08, 0.12);
+            const noteMat = new THREE.MeshStandardMaterial({ color: 0xfafaf9, roughness: 0.6 });
+            const notesInstanced = new THREE.InstancedMesh(noteGeo, noteMat, 140);
+            const dummy = new THREE.Object3D();
+            for (let i = 0; i < 140; i++) {
+                const nz = -34 + (i / 140) * 52 + (Math.random() - 0.5) * 0.4;
+                const ny = 3.15 + Math.random() * 1.45;
+                dummy.position.set(-7.32, ny, nz);
+                dummy.rotation.set(0, (Math.random() - 0.5) * 0.3, (Math.random() - 0.5) * 0.2);
+                dummy.updateMatrix();
+                notesInstanced.setMatrixAt(i, dummy.matrix);
+            }
+            scene.add(notesInstanced);
+
+            // שיחי צלף קוצני הצומחים בסדקי האבן הגבוהים
+            const caperMat = new THREE.MeshStandardMaterial({ color: 0x3f6f36, roughness: 0.8 });
+            [[-7.4, 9.2, -24], [-7.4, 11.4, -12], [-7.4, 8.6, 2], [-7.4, 12.1, 13]].forEach(([x, y, z]) => {
+                for (let b = 0; b < 5; b++) {
+                    const branch = new THREE.Mesh(new THREE.DodecahedronGeometry(0.55 + Math.random() * 0.35, 1), caperMat);
+                    branch.position.set(x + (Math.random() - 0.5) * 0.6, y + (Math.random() - 0.5) * 0.5, z + (Math.random() - 0.5) * 0.6);
+                    branch.scale.set(1.2, 0.7, 1.2);
+                    scene.add(branch);
+                }
+            });
+
+            // ריצוף רחבת הכותל המרכזית
+            const pavingTex = createPavingTexture(16, 16, '#e6d6b8');
+            const centralPlaza = new THREE.Mesh(
+                new THREE.BoxGeometry(38, 0.35, 44),
+                new THREE.MeshStandardMaterial({ map: pavingTex, roughness: 0.82 })
+            );
+            centralPlaza.position.set(-26, 2.05, -14);
+            centralPlaza.receiveShadow = true;
+            scene.add(centralPlaza);
+
+            // מחיצה מסורתית בין עזרת גברים לעזרת נשים ברחבה המרכזית
+            const mechitzah = new THREE.Mesh(
+                new THREE.BoxGeometry(11.5, 2.1, 0.35),
+                new THREE.MeshStandardMaterial({ color: 0x5c3a21, roughness: 0.65 })
+            );
+            mechitzah.position.set(-12.5, 3.2, -11);
+            mechitzah.castShadow = true;
+            mechitzah.receiveShadow = true;
+            scene.add(mechitzah);
+
+            // סטנדרים מעץ וסידורים פתוחים סמוך לכותל
+            const standMat = new THREE.MeshStandardMaterial({ color: 0x6b4226, roughness: 0.7 });
+            const pageMat = new THREE.MeshStandardMaterial({ color: 0xfffdf7, roughness: 0.5 });
+            for (let i = 0; i < 16; i++) {
+                const sz = -31 + i * 3.1;
+                if (Math.abs(sz + 11) < 1.2) continue;
+                const stand = new THREE.Group();
+                const post = new THREE.Mesh(new THREE.BoxGeometry(0.22, 1.15, 0.22), standMat);
+                post.position.y = 0.58;
+                const desk = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.08, 0.55), standMat);
+                desk.position.set(-0.06, 1.16, 0);
+                desk.rotation.z = 0.25;
+                const book = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.04, 0.26), pageMat);
+                book.position.set(-0.08, 1.22, 0);
+                book.rotation.z = 0.25;
+                stand.add(post, desk, book);
+                stand.position.set(-8.3, 2.2, sz);
+                stand.castShadow = true;
+                scene.add(stand);
+            }
+
+            // אנדרטת מנורת הזהב המשקיפה על רחבת הכותל
+            const menorahGroup = new THREE.Group();
+            const goldMat = new THREE.MeshStandardMaterial({ color: 0xfbbf24, metalness: 0.85, roughness: 0.22 });
+            const baseStone = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.2, 2.6), wallMat);
+            baseStone.position.y = 0.6;
+            const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.28, 3.4, 12), goldMat);
+            stem.position.y = 2.8;
+            const topBar = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.14, 0.22), goldMat);
+            topBar.position.y = 4.35;
+            menorahGroup.add(baseStone, stem, topBar);
+
+            for (let k = -3; k <= 3; k++) {
+                const branch = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.35, 8), goldMat);
+                branch.position.set(k * 0.4, 3.65, 0);
+                branch.rotation.z = -k * 0.12;
+                const flame = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.09, 8, 8),
+                    new THREE.MeshBasicMaterial({ color: 0xfffbeb })
+                );
+                flame.position.set(k * 0.42, 4.48, 0);
+                menorahGroup.add(branch, flame);
+            }
+            menorahGroup.position.set(-11.5, 2.2, -26);
+            menorahGroup.castShadow = true;
+            scene.add(menorahGroup);
+        }
+
+        /**
+         * רחבת עזרת ישראל והמדרגות הדרומיות / גן הארכיאולוגי (בדרום הכותל / "מאחורי" הרחבה המרכזית)
+         */
+        function buildEzratYisraelAndSouthernSteps() {
+            const THREE = getTHREE();
+            const group = new THREE.Group();
+            const pavingTex = createPavingTexture(10, 12, '#dfd0b3');
+            const plazaMat = new THREE.MeshStandardMaterial({ map: pavingTex, roughness: 0.84 });
+            const stepMat = new THREE.MeshStandardMaterial({ color: 0xd6c3a1, roughness: 0.88 });
+
+            // מפלס רחבת עזרת ישראל מדרום לרחבה המרכזית
+            const ezratDeck = new THREE.Mesh(new THREE.BoxGeometry(28, 0.35, 22), plazaMat);
+            ezratDeck.position.set(-18, 2.0, 21);
+            ezratDeck.receiveShadow = true;
+            group.add(ezratDeck);
+
+            // ספסלי אבן וכדים מדורגים ברחבת עזרת ישראל למראה טבעי יותר
+            const benchMat = new THREE.MeshStandardMaterial({ color: 0xcab693, roughness: 0.86 });
+            [-23, -17, -11].forEach((bx) => {
+                const bench = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.55, 0.75), benchMat);
+                bench.position.set(bx, 2.42, 15.5);
+                bench.castShadow = true;
+                bench.receiveShadow = true;
+                group.add(bench);
+            });
+
+            // מדרגות ירידה מדורגות לכיוון המדרגות הדרומיות וגן דוידסון
+            for (let s = 0; s < 6; s++) {
+                const step = new THREE.Mesh(new THREE.BoxGeometry(24, 0.25, 1.4), stepMat);
+                step.position.set(-16, 1.85 - s * 0.22, 32.5 + s * 1.35);
+                step.castShadow = true;
+                step.receiveShadow = true;
+                group.add(step);
+            }
+
+            addOliveTree(group, -29, 24, 0.95);
+            addCypressTree(group, -31, 16, 1.0);
+            scene.add(group);
+        }
+
+        /**
+         * הר הבית, כיפת הסלע ומסגד אל-אקצא
+         */
+        function buildTempleMount() {
+            const THREE = getTHREE();
+            const mountGroup = new THREE.Group();
+
+            const mountDeck = new THREE.Mesh(
+                new THREE.BoxGeometry(32, 1.2, 54),
+                new THREE.MeshStandardMaterial({ color: 0xe3d2b2, roughness: 0.85 })
+            );
+            mountDeck.position.set(14, 11.1, -12);
+            mountDeck.receiveShadow = true;
+            mountGroup.add(mountDeck);
+
+            // כיפת הסלע המתומנת
+            const rockGroup = new THREE.Group();
+            const tileMat = new THREE.MeshStandardMaterial({ color: 0x1d6f8a, roughness: 0.35, metalness: 0.15 });
+            const goldDomeMat = new THREE.MeshStandardMaterial({ color: 0xfbbf24, metalness: 0.82, roughness: 0.22 });
+
+            const octagonBase = new THREE.Mesh(new THREE.CylinderGeometry(7.2, 7.6, 5.2, 8), tileMat);
+            octagonBase.position.y = 2.6;
+            octagonBase.castShadow = true;
+            octagonBase.receiveShadow = true;
+
+            const drum = new THREE.Mesh(new THREE.CylinderGeometry(4.8, 5.0, 2.8, 16), tileMat);
+            drum.position.y = 6.5;
+            drum.castShadow = true;
+
+            const dome = new THREE.Mesh(new THREE.SphereGeometry(4.7, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2), goldDomeMat);
+            dome.position.y = 7.8;
+            dome.castShadow = true;
+
+            const finial = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.14, 2.2, 8), goldDomeMat);
+            finial.position.y = 13.2;
+
+            rockGroup.add(octagonBase, drum, dome, finial);
+            rockGroup.position.set(14, 11.7, -14);
+            mountGroup.add(rockGroup);
+
+            // מבנה אל-אקצא בדרום הר הבית
+            const aqsa = new THREE.Mesh(
+                new THREE.BoxGeometry(10, 4.8, 14),
+                new THREE.MeshStandardMaterial({ color: 0xd8c5a3, roughness: 0.82 })
+            );
+            aqsa.position.set(14, 14.1, 6);
+            aqsa.castShadow = true;
+            aqsa.receiveShadow = true;
+            mountGroup.add(aqsa);
+
+            addOliveTree(mountGroup, 4, 11.7, -26, 1.0);
+            addCypressTree(mountGroup, 25, 11.7, -24, 1.15);
+            scene.add(mountGroup);
+        }
+
+        /**
+         * חומות העיר העתיקה ושער האשפות
+         */
+        function buildOldCityWallsAndDungGate() {
+            const THREE = getTHREE();
+            const wallsGroup = new THREE.Group();
+            const { map, bumpMap } = createHerodianStoneTextures();
+            const wallMat = new THREE.MeshStandardMaterial({
+                map,
+                bumpMap,
+                bumpScale: 0.22,
+                roughness: 0.86
+            });
+
+            // חומה דרומית-מערבית עם פתח לשער האשפות
+            const wallLeft = new THREE.Mesh(new THREE.BoxGeometry(24, 8.5, 2.4), wallMat);
+            wallLeft.position.set(-34, 6.2, 34);
+            wallLeft.rotation.y = 0.22;
+            wallLeft.castShadow = true;
+            wallLeft.receiveShadow = true;
+            wallsGroup.add(wallLeft);
+
+            const wallRight = new THREE.Mesh(new THREE.BoxGeometry(24, 8.5, 2.4), wallMat);
+            wallRight.position.set(6, 6.2, 38.5);
+            wallRight.rotation.y = -0.14;
+            wallRight.castShadow = true;
+            wallRight.receiveShadow = true;
+            wallsGroup.add(wallRight);
+
+            // מגדל שער האשפות
+            const gateTower = new THREE.Mesh(new THREE.BoxGeometry(7.5, 10.5, 5.5), wallMat);
+            gateTower.position.set(-14, 7.2, 36.5);
+            gateTower.castShadow = true;
+            gateTower.receiveShadow = true;
+            wallsGroup.add(gateTower);
+
+            // פתח השער
+            const archCutout = new THREE.Mesh(
+                new THREE.BoxGeometry(3.2, 4.4, 5.8),
+                new THREE.MeshStandardMaterial({ color: 0x2b2118, roughness: 0.95 })
+            );
+            archCutout.position.set(-14, 4.2, 36.5);
+            wallsGroup.add(archCutout);
+
+            // בתי אבן ירושלמית בעלי כיפות אופייניות מאחורי החומה
+            const domeMat = new THREE.MeshStandardMaterial({ color: 0xe9dac0, roughness: 0.82 });
+            [[-28, 22, 6, 5], [-38, 15, 7, 6], [-22, 14, 5.5, 5]].forEach(([x, z, w, d]) => {
+                const h = 4.2;
+                const house = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), wallMat);
+                house.position.set(x, getBaseGroundHeight(x, z) + h / 2 - 0.3, z);
+                house.castShadow = true;
+                house.receiveShadow = true;
+                wallsGroup.add(house);
+
+                const dome = new THREE.Mesh(new THREE.SphereGeometry(Math.min(w, d) * 0.36, 14, 10, 0, Math.PI * 2, 0, Math.PI / 2), domeMat);
+                dome.position.set(x, house.position.y + h / 2, z);
+                dome.castShadow = true;
+                wallsGroup.add(dome);
+            });
+
+            scene.add(wallsGroup);
+        }
+
+        /**
+         * הר הזיתים ממזרח עם טרסות אבן ועצי זית וברוש
+         */
+        function buildMountOfOlives() {
+            const THREE = getTHREE();
+            const olivesGroup = new THREE.Group();
+            const terraceMat = new THREE.MeshStandardMaterial({ color: 0xc9b897, roughness: 0.9 });
+
+            for (let i = 0; i < 6; i++) {
+                const tx = 52 + i * 9;
+                const tz = -35 + (i % 2) * 8;
+                const ty = getBaseGroundHeight(tx, tz);
+                const wall = new THREE.Mesh(new THREE.BoxGeometry(2.2, 2.2, 54), terraceMat);
+                wall.position.set(tx, ty + 0.5, -6);
+                wall.castShadow = true;
+                wall.receiveShadow = true;
+                olivesGroup.add(wall);
+
+                addOliveTree(olivesGroup, tx + 3.2, tz + 6, 1.05);
+                addOliveTree(olivesGroup, tx + 3.2, tz - 16, 1.15);
+                if (i % 2 === 0) {
+                    addCypressTree(olivesGroup, tx + 3.5, tz - 4, 1.2);
+                }
+            }
+
+            scene.add(olivesGroup);
+        }
+
+        function addOliveTree(parent, x, z, scale = 1) {
+            const THREE = getTHREE();
+            const g = new THREE.Group();
+            const trunk = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.22, 0.38, 1.7, 7),
+                new THREE.MeshStandardMaterial({ color: 0x5e432c, roughness: 0.9 })
+            );
+            trunk.position.y = 0.85;
+            trunk.castShadow = true;
+            g.add(trunk);
+
+            const crownMat = new THREE.MeshStandardMaterial({ color: 0x5d7847, roughness: 0.85 });
+            [[-0.8, 2.2, 0.4, 1.1], [0.85, 2.3, -0.3, 1.05], [0, 2.8, 0, 1.25]].forEach(([dx, dy, dz, r]) => {
+                const puff = new THREE.Mesh(new THREE.DodecahedronGeometry(r, 1), crownMat);
+                puff.position.set(dx, dy, dz);
+                puff.scale.set(1.25, 0.78, 1.15);
+                puff.castShadow = true;
+                g.add(puff);
+            });
+
+            const baseY = getBaseGroundHeight(x, z);
+            g.scale.setScalar(scale);
+            g.position.set(x, baseY - 0.1, z);
+            parent.add(g);
+        }
+
+        function addCypressTree(parent, x, z, scale = 1) {
+            const THREE = getTHREE();
+            const g = new THREE.Group();
+            const trunk = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.14, 0.22, 1.5, 6),
+                new THREE.MeshStandardMaterial({ color: 0x543822, roughness: 0.9 })
+            );
+            trunk.position.y = 0.75;
+            g.add(trunk);
+
+            const foliage = new THREE.Mesh(
+                new THREE.ConeGeometry(0.85, 6.2, 8),
+                new THREE.MeshStandardMaterial({ color: 0x244a24, roughness: 0.82 })
+            );
+            foliage.position.y = 4.0;
+            foliage.castShadow = true;
+            g.add(foliage);
+
+            const baseY = getBaseGroundHeight(x, z);
+            g.scale.setScalar(scale);
+            g.position.set(x, baseY - 0.1, z);
+            parent.add(g);
+        }
+
+        /**
+         * יונים צחורות חגות, מתפללים ומבקרים ברחבת הכותל וברחבת עזרת ישראל, ופנסי רחוב
+         */
+        function buildAtmosphereAndLife() {
+            const THREE = getTHREE();
+
+            // יונים צחורות
+            const pigeonMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.6 });
+            for (let i = 0; i < 18; i++) {
+                const pGroup = new THREE.Group();
+                const body = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 8), pigeonMat);
+                body.scale.set(1.3, 0.85, 0.85);
+                const leftWing = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.04, 0.22), pigeonMat);
+                leftWing.position.set(0, 0.04, -0.24);
+                const rightWing = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.04, 0.22), pigeonMat);
+                rightWing.position.set(0, 0.04, 0.24);
+                pGroup.add(body, leftWing, rightWing);
+                scene.add(pGroup);
+
+                pigeons.push({
+                    group: pGroup,
+                    leftWing,
+                    rightWing,
+                    cx: -10 + (Math.random() - 0.5) * 28,
+                    cz: 2 + (Math.random() - 0.5) * 44,
+                    radius: 5 + Math.random() * 14,
+                    baseY: 7.5 + Math.random() * 11,
+                    angle: Math.random() * Math.PI * 2,
+                    speed: 0.012 + Math.random() * 0.01,
+                    flapSeed: Math.random() * 10
+                });
+            }
+
+            // דמויות מתפללים ומבקרים ברחבה המרכזית וברחבת עזרת ישראל
+            const coatColors = [0x1e293b, 0x334155, 0x1d4ed8, 0x475569, 0x78350f, 0x0f766e];
+            const headMat = new THREE.MeshStandardMaterial({ color: 0xe6b88a, roughness: 0.72 });
+            const armMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.78 });
+
+            function createPerson(x, y, z, mode, phase) {
+                const person = new THREE.Group();
+                const coatMat = new THREE.MeshStandardMaterial({
+                    color: coatColors[Math.floor(Math.random() * coatColors.length)],
+                    roughness: 0.78
+                });
+                const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.27, 1.02, 10), coatMat);
+                torso.position.y = 0.94;
+                torso.castShadow = true;
+
+                const leftArm = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.065, 0.65, 8), armMat);
+                leftArm.position.set(-0.29, 0.96, 0.06);
+                leftArm.rotation.x = -0.35;
+                leftArm.castShadow = true;
+
+                const rightArm = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.065, 0.65, 8), armMat);
+                rightArm.position.set(0.29, 0.96, 0.06);
+                rightArm.rotation.x = -0.35;
+                rightArm.castShadow = true;
+
+                const head = new THREE.Mesh(new THREE.SphereGeometry(0.175, 12, 12), headMat);
+                head.position.y = 1.64;
+                head.castShadow = true;
+
+                person.add(torso, leftArm, rightArm, head);
+                person.position.set(x, y, z);
+                scene.add(person);
+
+                figures.push({ group: person, torso, mode, phase, baseX: x, baseZ: z });
+            }
+
+            // מתפללים ליד הכותל המערבי
+            for (let i = 0; i < 12; i++) {
+                const pz = -29 + i * 3.8;
+                if (Math.abs(pz + 11) < 1.2) continue;
+                createPerson(-9.1, 2.2, pz, 'pray', i * 0.8);
+            }
+
+            // מבקרים ומתפללים ברחבת עזרת ישראל ובמדרגות הדרומיות
+            const ezratSpots = [
+                [-14, 2.1, 22, 'walk', 0.2],
+                [-19, 2.1, 26, 'pray', 1.4],
+                [-11, 2.1, 29, 'walk', 2.6],
+                [-15, 1.35, 38, 'walk', 3.8],
+                [-8, 1.35, 41, 'pray', 4.9],
+                [-20, 1.35, 39, 'walk', 6.0]
+            ];
+            ezratSpots.forEach(([x, y, z, m, ph]) => createPerson(x, y, z, m, ph));
+
+            // פנסי רחבה ותאורת ערב
+            const poleMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.65, roughness: 0.35 });
+            const lampBulbMat = new THREE.MeshStandardMaterial({
+                color: 0xfffbeb,
+                emissive: 0xffb74d,
+                emissiveIntensity: 0
+            });
+
+            const lampCoords = [
+                [-16, 2.2, -24], [-16, 2.2, -4], [-28, 2.2, -14],
+                [-12, 2.1, 18], [-24, 2.1, 28], [-12, 1.35, 38]
+            ];
+            lampCoords.forEach(([lx, ly, lz]) => {
+                const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.15, 4.8, 8), poleMat);
+                pole.position.set(lx, ly + 2.4, lz);
+                pole.castShadow = true;
+                scene.add(pole);
+
+                const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 8), lampBulbMat);
+                bulb.position.set(lx, ly + 4.9, lz);
+                scene.add(bulb);
+
+                const pt = new THREE.PointLight(0xffb347, 0, 22, 1.6);
+                pt.position.set(lx, ly + 4.6, lz);
+                scene.add(pt);
+                plazaLights.push(pt);
+            });
+            windowMats.push(lampBulbMat);
+
+            // כוכבים לשעות הלילה
+            const starGeo = new THREE.BufferGeometry();
+            const starPos = new Float32Array(750 * 3);
+            for (let i = 0; i < 750 * 3; i += 3) {
+                const r = 240 + Math.random() * 60;
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.random() * (Math.PI / 2.2);
+                starPos[i] = r * Math.sin(phi) * Math.cos(theta);
+                starPos[i + 1] = r * Math.cos(phi) + 15;
+                starPos[i + 2] = r * Math.sin(phi) * Math.sin(theta);
+            }
+            starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+            starsMesh = new THREE.Points(
+                starGeo,
+                new THREE.PointsMaterial({ color: 0xffffff, size: 1.25, transparent: true, opacity: 0 })
+            );
+            scene.add(starsMesh);
+        }
+
+        /**
+         * תגיות עניין אינטראקטיביות בתלת-ממד
+         */
+        function createHotspots() {
+            const container = document.getElementById('hotspots-container');
+            container.innerHTML = '';
+
+            Object.entries(locations).forEach(([key, loc]) => {
+                if (!loc.hotspotPos) return;
+                const el = document.createElement('div');
+                el.className = 'hotspot-label';
+                const extraBadge = loc.isEzrat ? ' ezrat-badge' : '';
+                const extraPin = loc.isEzrat ? ' ezrat-pin' : '';
+                const extraDot = loc.isEzrat ? ' ezrat-dot' : '';
+
+                el.innerHTML = `
+                    <div class="hotspot-badge${extraBadge}">
+                        <span class="pulse-dot${extraDot}"></span>
+                        <span>${loc.emoji}</span>
+                        <span>${loc.title}</span>
+                    </div>
+                    <div class="hotspot-pin${extraPin}"></div>
+                `;
+                el.onclick = () => flyTo(key);
+                container.appendChild(el);
+                hotspotElements[key] = el;
+            });
+        }
+
+        function updateHotspots() {
+            const THREE = getTHREE();
+            if (!camera || !renderer || !THREE) return;
+            if (isUIHidden) {
+                Object.values(hotspotElements).forEach(el => { el.style.opacity = '0'; });
+                return;
+            }
+            const proj = new THREE.Vector3();
+            Object.entries(locations).forEach(([key, loc]) => {
+                const el = hotspotElements[key];
+                if (!el || !loc.hotspotPos) return;
+                proj.copy(loc.hotspotPos).project(camera);
+                if (proj.z > 1) {
+                    el.style.opacity = '0';
+                    el.style.pointerEvents = 'none';
+                    return;
+                }
+                const x = (proj.x * 0.5 + 0.5) * window.innerWidth;
+                const y = (proj.y * -0.5 + 0.5) * window.innerHeight;
+                el.style.left = `${x}px`;
+                el.style.top = `${y}px`;
+                el.style.opacity = '1';
+                el.style.pointerEvents = 'auto';
+            });
+        }
+
+        function setLighting(mode) {
+            currentMode = mode;
+            const clock = document.getElementById('live-clock');
+            ['sunrise', 'morning', 'sunset', 'night'].forEach(m => {
+                const b = document.getElementById(`btn-${m}`);
+                if (b) {
+                    b.classList.toggle('btn-active', m === mode);
+                    b.classList.toggle('btn-hover', m !== mode);
+                }
+            });
+
+            if (mode === 'sunrise') {
+                clock.textContent = '06:10';
+                sunAzimuth = 0.12;
+                sunElevationDeg = 22;
+                scene.background.setHex(0xf4a261);
+                scene.fog.color.setHex(0xf4a261);
+                if (skyUniforms) {
+                    skyUniforms.topColor.value.setHex(0x3b5998);
+                    skyUniforms.horizonColor.value.setHex(0xf5a962);
+                    skyUniforms.bottomColor.value.setHex(0xc98a5b);
+                    skyUniforms.sunColor.value.setHex(0xffbe55);
+                    skyUniforms.sunGlowIntensity.value = 0.55;
+                }
+                sunLight.color.setHex(0xffb703);
+                sunLight.intensity = 1.5;
+                hemiLight.color.setHex(0xffd6a5);
+                hemiLight.groundColor.setHex(0x6e5c45);
+                hemiLight.intensity = 0.65;
+                sunSphere.visible = false;
+                starsMesh.material.opacity = 0.08;
+                setNightLights(0.25, 0.4);
+            } else if (mode === 'morning') {
+                clock.textContent = '12:00';
+                sunAzimuth = 0.65;
+                sunElevationDeg = 55;
+                scene.background.setHex(0x87c6eb);
+                scene.fog.color.setHex(0x9bd0ec);
+                if (skyUniforms) {
+                    skyUniforms.topColor.value.setHex(0x2563eb);
+                    skyUniforms.horizonColor.value.setHex(0xd4ecfa);
+                    skyUniforms.bottomColor.value.setHex(0xd8cbb4);
+                    skyUniforms.sunColor.value.setHex(0xfff5d6);
+                    skyUniforms.sunGlowIntensity.value = 0.3;
+                }
+                sunLight.color.setHex(0xfff1d0);
+                sunLight.intensity = 1.55;
+                hemiLight.color.setHex(0xfff6e5);
+                hemiLight.groundColor.setHex(0x7a6b52);
+                hemiLight.intensity = 0.72;
+                sunSphere.visible = false;
+                starsMesh.material.opacity = 0;
+                setNightLights(0, 0);
+            } else if (mode === 'sunset') {
+                clock.textContent = '18:30';
+                sunAzimuth = 2.65;
+                sunElevationDeg = 18;
+                scene.background.setHex(0xe8734a);
+                scene.fog.color.setHex(0xd96b43);
+                if (skyUniforms) {
+                    skyUniforms.topColor.value.setHex(0x312e81);
+                    skyUniforms.horizonColor.value.setHex(0xf27d42);
+                    skyUniforms.bottomColor.value.setHex(0x8c4a27);
+                    skyUniforms.sunColor.value.setHex(0xff8c3b);
+                    skyUniforms.sunGlowIntensity.value = 0.65;
+                }
+                sunLight.color.setHex(0xff822e);
+                sunLight.intensity = 1.7;
+                hemiLight.color.setHex(0xffb482);
+                hemiLight.groundColor.setHex(0x5c422c);
+                hemiLight.intensity = 0.6;
+                sunSphere.visible = false;
+                starsMesh.material.opacity = 0.18;
+                setNightLights(0.45, 0.75);
+            } else if (mode === 'night') {
+                clock.textContent = '21:15';
+                sunAzimuth = 0.8;
+                sunElevationDeg = 48;
+                scene.background.setHex(0x070d1d);
+                scene.fog.color.setHex(0x0a1329);
+                if (skyUniforms) {
+                    skyUniforms.topColor.value.setHex(0x050814);
+                    skyUniforms.horizonColor.value.setHex(0x111c36);
+                    skyUniforms.bottomColor.value.setHex(0x090e1a);
+                    skyUniforms.sunColor.value.setHex(0x93c5fd);
+                    skyUniforms.sunGlowIntensity.value = 0.08;
+                }
+                sunLight.color.setHex(0x6b8cce);
+                sunLight.intensity = 0.35;
+                hemiLight.color.setHex(0x1e293b);
+                hemiLight.groundColor.setHex(0x111827);
+                hemiLight.intensity = 0.32;
+                sunSphere.visible = false;
+                starsMesh.material.opacity = 0.75;
+                setNightLights(1.5, 1.8);
+            }
+
+            const slider = document.getElementById('slider-sun');
+            const valLabel = document.getElementById('sun-val');
+            if (slider) slider.value = sunElevationDeg;
+            if (valLabel) valLabel.textContent = `${sunElevationDeg}°`;
+            updateSunPosition();
+        }
+
+        function setNightLights(intensity, floodIntensity) {
+            windowMats.forEach(m => { m.emissiveIntensity = intensity; });
+            plazaLights.forEach(l => { l.intensity = floodIntensity; });
+            if (wallFloodLight) wallFloodLight.intensity = floodIntensity * 1.4;
+        }
+
+        function updateSunSlider(deg) {
+            sunElevationDeg = Number(deg);
+            document.getElementById('sun-val').textContent = `${sunElevationDeg}°`;
+            updateSunPosition();
+        }
+
+        function updateExposureSlider(val) {
+            const num = Number(val);
+            document.getElementById('exp-val').textContent = num.toFixed(2);
+            if (renderer) renderer.toneMappingExposure = num;
+        }
+
+        function flyTo(key) {
+            const loc = locations[key];
+            if (!loc || !camera || !controls) return;
+            if (isAutoTour) toggleAutoTour(false);
+            if (isDroneMode) toggleDroneMode(false);
+
+            targetCamPos.copy(loc.pos);
+            targetLookAt.copy(loc.lookAt);
+            isTransitioning = true;
+
+            document.getElementById('location-title').textContent = loc.title;
+            document.getElementById('location-emoji').textContent = loc.emoji;
+            document.getElementById('location-desc').textContent = loc.desc;
+            document.getElementById('fact-text').textContent = loc.fact;
+
+            Object.keys(locations).forEach(k => {
+                const btn = document.getElementById(`cam-${k}`);
+                if (btn) {
+                    btn.classList.toggle('btn-active', k === key);
+                    btn.classList.toggle('btn-hover', k !== key);
+                }
+            });
+        }
+
+        function toggleAutoTour(force) {
+            isAutoTour = typeof force === 'boolean' ? force : !isAutoTour;
+            if (isAutoTour && isDroneMode) toggleDroneMode(false);
+            const btn = document.getElementById('btn-tour');
+            const text = document.getElementById('tour-text');
+            const icon = document.getElementById('tour-icon');
+            if (isAutoTour) {
+                isTransitioning = false;
+                btn.classList.add('btn-active');
+                btn.classList.remove('btn-hover');
+                text.textContent = 'עצור סיור';
+                icon.textContent = '⏸️';
+            } else {
+                btn.classList.remove('btn-active');
+                btn.classList.add('btn-hover');
+                text.textContent = 'סיור אווירי';
+                icon.textContent = '🚁';
+            }
+        }
+
+        function toggleDroneMode(force) {
+            isDroneMode = typeof force === 'boolean' ? force : !isDroneMode;
+            if (isDroneMode && isAutoTour) toggleAutoTour(false);
+            const btn = document.getElementById('btn-drone');
+            const hud = document.getElementById('drone-hud');
+            if (isDroneMode) {
+                isTransitioning = false;
+                btn.classList.add('btn-active');
+                btn.classList.remove('btn-hover');
+                hud.classList.remove('hidden');
+            } else {
+                btn.classList.remove('btn-active');
+                btn.classList.add('btn-hover');
+                hud.classList.add('hidden');
+            }
+        }
+
+        function toggleUI() {
+            isUIHidden = !isUIHidden;
+            ['ui-header', 'ui-controls', 'ui-nav'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.classList.toggle('ui-hidden', isUIHidden);
+            });
+            document.getElementById('ui-toggle-icon').textContent = isUIHidden ? '🙈' : '👁️';
+            updateHotspots();
+        }
+
+        function updateDroneMovement() {
+            const THREE = getTHREE();
+            if (!isDroneMode || !camera || !controls || !THREE) return;
+            const speed = 0.65;
+            const forward = new THREE.Vector3();
+            camera.getWorldDirection(forward);
+            forward.y = 0;
+            if (forward.lengthSq() > 0.0001) forward.normalize();
+
+            const right = new THREE.Vector3().crossVectors(forward, camera.up).normalize();
+            const move = new THREE.Vector3();
+
+            if (keys.w || keys.ArrowUp) move.add(forward);
+            if (keys.s || keys.ArrowDown) move.sub(forward);
+            if (keys.d || keys.ArrowRight) move.add(right);
+            if (keys.a || keys.ArrowLeft) move.sub(right);
+            if (keys.e) move.y += 1;
+            if (keys.q) move.y -= 1;
+
+            if (move.lengthSq() > 0) {
+                move.normalize().multiplyScalar(speed);
+                camera.position.add(move);
+                controls.target.add(move);
+
+                const minY = getBaseGroundHeight(camera.position.x, camera.position.z) + 2.2;
+                if (camera.position.y < minY) {
+                    const diff = minY - camera.position.y;
+                    camera.position.y += diff;
+                    controls.target.y += diff;
+                }
+            }
+        }
+
+        function onResize() {
+            if (!camera || !renderer) return;
+            const w = Math.max(1, window.innerWidth);
+            const h = Math.max(1, window.innerHeight);
+            camera.aspect = w / h;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const THREE = getTHREE();
+            if (!renderer || !scene || !camera || !controls || !THREE) return;
+
+            const t = performance.now() * 0.001;
+
+            // תנועת יונים
+            pigeons.forEach(p => {
+                p.angle += p.speed;
+                p.group.position.x = p.cx + Math.cos(p.angle) * p.radius;
+                p.group.position.z = p.cz + Math.sin(p.angle) * p.radius;
+                p.group.position.y = p.baseY + Math.sin(t * 2.1 + p.flapSeed) * 1.1;
+                p.group.rotation.y = -p.angle;
+
+                const flap = Math.sin(t * 11 + p.flapSeed) * 0.55;
+                p.leftWing.rotation.x = flap;
+                p.rightWing.rotation.x = -flap;
+            });
+
+            // תנועת מתפללים ומבקרים
+            figures.forEach(f => {
+                if (f.mode === 'pray') {
+                    f.torso.rotation.x = Math.sin(t * 2.4 + f.phase) * 0.14;
+                } else {
+                    f.group.position.z = f.baseZ + Math.sin(t * 0.7 + f.phase) * 2.4;
+                }
+            });
+
+            updateDroneMovement();
+
+            if (isAutoTour) {
+                tourAngle += 0.0025;
+                camera.position.x = Math.cos(tourAngle) * 76;
+                camera.position.z = Math.sin(tourAngle) * 76;
+                camera.position.y = 42 + Math.sin(tourAngle * 2) * 8;
+                controls.target.lerp(new THREE.Vector3(-4, 9, 4), 0.05);
+            }
+
+            if (isTransitioning) {
+                camera.position.lerp(targetCamPos, 0.055);
+                controls.target.lerp(targetLookAt, 0.055);
+                if (camera.position.distanceTo(targetCamPos) < 0.25 && controls.target.distanceTo(targetLookAt) < 0.25) {
+                    isTransitioning = false;
+                }
+            }
+
+            controls.update();
+            updateHotspots();
+            renderer.render(scene, camera);
+        }
+
+        function startApp() {
+            ensureThreeAndControls()
+                .then(() => {
+                    initScene();
+                })
+                .catch(() => {
+                    const fb = document.getElementById('webgl-fallback');
+                    if (fb) fb.classList.remove('hidden');
+                });
+        }
+
+        if (document.readyState === 'loading') {
+            window.addEventListener('DOMContentLoaded', startApp);
+        } else {
+            startApp();
+        }
+    </script>
+
+<a id="club-back" href="../index.html#products-shelf" style="position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#fff;color:#1d2433;border:2px solid #cfe0f0;border-radius:999px;padding:8px 18px;font:600 15px/1.2 Arial,sans-serif;text-decoration:none;direction:rtl;box-shadow:0 3px 0 #cfe0f0">→ חזרה לאתר החוג</a>
+<script>if (window.top !== window) document.getElementById("club-back").remove();</script>
+</body>
+</html>

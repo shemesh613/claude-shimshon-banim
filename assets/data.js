@@ -2,14 +2,22 @@
 window.SITE = {
   "lessons": [
     {
+      "title": "שיעור: בונים עולם תלת־ממד בקוד",
+      "text": "מבקשים מגמיני קוד, ומקבלים את הכותל, הפירמידות או עיר שלמה שאפשר להסתובב בה.",
+      "href": "lessons/sim3d.html",
+      "icon": "star",
+      "color": "ink",
+      "tags": [
+        "חדש"
+      ]
+    },
+    {
       "title": "שיעור: משנים תמונה אמיתית בגמיני",
       "text": "מעלים תמונה שצילמנו, ומבקשים להוסיף לה דובים, קוף על הספה ועוד.",
       "href": "lessons/edit.html",
       "icon": "star",
       "color": "coral",
-      "tags": [
-        "חדש"
-      ]
+      "tags": []
     },
     {
       "title": "שיעור: מציירים בגמיני, בכל סגנון",
@@ -113,5 +121,42 @@ window.SITE = {
       "tags": []
     }
   ],
-  "links": []
+  "links": [],
+  "worlds": [
+    {
+      "title": "הכותל המערבי ורחבת עזרת ישראל",
+      "cover": "lessons/img/ex3d-kotel.jpg",
+      "href": "worlds/kotel.html"
+    },
+    {
+      "title": "הפירמידות של גיזה",
+      "cover": "lessons/img/ex3d-giza.jpg",
+      "href": "worlds/giza.html"
+    },
+    {
+      "title": "שיעבוד מצרים: עיר הבנייה והנילוס",
+      "cover": "lessons/img/ex3d-egypt-nile.jpg",
+      "href": "worlds/egypt-nile.html"
+    },
+    {
+      "title": "שיעבוד מצרים: ערי המסכנות",
+      "cover": "lessons/img/ex3d-egypt-city.jpg",
+      "href": "worlds/egypt-city.html"
+    },
+    {
+      "title": "שיעבוד מצרים: אתר הבנייה המלכותי",
+      "cover": "lessons/img/ex3d-egypt-build.jpg",
+      "href": "worlds/egypt-build.html"
+    },
+    {
+      "title": "קורקינט חשמלי בבאר שבע",
+      "cover": "lessons/img/ex3d-beersheva.jpg",
+      "href": "worlds/beersheva.html"
+    },
+    {
+      "title": "חדר גיימינג",
+      "cover": "lessons/img/ex3d-gaming.jpg",
+      "href": "worlds/gaming.html"
+    }
+  ]
 };
