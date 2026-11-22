@@ -1,0 +1,2905 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>מיראז' סיטי | עיר וילות יוקרה בתלת-ממד</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;800&display=swap" rel="stylesheet" />
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: 'Heebo', sans-serif;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #0b1120;
+      user-select: none;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      outline: none;
+    }
+    .glass-panel {
+      background: rgba(15, 23, 42, 0.65);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+    }
+    .btn-active {
+      background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+      color: #ffffff;
+      border-color: rgba(255, 255, 255, 0.45);
+      box-shadow: 0 4px 15px rgba(245, 158, 11, 0.45);
+    }
+    .btn-inactive {
+      background: rgba(255, 255, 255, 0.09);
+      color: #e2e8f0;
+      border-color: rgba(255, 255, 255, 0.12);
+    }
+    .btn-inactive:hover {
+      background: rgba(255, 255, 255, 0.18);
+      color: #ffffff;
+    }
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 0.75; }
+      50% { opacity: 1; }
+    }
+    .loader-glow {
+      animation: pulseGlow 1.8s infinite ease-in-out;
+    }
+    #joystick-zone {
+      touch-action: none;
+    }
+  </style>
+</head>
+<body>
+  <!-- Loading Screen Overlay -->
+  <div id="loading-screen" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-950 text-white transition-opacity duration-700">
+    <div class="w-16 h-16 border-4 border-amber-500/30 border-t-amber-400 rounded-full animate-spin mb-5"></div>
+    <h1 class="text-2xl md:text-3xl font-bold tracking-wide mb-2 loader-glow">בונה את מיראז' סיטי...</h1>
+    <p class="text-slate-400 text-sm">טוען 6 וילות יוקרה, כבישים, כיכר מזרקה, מדרגות, חניוני רכבי-על וחפצים אינטראקטיביים</p>
+  </div>
+
+  <!-- 3D Viewport Container -->
+  <div id="canvas-container" class="fixed inset-0 w-full h-full"></div>
+
+  <!-- Center Crosshair & Interactive Pickup Prompt (Visible in Walk Mode) -->
+  <div id="walk-crosshair" class="fixed inset-0 pointer-events-none z-10 flex flex-col items-center justify-center">
+    <div id="crosshair-dot" class="w-2.5 h-2.5 rounded-full bg-white/85 ring-2 ring-slate-900/60 shadow transition-transform duration-150"></div>
+    <div id="pickup-prompt" class="hidden mt-4 glass-panel px-4 py-1.5 rounded-full text-white text-xs md:text-sm font-bold flex items-center gap-2 border border-amber-400/50 shadow-lg">
+      <span class="bg-amber-500 text-slate-950 px-2 py-0.5 rounded font-extrabold">E</span>
+      <span id="pickup-prompt-text">הרם חפץ</span>
+    </div>
+    <div id="context-prompt" class="hidden mt-3 glass-panel px-4 py-2 rounded-full text-white text-xs md:text-sm font-bold flex items-center gap-2 border border-cyan-400/60 shadow-lg">
+      <span id="context-prompt-key" class="bg-cyan-400 text-slate-950 px-2 py-0.5 rounded font-extrabold">P</span>
+      <span id="context-prompt-text">הפעל עמדת משחקים</span>
+    </div>
+  </div>
+
+  <!-- Active Context Action Pill (PC / Car / Mouse Lock) -->
+  <div id="active-status-bar" class="hidden fixed top-24 left-1/2 -translate-x-1/2 z-20 glass-panel px-4 py-2 rounded-2xl text-white text-xs md:text-sm font-semibold flex flex-wrap items-center justify-center gap-2.5 border border-cyan-400/40 pointer-events-auto">
+    <span id="mouse-lock-badge" class="bg-white/10 px-2.5 py-1 rounded-lg text-xs">🖱️ עכבר: <strong id="mouse-lock-status" class="text-amber-300">משוחרר (M לנעילה)</strong></span>
+    <button id="hud-pc-btn" onclick="openPcArcadeModal()" class="hidden bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold px-3 py-1 rounded-lg text-xs cursor-pointer transition">
+      🎮 פתח משחקים במחשב [P]
+    </button>
+    <button id="hud-car-btn" onclick="toggleCarDriveMode()" class="hidden bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-bold px-3 py-1 rounded-lg text-xs cursor-pointer transition">
+      🚗 היכנס/צא מרכב [I]
+    </button>
+  </div>
+
+  <!-- Held Item Status Badge -->
+  <div id="held-item-badge" class="hidden fixed top-36 left-1/2 -translate-x-1/2 z-20 glass-panel px-4 py-2 rounded-2xl text-white text-xs md:text-sm font-semibold flex items-center gap-3 border border-amber-400/40 pointer-events-auto">
+    <span>🖐️ מחזיק: <strong id="held-item-name" class="text-amber-400">חפץ</strong></span>
+    <span class="text-slate-400">|</span>
+    <button onclick="dropOrPickupAction()" class="bg-white/15 hover:bg-white/25 px-2.5 py-1 rounded-lg text-xs cursor-pointer transition">[E] הנח</button>
+    <button onclick="throwHeldObject()" class="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold px-2.5 py-1 rounded-lg text-xs cursor-pointer transition">[F / לחיצה] זרוק</button>
+  </div>
+
+  <!-- Playable PC Mini-Games Modal Overlay ('P' near 1st-floor computer) -->
+  <div id="pc-arcade-modal" class="hidden fixed inset-0 z-40 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-3 md:p-6">
+    <div class="glass-panel w-full max-w-3xl rounded-3xl border border-cyan-400/40 overflow-hidden text-white shadow-2xl">
+      <div class="flex items-center justify-between px-5 py-3.5 bg-slate-900/90 border-b border-white/10">
+        <div class="flex items-center gap-2.5">
+          <span class="text-xl">🖥️</span>
+          <div>
+            <h2 id="pc-villa-title" class="text-sm md:text-base font-bold text-cyan-300">עמדת גיימינג • קומה 1</h2>
+            <p class="text-[11px] text-slate-400">שליטה: חצים / A-D • סגירה: Esc או כפתור יציאה</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="tab-racer" onclick="switchMiniGame('racer')" class="btn-active px-3 py-1.5 rounded-xl text-xs font-bold border cursor-pointer">🏎️ מיראז' רייסר</button>
+          <button id="tab-snake" onclick="switchMiniGame('snake')" class="btn-inactive px-3 py-1.5 rounded-xl text-xs font-bold border cursor-pointer">🐍 פולסר סנייק</button>
+          <button onclick="closePcArcadeModal()" class="bg-rose-500/80 hover:bg-rose-500 text-white px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer transition">✕ חזור לעיר</button>
+        </div>
+      </div>
+
+      <div class="p-4 md:p-5 bg-slate-950/90 flex flex-col items-center">
+        <div class="w-full flex items-center justify-between mb-3 px-2 text-xs md:text-sm font-bold">
+          <span>ניקוד: <strong id="minigame-score" class="text-amber-400">0</strong></span>
+          <span id="minigame-status" class="text-cyan-300">מוכן למשחק</span>
+          <button onclick="startCurrentMiniGame()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 px-3 py-1 rounded-lg text-xs font-extrabold cursor-pointer">↻ משחק חדש</button>
+        </div>
+        <canvas id="minigame-canvas" width="640" height="360" class="w-full max-w-[640px] h-auto rounded-2xl border border-cyan-500/30 bg-slate-900"></canvas>
+        <div class="flex md:hidden items-center gap-3 mt-3">
+          <button onpointerdown="miniGameInput.left = true" onpointerup="miniGameInput.left = false" onpointerleave="miniGameInput.left = false" class="px-5 py-2.5 rounded-xl bg-white/15 font-bold">◀ שמאלה</button>
+          <button onpointerdown="miniGameInput.right = true" onpointerup="miniGameInput.right = false" onpointerleave="miniGameInput.right = false" class="px-5 py-2.5 rounded-xl bg-white/15 font-bold">ימינה ▶</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Top Header & Controls -->
+  <header class="fixed top-4 right-4 left-4 z-20 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 pointer-events-none">
+    <!-- City Title Card & Mode Switcher -->
+    <div class="flex flex-wrap items-center gap-2.5 pointer-events-auto">
+      <div class="glass-panel rounded-2xl px-4 py-2.5 text-white flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shadow-lg shrink-0">
+          <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-base md:text-lg font-bold leading-tight">מיראז' סיטי • Mirage Villa City</h1>
+          <p id="controls-hint" class="text-xs text-slate-300">WASD הליכה/נהיגה • M שחרור/נעילת עכבר • E הרמה • F זריקה • P מחשב • I רכב</p>
+        </div>
+      </div>
+
+      <!-- Primary Walk vs Drone Mode Toggle -->
+      <div class="glass-panel rounded-2xl p-1.5 flex items-center gap-1.5">
+        <button id="nav-walk" onclick="setNavigationMode('walk')" class="btn-active px-3.5 py-2 rounded-xl text-xs md:text-sm font-bold border transition-all flex items-center gap-1.5 cursor-pointer">
+          <span>🚶‍♂️</span>
+          <span>הליכה בעיר</span>
+        </button>
+        <button id="nav-orbit" onclick="setNavigationMode('orbit')" class="btn-inactive px-3.5 py-2 rounded-xl text-xs md:text-sm font-bold border transition-all flex items-center gap-1.5 cursor-pointer">
+          <span>🚁</span>
+          <span>מבט רחפן</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Atmosphere / Lighting Switcher & Utility Toggles -->
+    <div class="flex flex-wrap items-center gap-2 pointer-events-auto">
+      <div class="glass-panel rounded-2xl p-1.5 flex items-center gap-1.5">
+        <button id="mode-day" onclick="setLightingMode('day')" class="btn-active px-3 py-2 rounded-xl text-xs md:text-sm font-medium border transition-all flex items-center gap-1.5 cursor-pointer">
+          <span>☀️</span>
+          <span>יום</span>
+        </button>
+        <button id="mode-sunset" onclick="setLightingMode('sunset')" class="btn-inactive px-3 py-2 rounded-xl text-xs md:text-sm font-medium border transition-all flex items-center gap-1.5 cursor-pointer">
+          <span>🌅</span>
+          <span>שקיעה</span>
+        </button>
+        <button id="mode-night" onclick="setLightingMode('night')" class="btn-inactive px-3 py-2 rounded-xl text-xs md:text-sm font-medium border transition-all flex items-center gap-1.5 cursor-pointer">
+          <span>🌙</span>
+          <span>לילה</span>
+        </button>
+      </div>
+
+      <div class="glass-panel rounded-2xl p-1.5 flex items-center gap-1.5">
+        <button id="toggle-water" onclick="toggleWaterAnimation()" title="הפעל/השהה גלי בריכה" class="btn-active px-3 py-2 rounded-xl text-xs md:text-sm font-medium border transition-all flex items-center gap-1.5 cursor-pointer">
+          <span>🌊</span>
+          <span class="hidden sm:inline">גלי מים</span>
+        </button>
+        <button id="toggle-ui" onclick="toggleHudVisibility()" title="הסתר/הצג תפריטים" class="btn-inactive px-2.5 py-2 rounded-xl text-xs md:text-sm font-medium border transition-all cursor-pointer">
+          👁️
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Mobile / Touch Virtual Joystick & Action Buttons -->
+  <div id="mobile-walk-controls" class="fixed bottom-24 right-5 left-5 z-20 flex items-end justify-between pointer-events-none md:hidden">
+    <div id="joystick-zone" class="w-28 h-28 rounded-full glass-panel relative flex items-center justify-center pointer-events-auto">
+      <div id="joystick-knob" class="w-11 h-11 rounded-full bg-amber-400/90 shadow-lg border-2 border-white pointer-events-none transition-transform duration-75"></div>
+    </div>
+    <div class="flex flex-col gap-2 pointer-events-auto">
+      <div class="flex gap-2">
+        <button onclick="toggleMouseLock()" class="px-3 py-2 rounded-full glass-panel text-cyan-300 font-bold text-xs flex items-center justify-center active:scale-95 border border-cyan-400/40">
+          עכבר [M]
+        </button>
+        <button onclick="openPcArcadeModal()" class="px-3 py-2 rounded-full glass-panel text-amber-300 font-bold text-xs flex items-center justify-center active:scale-95 border border-amber-400/40">
+          מחשב [P]
+        </button>
+        <button onclick="toggleCarDriveMode()" class="px-3 py-2 rounded-full glass-panel text-emerald-300 font-bold text-xs flex items-center justify-center active:scale-95 border border-emerald-400/40">
+          רכב [I]
+        </button>
+      </div>
+      <div class="flex gap-2">
+        <button onclick="dropOrPickupAction()" class="w-14 h-14 rounded-full glass-panel text-amber-300 font-bold text-xs flex items-center justify-center active:scale-95 border border-amber-400/40">
+          הרם/הנח
+        </button>
+        <button onclick="throwHeldObject()" class="w-14 h-14 rounded-full glass-panel text-rose-300 font-bold text-xs flex items-center justify-center active:scale-95 border border-rose-400/40">
+          זרוק
+        </button>
+      </div>
+      <button id="mobile-jump-btn" class="w-full h-12 rounded-full glass-panel text-white font-bold text-sm flex items-center justify-center active:scale-95">
+        קפיצה
+      </button>
+    </div>
+  </div>
+
+  <!-- Bottom City District & Villa Teleport Dock -->
+  <footer id="bottom-dock" class="fixed bottom-4 right-4 left-4 z-20 flex flex-col items-center pointer-events-none transition-opacity duration-300">
+    <div class="glass-panel rounded-2xl p-2 max-w-full pointer-events-auto">
+      <div class="flex items-center gap-2 overflow-x-auto no-scrollbar">
+        <button id="cam-plaza" onclick="goToLocation('plaza')" class="cam-btn btn-active whitespace-nowrap px-3.5 py-2 rounded-xl text-xs md:text-sm font-semibold border transition-all flex items-center gap-1.5 cursor-pointer">
+          <span>⛲</span>
+          <span>כיכר העיר המרכזית</span>
+        </button>
+        <button id="cam-villa1" onclick="goToLocation('villa1')" class="cam-btn btn-inactive whitespace-nowrap px-3.5 py-2 rounded-xl text-xs md:text-sm font-semibold border transition-all flex items-center gap-1.5 cursor-pointer">
+          <span>👑</span>
+          <span>1. האחוזה הנשיאותית</span>
+        </button>
+        <button id="cam-villa1Roof" onclick="goToLocation('villa1Roof')" class="cam-btn btn-inactive whitespace-nowrap px-3.5 py-2 rounded-xl text-xs md:text-sm font-semibold border transition-all flex items-center gap-1.5 cursor-pointer">
+          <span>🥂</span>
+          <span>גג האחוזה (מדרגות)</span>
+        </button>
+        <button id="cam-villa2" onclick="goToLocation('villa2')" class="cam-btn btn-inactive whitespace-nowrap px-3.5 py-2 rounded-xl text-xs md:text-sm font-semibold border transition-all flex items-center gap-1.5 cursor-pointer">
+          <span>💎</span>
+          <span>2. וילת הקריסטל המודרנית</span>
+        </button>
+        <button id="cam-villa3" onclick="goToLocation('villa3')" class="cam-btn btn-inactive whitespace-nowrap px-3.5 py-2 rounded-xl text-xs md:text-sm font-semibold border transition-all flex items-center gap-1.5 cursor-pointer">
+          <span>🌴</span>
+          <span>3. וילת הריזורט והדקלים</span>
+        </button>
+        <button id="cam-villa4" onclick="goToLocation('villa4')" class="cam-btn btn-inactive whitespace-nowrap px-3.5 py-2 rounded-xl text-xs md:text-sm font-semibold border transition-all flex items-center gap-1.5 cursor-pointer">
+          <span>🏛️</span>
+          <span>4. וילת האבן הלבנה</span>
+        </button>
+        <button id="cam-villa5" onclick="goToLocation('villa5')" class="cam-btn btn-inactive whitespace-nowrap px-3.5 py-2 rounded-xl text-xs md:text-sm font-semibold border transition-all flex items-center gap-1.5 cursor-pointer">
+          <span>🌅</span>
+          <span>5. וילת השקיעה והמנחת</span>
+        </button>
+        <button id="cam-villa6" onclick="goToLocation('villa6')" class="cam-btn btn-inactive whitespace-nowrap px-3.5 py-2 rounded-xl text-xs md:text-sm font-semibold border transition-all flex items-center gap-1.5 cursor-pointer">
+          <span>🏎️</span>
+          <span>6. וילת האספנים והחניון</span>
+        </button>
+        <button id="cam-aerial" onclick="goToLocation('aerial')" class="cam-btn btn-inactive whitespace-nowrap px-3.5 py-2 rounded-xl text-xs md:text-sm font-semibold border transition-all flex items-center gap-1.5 cursor-pointer">
+          <span>🚁</span>
+          <span>מבט על על העיר</span>
+        </button>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Three.js & OrbitControls via CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+  <script>
+    /**
+     * ============================================================================
+     * MIRAGE CITY - EXPANSIVE 3D LUXURY VILLA NEIGHBORHOOD (THREE.JS)
+     * 1. Rock-Solid Walkable Ramps, Stairs, & Multi-Story Raycast/Height Physics.
+     * 2. Complete City of 6 Distinct Accessible Luxury Villas, Boulevards,
+     *    Central Roundabout Fountain Plaza, Supercars, Helipad & Pools.
+     * 3. Interactive Object Pickup (E), Drop (E), & Physics Throw (F / Click).
+     * ============================================================================
+     */
+
+    // Core Three.js Globals
+    let scene, camera, renderer, controls;
+    let sunLight, hemiLight, ambientLight;
+    let skyMesh, skyMaterial, starField;
+    let clock = new THREE.Clock();
+
+    // Animated Scene Elements
+    let waterMeshes = [];
+    let fountainWaterDrops = [];
+    let fireLight, fireFlames = [];
+    let heliRotor;
+    let nightLights = [];
+    let emissiveMaterials = [];
+
+    // Interactive States
+    let navMode = 'walk'; // 'walk' | 'orbit'
+    let isWaterAnimated = true;
+    let currentLightingMode = 'day';
+    let hudVisible = true;
+
+    // First-Person Walker State
+    const EYE_HEIGHT = 1.78;
+    const walker = {
+      pos: new THREE.Vector3(0, 0.25 + EYE_HEIGHT, 16),
+      velY: 0,
+      yaw: Math.PI, // Facing north towards the Central Fountain Plaza
+      pitch: 0.02,
+      isGrounded: true
+    };
+
+    // Mouse / Touch Drag Look State
+    let isDraggingLook = false;
+    let prevPointerX = 0;
+    let prevPointerY = 0;
+    let pointerDownPos = { x: 0, y: 0 };
+
+    // Virtual Joystick Vector
+    let joyMoveX = 0;
+    let joyMoveZ = 0;
+
+    // Keyboard State
+    const keysPressed = {};
+
+    // ============================================================================
+    // WALKABLE SURFACES, STAIR RAMPS & COLLISION VOLUMES
+    // ============================================================================
+    const walkableFloors = []; // { minX, maxX, minZ, maxZ, y }
+    const stairRamps = [];     // { minX, maxX, minZ, maxZ, axis: 'x'|'z', startCoord, endCoord, startY, endY }
+    const solidObstacles = []; // { minX, maxX, minY, maxY, minZ, maxZ }
+
+    // ============================================================================
+    // INTERACTIVE PICKABLE & THROWABLE OBJECTS SYSTEM
+    // ============================================================================
+    const pickableObjects = [];
+    let targetedObject = null;
+    let heldObject = null;
+
+    // ============================================================================
+    // 1ST FLOOR GAMING PCS, DRIVABLE CARS & POINTER LOCK STATE
+    // ============================================================================
+    const villaPcStations = []; // { x, y, z, villaName }
+    let nearbyPcStation = null;
+    let isPcModalOpen = false;
+
+    const drivableCars = []; // { group, pos, yaw, speed, colorHex, headlights }
+    let nearbyCar = null;
+    let activeDrivingCar = null;
+    let isMouseLocked = false;
+
+    // Mini-Game State ('racer' | 'snake')
+    let activeMiniGame = 'racer';
+    let miniGameScore = 0;
+    let miniGameRunning = false;
+    const miniGameInput = { left: false, right: false, up: false, down: false };
+    let racerState = { playerX: 295, lanes: [155, 295, 435], obstacles: [], coins: [], spawnTimer: 0 };
+    let snakeState = { snake: [], dir: { x: 1, y: 0 }, food: { x: 16, y: 8 }, stepTimer: 0 };
+
+    // Smooth Camera Transition State for Drone / Teleport
+    const cameraTransition = {
+      active: false,
+      progress: 0,
+      duration: 1.0,
+      startPos: new THREE.Vector3(),
+      endPos: new THREE.Vector3(),
+      startTarget: new THREE.Vector3(),
+      endTarget: new THREE.Vector3()
+    };
+
+    // City Districts & Villa Teleport Locations
+    const LOCATIONS = {
+      plaza: {
+        walkPos: new THREE.Vector3(0, 0.25, 16),
+        walkYaw: Math.PI,
+        dronePos: new THREE.Vector3(0, 18, 36),
+        droneTarget: new THREE.Vector3(0, 1, 0)
+      },
+      villa1: {
+        walkPos: new THREE.Vector3(-42, 0.35, -24),
+        walkYaw: Math.PI,
+        dronePos: new THREE.Vector3(-62, 14, -14),
+        droneTarget: new THREE.Vector3(-42, 4, -44)
+      },
+      villa1Roof: {
+        walkPos: new THREE.Vector3(-42, 9.65, -42),
+        walkYaw: 0.2,
+        dronePos: new THREE.Vector3(-24, 18, -28),
+        droneTarget: new THREE.Vector3(-42, 9, -44)
+      },
+      villa2: {
+        walkPos: new THREE.Vector3(42, 0.35, -24),
+        walkYaw: Math.PI,
+        dronePos: new THREE.Vector3(64, 14, -14),
+        droneTarget: new THREE.Vector3(42, 4, -44)
+      },
+      villa3: {
+        walkPos: new THREE.Vector3(-42, 0.35, 24),
+        walkYaw: 0,
+        dronePos: new THREE.Vector3(-64, 14, 14),
+        droneTarget: new THREE.Vector3(-42, 4, 44)
+      },
+      villa4: {
+        walkPos: new THREE.Vector3(42, 0.35, 24),
+        walkYaw: 0,
+        dronePos: new THREE.Vector3(64, 14, 14),
+        droneTarget: new THREE.Vector3(42, 4, 44)
+      },
+      villa5: {
+        walkPos: new THREE.Vector3(0, 0.35, -34),
+        walkYaw: Math.PI,
+        dronePos: new THREE.Vector3(24, 16, -24),
+        droneTarget: new THREE.Vector3(0, 5, -54)
+      },
+      villa6: {
+        walkPos: new THREE.Vector3(0, 0.35, 34),
+        walkYaw: 0,
+        dronePos: new THREE.Vector3(-24, 14, 24),
+        droneTarget: new THREE.Vector3(0, 4, 54)
+      },
+      aerial: {
+        walkPos: new THREE.Vector3(0, 0.25, 16),
+        walkYaw: Math.PI,
+        dronePos: new THREE.Vector3(88, 68, 92),
+        droneTarget: new THREE.Vector3(0, 3, 0)
+      }
+    };
+
+    /**
+     * ============================================================================
+     * PROCEDURAL TEXTURES (MARBLE, WOOD, CONCRETE, ASPHALT, GRASS, WATER TILE)
+     * ============================================================================
+     */
+    function createMarbleTexture(tint = '#f8fafc') {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 512;
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = tint;
+      ctx.fillRect(0, 0, 512, 512);
+
+      for (let v = 0; v < 18; v++) {
+        ctx.beginPath();
+        let x = Math.random() * 512;
+        let y = Math.random() * 512;
+        ctx.moveTo(x, y);
+        for (let s = 0; s < 12; s++) {
+          x += (Math.random() - 0.3) * 55;
+          y += (Math.random() - 0.3) * 55;
+          ctx.lineTo(x, y);
+        }
+        ctx.strokeStyle = `rgba(148, 163, 184, ${0.1 + Math.random() * 0.14})`;
+        ctx.lineWidth = 1 + Math.random() * 2.5;
+        ctx.stroke();
+      }
+
+      ctx.strokeStyle = 'rgba(203, 213, 225, 0.55)';
+      ctx.lineWidth = 2;
+      for (let i = 0; i <= 512; i += 256) {
+        ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 512); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(512, i); ctx.stroke();
+      }
+
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(6, 6);
+      return tex;
+    }
+
+    function createWoodTexture(baseColor = '#8b5a2b') {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 512;
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = baseColor;
+      ctx.fillRect(0, 0, 512, 512);
+
+      const slatCount = 16;
+      const slatWidth = 512 / slatCount;
+      for (let i = 0; i < slatCount; i++) {
+        const x = i * slatWidth;
+        ctx.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.08)';
+        ctx.fillRect(x + 2, 0, slatWidth - 4, 512);
+        ctx.fillStyle = '#2d1a0c';
+        ctx.fillRect(x, 0, 2, 512);
+      }
+
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(3, 1);
+      return tex;
+    }
+
+    function createAsphaltTexture() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 512;
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(0, 0, 512, 512);
+
+      for (let i = 0; i < 6000; i++) {
+        const x = Math.random() * 512;
+        const y = Math.random() * 512;
+        ctx.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.12)';
+        ctx.fillRect(x, y, 2, 2);
+      }
+
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(16, 16);
+      return tex;
+    }
+
+    function createGrassTexture() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 512;
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = '#3b6e22';
+      ctx.fillRect(0, 0, 512, 512);
+
+      ctx.fillStyle = 'rgba(77, 134, 42, 0.35)';
+      for (let i = 0; i < 512; i += 64) {
+        ctx.fillRect(i, 0, 32, 512);
+      }
+
+      for (let i = 0; i < 8000; i++) {
+        const x = Math.random() * 512;
+        const y = Math.random() * 512;
+        ctx.fillStyle = Math.random() > 0.5 ? 'rgba(101, 163, 13, 0.25)' : 'rgba(26, 46, 5, 0.22)';
+        ctx.fillRect(x, y, 2, 4);
+      }
+
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(48, 48);
+      return tex;
+    }
+
+    function createPoolTileTexture() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 256;
+      canvas.height = 256;
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = '#0284c7';
+      ctx.fillRect(0, 0, 256, 256);
+
+      const step = 32;
+      for (let x = 0; x < 256; x += step) {
+        for (let y = 0; y < 256; y += step) {
+          const shades = ['#0369a1', '#0284c7', '#0ea5e9', '#38bdf8'];
+          ctx.fillStyle = shades[Math.floor(Math.random() * shades.length)];
+          ctx.fillRect(x + 1, y + 1, step - 2, step - 2);
+        }
+      }
+
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(10, 6);
+      return tex;
+    }
+
+    /**
+     * ============================================================================
+     * WALKABLE SURFACE & STAIR RAMP REGISTRATION HELPERS
+     * ============================================================================
+     */
+    function addWalkableFloor(minX, maxX, minZ, maxZ, yHeight) {
+      walkableFloors.push({
+        minX: Math.min(minX, maxX),
+        maxX: Math.max(minX, maxX),
+        minZ: Math.min(minZ, maxZ),
+        maxZ: Math.max(minZ, maxZ),
+        y: yHeight
+      });
+    }
+
+    /**
+     * Registers a smooth, wide walkable incline ramp over any staircase so the player
+     * effortlessly walks up and down between floors without getting caught on steps.
+     */
+    function addStairRamp(minX, maxX, minZ, maxZ, axis, startCoord, endCoord, startY, endY) {
+      stairRamps.push({
+        minX: Math.min(minX, maxX),
+        maxX: Math.max(minX, maxX),
+        minZ: Math.min(minZ, maxZ),
+        maxZ: Math.max(minZ, maxZ),
+        axis,
+        startCoord,
+        endCoord,
+        startY,
+        endY
+      });
+    }
+
+    function addSolidBox(minX, maxX, minY, maxY, minZ, maxZ) {
+      solidObstacles.push({
+        minX: Math.min(minX, maxX),
+        maxX: Math.max(minX, maxX),
+        minY: Math.min(minY, maxY),
+        maxY: Math.max(minY, maxY),
+        minZ: Math.min(minZ, maxZ),
+        maxZ: Math.max(minZ, maxZ)
+      });
+    }
+
+    /**
+     * ============================================================================
+     * INITIALIZATION
+     * ============================================================================
+     */
+    function init() {
+      const container = document.getElementById('canvas-container');
+
+      scene = new THREE.Scene();
+      scene.fog = new THREE.FogExp2(0xdbeafe, 0.0022);
+
+      camera = new THREE.PerspectiveCamera(64, window.innerWidth / window.innerHeight, 0.15, 1100);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.1;
+      renderer.outputEncoding = THREE.sRGBEncoding;
+      container.appendChild(renderer.domElement);
+
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.06;
+      controls.maxPolarAngle = Math.PI / 2 - 0.02;
+      controls.minDistance = 3;
+      controls.maxDistance = 240;
+      controls.enabled = false;
+
+      controls.addEventListener('start', () => {
+        cameraTransition.active = false;
+      });
+
+      setupLights();
+      createSkyDome();
+      buildCityInfrastructure();
+
+      // Build 6 Distinct, Fully Accessible Luxury Villas across Mirage City!
+      // Villa 1 (North-West): The Grand Presidential Mega-Mansion (2 Stories + Rooftop Sky Lounge)
+      buildLuxuryVilla({
+        id: 'villa1',
+        cx: -42,
+        cz: -46,
+        rotationY: 0,
+        wallColor: 0xffffff,
+        accentWood: '#8b5a2b',
+        hasRooftop: true,
+        hasPool: true,
+        styleName: 'האחוזה הנשיאותית'
+      });
+
+      // Villa 2 (North-East): The Modern Crystal & Slate Villa (2 Stories + Rooftop Deck)
+      buildLuxuryVilla({
+        id: 'villa2',
+        cx: 42,
+        cz: -46,
+        rotationY: 0,
+        wallColor: 0xf1f5f9,
+        accentWood: '#334155',
+        hasRooftop: true,
+        hasPool: true,
+        styleName: 'וילת הקריסטל'
+      });
+
+      // Villa 3 (South-West): The Tropical Resort & Palms Villa (Facing North towards Blvd)
+      buildLuxuryVilla({
+        id: 'villa3',
+        cx: -42,
+        cz: 46,
+        rotationY: Math.PI,
+        wallColor: 0xfefce8,
+        accentWood: '#9a3412',
+        hasRooftop: true,
+        hasPool: true,
+        styleName: 'וילת הריזורט'
+      });
+
+      // Villa 4 (South-East): The White Limestone Villa (Facing North towards Blvd)
+      buildLuxuryVilla({
+        id: 'villa4',
+        cx: 42,
+        cz: 46,
+        rotationY: Math.PI,
+        wallColor: 0xffffff,
+        accentWood: '#78350f',
+        hasRooftop: true,
+        hasPool: true,
+        styleName: 'וילת האבן הלבנה'
+      });
+
+      // Villa 5 (North-Center): The Sunset Sky-Villa + Private Helipad
+      buildLuxuryVilla({
+        id: 'villa5',
+        cx: 0,
+        cz: -56,
+        rotationY: 0,
+        wallColor: 0xf8fafc,
+        accentWood: '#b45309',
+        hasRooftop: true,
+        hasPool: true,
+        styleName: 'וילת השקיעה'
+      });
+      buildHelipadAndHelicopter(0, -82);
+
+      // Villa 6 (South-Center): The Collectors Villa + Glass Supercar Showroom
+      buildLuxuryVilla({
+        id: 'villa6',
+        cx: 0,
+        cz: 56,
+        rotationY: Math.PI,
+        wallColor: 0xe2e8f0,
+        accentWood: '#1e293b',
+        hasRooftop: true,
+        hasPool: false,
+        styleName: 'וילת האספנים'
+      });
+      buildSupercarGlassGarage(0, 78);
+
+      // Scatter dozens of interactive pickable & throwable objects across the city & villas!
+      spawnInteractiveCityItems();
+
+      // Spawn drivable cars around the city streets & villas
+      spawnDrivableCityCars();
+
+      setNavigationMode('walk');
+      goToLocation('plaza');
+      setLightingMode('day');
+      updateMouseLockBadge();
+
+      setTimeout(() => {
+        const loader = document.getElementById('loading-screen');
+        if (loader) {
+          loader.style.opacity = '0';
+          setTimeout(() => loader.remove(), 700);
+        }
+      }, 450);
+
+      animate();
+    }
+
+    /**
+     * ============================================================================
+     * LIGHTING & SKY DOME
+     * ============================================================================
+     */
+    function setupLights() {
+      ambientLight = new THREE.AmbientLight(0xffffff, 0.42);
+      scene.add(ambientLight);
+
+      hemiLight = new THREE.HemisphereLight(0x93c5fd, 0x3f6212, 0.65);
+      hemiLight.position.set(0, 100, 0);
+      scene.add(hemiLight);
+
+      sunLight = new THREE.DirectionalLight(0xfffbeb, 1.85);
+      sunLight.position.set(70, 95, 55);
+      sunLight.castShadow = true;
+      sunLight.shadow.mapSize.width = 2048;
+      sunLight.shadow.mapSize.height = 2048;
+      sunLight.shadow.camera.near = 10;
+      sunLight.shadow.camera.far = 280;
+      const d = 105;
+      sunLight.shadow.camera.left = -d;
+      sunLight.shadow.camera.right = d;
+      sunLight.shadow.camera.top = d;
+      sunLight.shadow.camera.bottom = -d;
+      sunLight.shadow.bias = -0.0005;
+      scene.add(sunLight);
+    }
+
+    function createSkyDome() {
+      const skyGeo = new THREE.SphereGeometry(520, 32, 24);
+      skyMaterial = new THREE.ShaderMaterial({
+        side: THREE.BackSide,
+        depthWrite: false,
+        uniforms: {
+          topColor: { value: new THREE.Color(0x1d4ed8) },
+          bottomColor: { value: new THREE.Color(0xdbeafe) },
+          offset: { value: 28 },
+          exponent: { value: 0.65 }
+        },
+        vertexShader: `
+          varying vec3 vWorldPosition;
+          void main() {
+            vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+            vWorldPosition = worldPosition.xyz;
+            gl_Position = projectionMatrix * viewMatrix * worldPosition;
+          }
+        `,
+        fragmentShader: `
+          uniform vec3 topColor;
+          uniform vec3 bottomColor;
+          uniform float offset;
+          uniform float exponent;
+          varying vec3 vWorldPosition;
+          void main() {
+            float h = normalize(vWorldPosition + offset).y;
+            gl_FragColor = vec4(mix(bottomColor, topColor, max(pow(max(h, 0.0), exponent), 0.0)), 1.0);
+          }
+        `
+      });
+      skyMesh = new THREE.Mesh(skyGeo, skyMaterial);
+      scene.add(skyMesh);
+
+      const starsGeo = new THREE.BufferGeometry();
+      const starCount = 2200;
+      const starPositions = new Float32Array(starCount * 3);
+      for (let i = 0; i < starCount; i++) {
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(Math.random() * 0.92);
+        const r = 460;
+        starPositions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+        starPositions[i * 3 + 1] = r * Math.cos(phi) + 15;
+        starPositions[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+      }
+      starsGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+      const starsMat = new THREE.PointsMaterial({ color: 0xffffff, size: 1.4, transparent: true, opacity: 0 });
+      starField = new THREE.Points(starsGeo, starsMat);
+      scene.add(starField);
+    }
+
+    /**
+     * ============================================================================
+     * CITY BOULEVARDS, SIDEWALKS, FOUNTAIN PLAZA, STREET LAMPS & PALMS
+     * ============================================================================
+     */
+    function buildCityInfrastructure() {
+      const grassTex = createGrassTexture();
+      const asphaltTex = createAsphaltTexture();
+      const marbleTex = createMarbleTexture('#e2e8f0');
+
+      // Vast City Terrain (600m x 600m)
+      const terrain = new THREE.Mesh(
+        new THREE.PlaneGeometry(600, 600),
+        new THREE.MeshStandardMaterial({ map: grassTex, roughness: 0.88 })
+      );
+      terrain.rotation.x = -Math.PI / 2;
+      terrain.receiveShadow = true;
+      scene.add(terrain);
+
+      addWalkableFloor(-120, 120, -120, 120, 0.05);
+
+      const roadMat = new THREE.MeshStandardMaterial({ map: asphaltTex, roughness: 0.78 });
+      const sidewalkMat = new THREE.MeshStandardMaterial({ map: marbleTex, roughness: 0.6 });
+      const stripeMat = new THREE.MeshBasicMaterial({ color: 0xfef08a });
+
+      // East-West Grand Boulevard (Z = 0, width 16m, length 200m)
+      const ewRoad = new THREE.Mesh(new THREE.BoxGeometry(200, 0.14, 14), roadMat);
+      ewRoad.position.set(0, 0.07, 0);
+      ewRoad.receiveShadow = true;
+      scene.add(ewRoad);
+      addWalkableFloor(-100, 100, -7, 7, 0.14);
+
+      // North-South Grand Avenue (X = 0, width 14m, length 200m)
+      const nsRoad = new THREE.Mesh(new THREE.BoxGeometry(14, 0.14, 200), roadMat);
+      nsRoad.position.set(0, 0.07, 0);
+      nsRoad.receiveShadow = true;
+      scene.add(nsRoad);
+      addWalkableFloor(-7, 7, -100, 100, 0.14);
+
+      // Road Center Yellow Dashes
+      for (let x = -92; x <= 92; x += 8) {
+        if (Math.abs(x) < 15) continue;
+        const dash = new THREE.Mesh(new THREE.BoxGeometry(3.8, 0.02, 0.25), stripeMat);
+        dash.position.set(x, 0.15, 0);
+        scene.add(dash);
+      }
+      for (let z = -92; z <= 92; z += 8) {
+        if (Math.abs(z) < 15) continue;
+        const dash = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.02, 3.8), stripeMat);
+        dash.position.set(0, 0.15, z);
+        scene.add(dash);
+      }
+
+      // Raised Sidewalks lining the Boulevards
+      const sidewalkSegments = [
+        { x: -55, z: -9, w: 86, d: 4 },
+        { x: 55, z: -9, w: 86, d: 4 },
+        { x: -55, z: 9, w: 86, d: 4 },
+        { x: 55, z: 9, w: 86, d: 4 },
+        { x: -9, z: -55, w: 4, d: 86 },
+        { x: 9, z: -55, w: 4, d: 86 },
+        { x: -9, z: 55, w: 4, d: 86 },
+        { x: 9, z: 55, w: 4, d: 86 }
+      ];
+      sidewalkSegments.forEach((s) => {
+        const sw = new THREE.Mesh(new THREE.BoxGeometry(s.w, 0.24, s.d), sidewalkMat);
+        sw.position.set(s.x, 0.12, s.z);
+        sw.receiveShadow = true;
+        scene.add(sw);
+        addWalkableFloor(s.x - s.w / 2, s.x + s.w / 2, s.z - s.d / 2, s.z + s.d / 2, 0.24);
+      });
+
+      // Central Roundabout Fountain Plaza (at X = 0, Z = 0)
+      const plazaDisc = new THREE.Mesh(new THREE.CylinderGeometry(12.5, 13.0, 0.28, 36), sidewalkMat);
+      plazaDisc.position.set(0, 0.14, 0);
+      plazaDisc.receiveShadow = true;
+      scene.add(plazaDisc);
+      addWalkableFloor(-11, 11, -11, 11, 0.28);
+
+      const fountainBasin = new THREE.Mesh(
+        new THREE.CylinderGeometry(5.5, 5.8, 0.9, 32),
+        new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.3 })
+      );
+      fountainBasin.position.set(0, 0.65, 0);
+      fountainBasin.castShadow = true;
+      scene.add(fountainBasin);
+      addSolidBox(-5.6, 5.6, 0.2, 1.3, -5.6, 5.6);
+
+      const fountainWater = new THREE.Mesh(
+        new THREE.CylinderGeometry(5.1, 5.1, 0.85, 32),
+        new THREE.MeshBasicMaterial({ color: 0x06b6d4 })
+      );
+      fountainWater.position.set(0, 0.68, 0);
+      scene.add(fountainWater);
+
+      const tier1 = new THREE.Mesh(
+        new THREE.CylinderGeometry(2.2, 2.4, 0.4, 24),
+        new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2 })
+      );
+      tier1.position.set(0, 1.8, 0);
+      scene.add(tier1);
+
+      const spire = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.35, 0.65, 2.6, 16),
+        new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.85, roughness: 0.2 })
+      );
+      spire.position.set(0, 2.6, 0);
+      scene.add(spire);
+
+      // Animated Fountain Water Jets
+      const dropMat = new THREE.MeshBasicMaterial({ color: 0xe0f2fe });
+      for (let i = 0; i < 16; i++) {
+        const drop = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 8), dropMat);
+        const angle = (i / 16) * Math.PI * 2;
+        scene.add(drop);
+        fountainWaterDrops.push({ mesh: drop, angle, phase: i * 0.4 });
+      }
+
+      const plazaLight = new THREE.PointLight(0x38bdf8, 1.2, 30);
+      plazaLight.position.set(0, 3.2, 0);
+      scene.add(plazaLight);
+      nightLights.push({ light: plazaLight, dayIntensity: 0.5, sunsetIntensity: 2.2, nightIntensity: 3.8 });
+
+      // Street Lamps & Palm Trees lining all City Boulevards
+      const lampPoleMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.8, roughness: 0.3 });
+      const lampBulbMat = new THREE.MeshStandardMaterial({
+        color: 0xfef08a,
+        emissive: 0xf59e0b,
+        emissiveIntensity: 0.3
+      });
+      emissiveMaterials.push(lampBulbMat);
+
+      function addStreetLamp(lx, lz) {
+        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.14, 5.2, 10), lampPoleMat);
+        pole.position.set(lx, 2.6, lz);
+        pole.castShadow = true;
+        scene.add(pole);
+
+        const globe = new THREE.Mesh(new THREE.SphereGeometry(0.32, 12, 12), lampBulbMat);
+        globe.position.set(lx, 5.3, lz);
+        scene.add(globe);
+
+        const sLight = new THREE.PointLight(0xffb74d, 0, 22);
+        sLight.position.set(lx, 5.0, lz);
+        scene.add(sLight);
+        nightLights.push({ light: sLight, dayIntensity: 0, sunsetIntensity: 1.4, nightIntensity: 2.6 });
+      }
+
+      for (let pos = -84; pos <= 84; pos += 24) {
+        if (Math.abs(pos) < 16) continue;
+        addStreetLamp(pos, -9.5);
+        addStreetLamp(pos, 9.5);
+        addStreetLamp(-9.5, pos);
+        addStreetLamp(9.5, pos);
+
+        createPalmTree(pos + 6, -11.5, 1.15);
+        createPalmTree(pos + 6, 11.5, 1.15);
+        createPalmTree(-11.5, pos + 6, 1.15);
+        createPalmTree(11.5, pos + 6, 1.15);
+      }
+
+      // Distant Coastal Mountain Range
+      const hillMat = new THREE.MeshStandardMaterial({ color: 0x365314, roughness: 0.95 });
+      const hills = [
+        { x: -240, z: -260, r: 120, h: 55 },
+        { x: 0, z: -290, r: 145, h: 68 },
+        { x: 240, z: -250, r: 125, h: 58 },
+        { x: -280, z: 40, r: 130, h: 48 },
+        { x: 280, z: 50, r: 135, h: 52 },
+        { x: 0, z: 295, r: 150, h: 46 }
+      ];
+      hills.forEach((h) => {
+        const hill = new THREE.Mesh(new THREE.ConeGeometry(h.r, h.h, 28), hillMat);
+        hill.position.set(h.x, h.h * 0.42, h.z);
+        scene.add(hill);
+      });
+    }
+
+    function createPalmTree(x, z, scale = 1) {
+      const palm = new THREE.Group();
+      palm.position.set(x, 0, z);
+      palm.scale.setScalar(scale);
+
+      const trunkMat = new THREE.MeshStandardMaterial({ color: 0x78553a, roughness: 0.9 });
+      const leafMat = new THREE.MeshStandardMaterial({ color: 0x2e6f28, roughness: 0.65, side: THREE.DoubleSide });
+
+      let curX = 0, curY = 0;
+      for (let i = 0; i < 9; i++) {
+        const h = 0.9;
+        const seg = new THREE.Mesh(new THREE.CylinderGeometry(0.22 - i * 0.01, 0.26 - i * 0.01, h, 8), trunkMat);
+        seg.position.set(curX, curY + h / 2, 0);
+        seg.rotation.z = -0.04 * i;
+        seg.castShadow = true;
+        palm.add(seg);
+        curX += Math.sin(0.04 * i) * h * 0.85;
+        curY += Math.cos(0.04 * i) * h * 0.96;
+      }
+
+      for (let f = 0; f < 9; f++) {
+        const angle = (f / 9) * Math.PI * 2;
+        const frond = new THREE.Mesh(new THREE.ConeGeometry(0.55, 3.3, 5), leafMat);
+        frond.position.set(curX + Math.cos(angle) * 1.25, curY + 0.1, Math.sin(angle) * 1.25);
+        frond.rotation.z = -Math.PI / 2.6;
+        frond.rotation.y = -angle;
+        frond.castShadow = true;
+        palm.add(frond);
+      }
+
+      scene.add(palm);
+    }
+
+    /**
+     * ============================================================================
+     * MODULAR MULTI-STORY LUXURY VILLA BUILDER WITH WORKING STAIR RAMPS
+     * Builds a 24m x 18m 2-Story + Rooftop Villa at (cx, cz) rotated by rotationY.
+     * Transforms local floor & ramp coordinates accurately into World Space!
+     * ============================================================================
+     */
+    function buildLuxuryVilla(cfg) {
+      const villaGroup = new THREE.Group();
+      villaGroup.position.set(cfg.cx, 0, cfg.cz);
+      villaGroup.rotation.y = cfg.rotationY;
+      scene.add(villaGroup);
+
+      // Helper to transform local (lx, lz) into world (wx, wz) accounting for rotationY (0 or PI)
+      const cosR = Math.round(Math.cos(cfg.rotationY));
+      const sinR = Math.round(Math.sin(cfg.rotationY));
+
+      function localToWorldXZ(lx, lz) {
+        return {
+          x: cfg.cx + lx * cosR + lz * sinR,
+          z: cfg.cz - lx * sinR + lz * cosR
+        };
+      }
+
+      function addVillaFloor(lx1, lx2, lz1, lz2, yHeight) {
+        const p1 = localToWorldXZ(lx1, lz1);
+        const p2 = localToWorldXZ(lx2, lz2);
+        addWalkableFloor(p1.x, p2.x, p1.z, p2.z, yHeight);
+      }
+
+      function addVillaStairRamp(lx1, lx2, lz1, lz2, localAxis, lStart, lEnd, startY, endY) {
+        const p1 = localToWorldXZ(lx1, lz1);
+        const p2 = localToWorldXZ(lx2, lz2);
+        if (localAxis === 'z') {
+          const wStart = localToWorldXZ(0, lStart).z;
+          const wEnd = localToWorldXZ(0, lEnd).z;
+          addStairRamp(p1.x, p2.x, p1.z, p2.z, 'z', wStart, wEnd, startY, endY);
+        } else {
+          const wStart = localToWorldXZ(lStart, 0).x;
+          const wEnd = localToWorldXZ(lEnd, 0).x;
+          addStairRamp(p1.x, p2.x, p1.z, p2.z, 'x', wStart, wEnd, startY, endY);
+        }
+      }
+
+      function addVillaSolid(lx1, lx2, y1, y2, lz1, lz2) {
+        const p1 = localToWorldXZ(lx1, lz1);
+        const p2 = localToWorldXZ(lx2, lz2);
+        addSolidBox(p1.x, p2.x, y1, y2, p1.z, p2.z);
+      }
+
+      const marbleMat = new THREE.MeshStandardMaterial({ map: createMarbleTexture(), roughness: 0.22, metalness: 0.08 });
+      const woodMat = new THREE.MeshStandardMaterial({ map: createWoodTexture(cfg.accentWood), roughness: 0.55 });
+      const wallMat = new THREE.MeshStandardMaterial({ color: cfg.wallColor, roughness: 0.35 });
+      const darkMetalMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.3, metalness: 0.8 });
+      const glassMat = new THREE.MeshPhysicalMaterial({
+        color: 0xcffafe,
+        transparent: true,
+        opacity: 0.28,
+        roughness: 0.05,
+        side: THREE.DoubleSide
+      });
+
+      // 1. Estate Lot Patio Deck (32m x 34m)
+      const deck = new THREE.Mesh(new THREE.BoxGeometry(32, 0.35, 34), marbleMat);
+      deck.position.set(0, 0.175, 2);
+      deck.receiveShadow = true;
+      villaGroup.add(deck);
+      addVillaFloor(-16, 16, -15, 19, 0.35);
+
+      // 2. Ground Floor Marble Slab (24m x 16m, y = 0.55)
+      const groundSlab = new THREE.Mesh(new THREE.BoxGeometry(24, 0.3, 16), marbleMat);
+      groundSlab.position.set(0, 0.4, -2);
+      groundSlab.receiveShadow = true;
+      villaGroup.add(groundSlab);
+      addVillaFloor(-12, 12, -10, 6, 0.55);
+
+      // Wide Outdoor Entry Steps (Z = 6 to Z = 8, climbing from y = 0.35 to y = 0.55)
+      const entryStep = new THREE.Mesh(new THREE.BoxGeometry(8, 0.2, 1.4), marbleMat);
+      entryStep.position.set(0, 0.35, 6.6);
+      villaGroup.add(entryStep);
+      addVillaStairRamp(-12, 12, 5.5, 7.5, 'z', 7.5, 5.5, 0.35, 0.55);
+
+      // Exterior Walls with Wide Open Entrance Portal (Front Z = 6, Opening at X: [-4 to +4])
+      const frontLeftWall = new THREE.Mesh(new THREE.BoxGeometry(8, 4.3, 0.5), wallMat);
+      frontLeftWall.position.set(-8, 2.7, 5.8);
+      frontLeftWall.castShadow = true;
+      villaGroup.add(frontLeftWall);
+      addVillaSolid(-12, -4.1, 0.5, 4.9, 5.5, 6.1);
+
+      const frontRightWall = new THREE.Mesh(new THREE.BoxGeometry(8, 4.3, 0.5), woodMat);
+      frontRightWall.position.set(8, 2.7, 5.8);
+      frontRightWall.castShadow = true;
+      villaGroup.add(frontRightWall);
+      addVillaSolid(4.1, 12, 0.5, 4.9, 5.5, 6.1);
+
+      // Side Solid Walls
+      const leftWall = new THREE.Mesh(new THREE.BoxGeometry(0.5, 4.3, 16), wallMat);
+      leftWall.position.set(-11.8, 2.7, -2);
+      leftWall.castShadow = true;
+      villaGroup.add(leftWall);
+      addVillaSolid(-12.1, -11.5, 0.5, 4.9, -10, 6);
+
+      const rightWall = new THREE.Mesh(new THREE.BoxGeometry(0.5, 4.3, 16), wallMat);
+      rightWall.position.set(11.8, 2.7, -2);
+      rightWall.castShadow = true;
+      villaGroup.add(rightWall);
+      addVillaSolid(11.5, 12.1, 0.5, 4.9, -10, 6);
+
+      // Back Glass Wall (Z = -10) with Wide Open Sliding Patio Doors (X: [-3.5 to +3.5])
+      const backGlassLeft = new THREE.Mesh(new THREE.BoxGeometry(8.5, 4.2, 0.12), glassMat);
+      backGlassLeft.position.set(-7.75, 2.65, -9.9);
+      villaGroup.add(backGlassLeft);
+      addVillaSolid(-12, -3.6, 0.5, 4.9, -10.1, -9.7);
+
+      const backGlassRight = new THREE.Mesh(new THREE.BoxGeometry(8.5, 4.2, 0.12), glassMat);
+      backGlassRight.position.set(7.75, 2.65, -9.9);
+      villaGroup.add(backGlassRight);
+      addVillaSolid(3.6, 12, 0.5, 4.9, -10.1, -9.7);
+
+      // ================= WIDE INDOOR GRAND STAIRCASE (GROUND -> 2ND FLOOR) =================
+      // Positioned cleanly at X: [6.5 to 10.5] (4 meters wide!), climbing from Z = 4.0 (y = 0.55) to Z = -5.0 (y = 5.15)
+      const steps1 = 18;
+      for (let i = 0; i < steps1; i++) {
+        const t = (i + 0.5) / steps1;
+        const sy = 0.55 + t * (5.15 - 0.55);
+        const sz = 4.0 - t * 9.0;
+        const tread = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.16, 0.52), woodMat);
+        tread.position.set(8.5, sy, sz);
+        tread.castShadow = true;
+        tread.receiveShadow = true;
+        villaGroup.add(tread);
+      }
+
+      // Register smooth, extra-wide Stair Ramp so player effortlessly walks up and down!
+      addVillaStairRamp(6.3, 10.8, -5.5, 4.8, 'z', 4.5, -5.2, 0.55, 5.15);
+
+      // ================= GROUND FLOOR DESIGNER FURNITURE =================
+      const sofaMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.72 });
+      const sofa = new THREE.Mesh(new THREE.BoxGeometry(5.6, 0.55, 1.3), sofaMat);
+      sofa.position.set(-4.5, 0.85, -2.5);
+      sofa.castShadow = true;
+      villaGroup.add(sofa);
+
+      const coffeeTable = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.35, 1.2), marbleMat);
+      coffeeTable.position.set(-4.5, 0.72, -0.5);
+      coffeeTable.castShadow = true;
+      villaGroup.add(coffeeTable);
+
+      const diningTable = new THREE.Mesh(new THREE.BoxGeometry(3.8, 0.14, 1.5), woodMat);
+      diningTable.position.set(-4.5, 1.32, 2.5);
+      diningTable.castShadow = true;
+      villaGroup.add(diningTable);
+
+      // ================= 1ST FLOOR GAMING & COMPUTER STATION (PRESS 'P') =================
+      const deskGroup = new THREE.Group();
+      deskGroup.position.set(2.2, 0.55, -3.6);
+      villaGroup.add(deskGroup);
+
+      const deskTop = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.1, 1.0), woodMat);
+      deskTop.position.set(0, 0.78, 0);
+      deskTop.castShadow = true;
+      deskGroup.add(deskTop);
+
+      [-1.05, 1.05].forEach((lx) => {
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.78, 0.9), darkMetalMat);
+        leg.position.set(lx, 0.39, 0);
+        deskGroup.add(leg);
+      });
+
+      const monitorBezel = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.65, 0.06), darkMetalMat);
+      monitorBezel.position.set(-0.15, 1.22, -0.22);
+      monitorBezel.castShadow = true;
+      deskGroup.add(monitorBezel);
+
+      const screenMat = new THREE.MeshStandardMaterial({
+        color: 0x0ea5e9,
+        emissive: 0x06b6d4,
+        emissiveIntensity: 1.4
+      });
+      emissiveMaterials.push(screenMat);
+      const monitorScreen = new THREE.Mesh(new THREE.PlaneGeometry(1.05, 0.55), screenMat);
+      monitorScreen.position.set(-0.15, 1.22, -0.185);
+      deskGroup.add(monitorScreen);
+
+      const pcTower = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.55, 0.5), darkMetalMat);
+      pcTower.position.set(0.85, 1.1, -0.15);
+      deskGroup.add(pcTower);
+
+      const keyboard = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.03, 0.2), darkMetalMat);
+      keyboard.position.set(-0.15, 0.84, 0.14);
+      deskGroup.add(keyboard);
+
+      const chairSeat = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.1, 0.6), new THREE.MeshStandardMaterial({ color: 0x0284c7 }));
+      chairSeat.position.set(-0.15, 0.52, 0.75);
+      deskGroup.add(chairSeat);
+
+      const chairBack = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.65, 0.1), new THREE.MeshStandardMaterial({ color: 0x0284c7 }));
+      chairBack.position.set(-0.15, 0.88, 1.02);
+      deskGroup.add(chairBack);
+
+      // Register world position of 1st-floor computer station for 'P' mini-games
+      const pcWorld = localToWorldXZ(2.2, -2.5);
+      villaPcStations.push({
+        x: pcWorld.x,
+        y: 0.55,
+        z: pcWorld.z,
+        villaName: cfg.styleName
+      });
+
+      const interiorLight = new THREE.PointLight(0xffb74d, 0.8, 22);
+      interiorLight.position.set(-2, 4.1, -2);
+      villaGroup.add(interiorLight);
+      nightLights.push({ light: interiorLight, dayIntensity: 0.4, sunsetIntensity: 1.9, nightIntensity: 3.2 });
+
+      // ================= SECOND FLOOR SLAB WITH OPEN STAIRWELL (y = 5.15) =================
+      // Left & Center 2nd Floor Slab (X: [-13 to +6.2], Z: [-11 to +7])
+      const secondMain = new THREE.Mesh(new THREE.BoxGeometry(19.2, 0.5, 18), wallMat);
+      secondMain.position.set(-3.4, 4.9, -2);
+      secondMain.castShadow = true;
+      secondMain.receiveShadow = true;
+      villaGroup.add(secondMain);
+      addVillaFloor(-13, 6.2, -11, 7, 5.15);
+
+      // Upper Landing behind Staircase (X: [6.2 to 13], Z: [-11 to -5.2])
+      const secondLanding = new THREE.Mesh(new THREE.BoxGeometry(6.8, 0.5, 5.8), wallMat);
+      secondLanding.position.set(9.6, 4.9, -8.1);
+      secondLanding.castShadow = true;
+      villaGroup.add(secondLanding);
+      addVillaFloor(6.2, 13, -11, -5.2, 5.15);
+
+      // East Perimeter Walkway on 2nd Floor (X: [10.8 to 13], Z: [-5.2 to +7])
+      const secondEastWalk = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.5, 12.2), wallMat);
+      secondEastWalk.position.set(11.9, 4.9, 0.9);
+      villaGroup.add(secondEastWalk);
+      addVillaFloor(10.8, 13, -5.2, 7, 5.15);
+
+      // Master Suite Bed on 2nd Floor
+      const bed = new THREE.Mesh(new THREE.BoxGeometry(3.0, 0.55, 2.8), woodMat);
+      bed.position.set(-6.5, 5.42, -4.5);
+      bed.castShadow = true;
+      villaGroup.add(bed);
+
+      const mattress = new THREE.Mesh(new THREE.BoxGeometry(2.7, 0.3, 2.5), sofaMat);
+      mattress.position.set(-6.5, 5.8, -4.4);
+      villaGroup.add(mattress);
+
+      // 2nd Floor Balcony Glass Railings
+      const railFront = new THREE.Mesh(new THREE.BoxGeometry(26, 1.05, 0.08), glassMat);
+      railFront.position.set(0, 5.68, 6.9);
+      villaGroup.add(railFront);
+      addVillaSolid(-13, 13, 5.15, 6.3, 6.7, 7.1);
+
+      const railBack = new THREE.Mesh(new THREE.BoxGeometry(26, 1.05, 0.08), glassMat);
+      railBack.position.set(0, 5.68, -10.9);
+      villaGroup.add(railBack);
+      addVillaSolid(-13, 13, 5.15, 6.3, -11.1, -10.7);
+
+      // ================= SECOND STAIRCASE TO ROOFTOP SKY TERRACE (2ND -> ROOF) =================
+      // Climbs along West Balcony at X: [-11.5 to -8.0] from Z = 4.5 (y = 5.15) up to Z = -4.5 (y = 9.65)
+      if (cfg.hasRooftop) {
+        const steps2 = 18;
+        for (let i = 0; i < steps2; i++) {
+          const t = (i + 0.5) / steps2;
+          const sy = 5.15 + t * (9.65 - 5.15);
+          const sz = 4.5 - t * 9.0;
+          const tread = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.16, 0.52), darkMetalMat);
+          tread.position.set(-9.8, sy, sz);
+          tread.castShadow = true;
+          villaGroup.add(tread);
+        }
+
+        addVillaStairRamp(-11.8, -7.8, -5.0, 5.2, 'z', 4.8, -4.8, 5.15, 9.65);
+
+        // Rooftop Slab (y = 9.65) with cutout for the Rooftop Stairwell (X: [-11.8 to -7.8], Z: [-4.8 to 5.2])
+        const roofMain = new THREE.Mesh(new THREE.BoxGeometry(19.8, 0.5, 16), wallMat);
+        roofMain.position.set(2.1, 9.4, -2);
+        roofMain.castShadow = true;
+        roofMain.receiveShadow = true;
+        villaGroup.add(roofMain);
+        addVillaFloor(-7.8, 12, -10, 6, 9.65);
+
+        const roofLanding = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.5, 5.2), wallMat);
+        roofLanding.position.set(-9.9, 9.4, -7.4);
+        roofLanding.castShadow = true;
+        villaGroup.add(roofLanding);
+        addVillaFloor(-12, -7.8, -10, -4.8, 9.65);
+
+        // Rooftop Glass Parapets
+        const roofRailFront = new THREE.Mesh(new THREE.BoxGeometry(24, 1.05, 0.08), glassMat);
+        roofRailFront.position.set(0, 10.18, 5.9);
+        villaGroup.add(roofRailFront);
+        addVillaSolid(-12, 12, 9.65, 10.8, 5.7, 6.1);
+
+        const roofRailBack = new THREE.Mesh(new THREE.BoxGeometry(24, 1.05, 0.08), glassMat);
+        roofRailBack.position.set(0, 10.18, -9.9);
+        villaGroup.add(roofRailBack);
+        addVillaSolid(-12, 12, 9.65, 10.8, -10.1, -9.7);
+
+        // Rooftop Heated Jacuzzi
+        const jacuzzi = new THREE.Mesh(new THREE.BoxGeometry(4.0, 0.8, 3.0), marbleMat);
+        jacuzzi.position.set(4.5, 10.05, -2.5);
+        jacuzzi.castShadow = true;
+        villaGroup.add(jacuzzi);
+
+        const jacWater = new THREE.Mesh(
+          new THREE.PlaneGeometry(3.4, 2.4),
+          new THREE.MeshBasicMaterial({ color: 0x22d3ee })
+        );
+        jacWater.rotation.x = -Math.PI / 2;
+        jacWater.position.set(4.5, 10.46, -2.5);
+        villaGroup.add(jacWater);
+      }
+
+      // 3. Backyard Private Swimming Pool (at local Z = -14.5)
+      if (cfg.hasPool) {
+        const poolW = 16;
+        const poolD = 6.5;
+        const waterGeo = new THREE.PlaneGeometry(poolW, poolD, 36, 16);
+        waterGeo.rotateX(-Math.PI / 2);
+        const basePos = Float32Array.from(waterGeo.attributes.position.array);
+
+        const waterMat = new THREE.MeshPhysicalMaterial({
+          color: 0x06b6d4,
+          emissive: 0x0891b2,
+          emissiveIntensity: 0.2,
+          transparent: true,
+          opacity: 0.84,
+          roughness: 0.08
+        });
+
+        const waterMesh = new THREE.Mesh(waterGeo, waterMat);
+        waterMesh.position.set(0, 0.32, -13.5);
+        villaGroup.add(waterMesh);
+        waterMeshes.push({ mesh: waterMesh, geo: waterGeo, base: basePos });
+
+        const basin = new THREE.Mesh(
+          new THREE.BoxGeometry(poolW + 0.4, 0.28, poolD + 0.4),
+          new THREE.MeshStandardMaterial({ map: createPoolTileTexture(), roughness: 0.25 })
+        );
+        basin.position.set(0, 0.16, -13.5);
+        villaGroup.add(basin);
+
+        const poolLight = new THREE.PointLight(0x22d3ee, 1.0, 18);
+        poolLight.position.set(0, 1.0, -13.5);
+        villaGroup.add(poolLight);
+        nightLights.push({ light: poolLight, dayIntensity: 0.5, sunsetIntensity: 2.0, nightIntensity: 3.4 });
+      }
+    }
+
+    /**
+     * ============================================================================
+     * PRIVATE HELIPAD & EXECUTIVE HELICOPTER
+     * ============================================================================
+     */
+    function buildHelipadAndHelicopter(hx, hz) {
+      const heliGroup = new THREE.Group();
+      heliGroup.position.set(hx, 0.05, hz);
+      scene.add(heliGroup);
+
+      const pad = new THREE.Mesh(
+        new THREE.CylinderGeometry(9.0, 9.5, 0.25, 36),
+        new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.7 })
+      );
+      pad.position.y = 0.125;
+      pad.receiveShadow = true;
+      heliGroup.add(pad);
+      addWalkableFloor(hx - 9, hx + 9, hz - 9, hz + 9, 0.3);
+
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(7.6, 8.2, 36),
+        new THREE.MeshBasicMaterial({ color: 0xfacc15, side: THREE.DoubleSide })
+      );
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.y = 0.26;
+      heliGroup.add(ring);
+
+      const hMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+      const hL = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.02, 4.0), hMat);
+      hL.position.set(-1.2, 0.26, 0);
+      heliGroup.add(hL);
+      const hR = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.02, 4.0), hMat);
+      hR.position.set(1.2, 0.26, 0);
+      heliGroup.add(hR);
+      const hB = new THREE.Mesh(new THREE.BoxGeometry(3.0, 0.02, 0.6), hMat);
+      hB.position.set(0, 0.26, 0);
+      heliGroup.add(hB);
+
+      const chopper = new THREE.Group();
+      chopper.position.set(0, 0.25, 0);
+      chopper.rotation.y = 0.5;
+      heliGroup.add(chopper);
+
+      const fuselageMat = new THREE.MeshPhysicalMaterial({
+        color: 0x0f172a,
+        roughness: 0.18,
+        metalness: 0.85,
+        clearcoat: 1.0
+      });
+      const goldTrimMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.9, roughness: 0.2 });
+
+      const body = new THREE.Mesh(new THREE.SphereGeometry(1.6, 24, 18), fuselageMat);
+      body.scale.set(0.95, 0.95, 2.1);
+      body.position.set(0, 1.7, 0);
+      body.castShadow = true;
+      chopper.add(body);
+
+      const tailBoom = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.42, 5.0, 12), fuselageMat);
+      tailBoom.rotation.x = Math.PI / 2;
+      tailBoom.position.set(0, 1.85, 4.0);
+      chopper.add(tailBoom);
+
+      [-1.05, 1.05].forEach((sx) => {
+        const skid = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 4.0, 10), goldTrimMat);
+        skid.rotation.x = Math.PI / 2;
+        skid.position.set(sx, 0.1, 0);
+        chopper.add(skid);
+      });
+
+      heliRotor = new THREE.Group();
+      heliRotor.position.set(0, 3.35, 0);
+      chopper.add(heliRotor);
+
+      heliRotor.add(new THREE.Mesh(new THREE.BoxGeometry(11.0, 0.06, 0.35), fuselageMat));
+      heliRotor.add(new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.06, 11.0), fuselageMat));
+    }
+
+    /**
+     * ============================================================================
+     * GLASS-WALLED SUPERCAR SHOWROOM GARAGE
+     * ============================================================================
+     */
+    function buildSupercarGlassGarage(gx, gz) {
+      const garageGroup = new THREE.Group();
+      garageGroup.position.set(gx, 0, gz);
+      scene.add(garageGroup);
+
+      const marbleMat = new THREE.MeshStandardMaterial({ map: createMarbleTexture(), roughness: 0.18, metalness: 0.15 });
+      const darkMetalMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.3, metalness: 0.85 });
+
+      const floor = new THREE.Mesh(new THREE.BoxGeometry(16, 0.3, 12), marbleMat);
+      floor.position.y = 0.15;
+      floor.receiveShadow = true;
+      garageGroup.add(floor);
+      addWalkableFloor(gx - 8, gx + 8, gz - 6, gz + 6, 0.3);
+
+      const roof = new THREE.Mesh(new THREE.BoxGeometry(16.6, 0.4, 12.6), darkMetalMat);
+      roof.position.y = 4.1;
+      roof.castShadow = true;
+      garageGroup.add(roof);
+
+      [[-7.8, -5.8], [7.8, -5.8], [-7.8, 5.8], [7.8, 5.8]].forEach(([cx, cz]) => {
+        const col = new THREE.Mesh(new THREE.BoxGeometry(0.35, 4.1, 0.35), darkMetalMat);
+        col.position.set(cx, 2.05, cz);
+        garageGroup.add(col);
+      });
+
+      function createSupercar(colorHex, offsetX) {
+        const car = new THREE.Group();
+        car.position.set(offsetX, 0.3, 0);
+
+        const bodyMat = new THREE.MeshPhysicalMaterial({
+          color: colorHex,
+          roughness: 0.15,
+          metalness: 0.75,
+          clearcoat: 1.0
+        });
+        const cabinMat = new THREE.MeshPhysicalMaterial({ color: 0x090d16, roughness: 0.08, metalness: 0.9 });
+        const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.5 });
+
+        const lowerBody = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.55, 4.6), bodyMat);
+        lowerBody.position.y = 0.52;
+        lowerBody.castShadow = true;
+        car.add(lowerBody);
+
+        const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.5, 2.0), cabinMat);
+        cabin.position.set(0, 0.96, 0.1);
+        car.add(cabin);
+
+        const wing = new THREE.Mesh(new THREE.BoxGeometry(2.05, 0.08, 0.35), darkMetalMat);
+        wing.position.set(0, 1.06, 2.1);
+        car.add(wing);
+
+        [[-1.05, 0.42, -1.4], [1.05, 0.42, -1.4], [-1.05, 0.42, 1.4], [1.05, 0.42, 1.4]].forEach(([wx, wy, wz]) => {
+          const tire = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.3, 18), wheelMat);
+          tire.rotation.z = Math.PI / 2;
+          tire.position.set(wx, wy, wz);
+          car.add(tire);
+        });
+
+        garageGroup.add(car);
+      }
+
+      createSupercar(0xdc2626, -3.5);
+      createSupercar(0xf59e0b, 3.5);
+    }
+
+    /**
+     * ============================================================================
+     * INTERACTIVE PICKABLE & THROWABLE OBJECTS SPAWNER
+     * ============================================================================
+     */
+    function createPickableItem(type, label, x, y, z) {
+      const group = new THREE.Group();
+      group.position.set(x, y, z);
+
+      let mesh;
+      let radius = 0.35;
+
+      if (type === 'trophy') {
+        const goldMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, metalness: 0.9, roughness: 0.15 });
+        const base = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 0.15, 16), new THREE.MeshStandardMaterial({ color: 0x0f172a }));
+        base.position.y = 0.075;
+        const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.08, 0.38, 16), goldMat);
+        cup.position.y = 0.32;
+        group.add(base, cup);
+        radius = 0.28;
+      } else if (type === 'briefcase') {
+        const caseMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.7, roughness: 0.25 });
+        const trimMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.9, roughness: 0.2 });
+        const box = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.42, 0.18), caseMat);
+        box.position.y = 0.21;
+        const handle = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.08, 0.06), trimMat);
+        handle.position.y = 0.45;
+        group.add(box, handle);
+        radius = 0.3;
+      } else if (type === 'basketball') {
+        const ballMat = new THREE.MeshStandardMaterial({ color: 0xea580c, roughness: 0.65 });
+        mesh = new THREE.Mesh(new THREE.SphereGeometry(0.24, 20, 20), ballMat);
+        mesh.position.y = 0.24;
+        group.add(mesh);
+        radius = 0.24;
+      } else if (type === 'crystal') {
+        const crystalMat = new THREE.MeshPhysicalMaterial({
+          color: 0x22d3ee,
+          emissive: 0x06b6d4,
+          emissiveIntensity: 0.65,
+          roughness: 0.1,
+          metalness: 0.2
+        });
+        mesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.28, 0), crystalMat);
+        mesh.position.y = 0.28;
+        group.add(mesh);
+        radius = 0.28;
+      } else if (type === 'champagne') {
+        const bottleMat = new THREE.MeshStandardMaterial({ color: 0x14532d, roughness: 0.2, metalness: 0.3 });
+        const goldFoil = new THREE.MeshStandardMaterial({ color: 0xfacc15, metalness: 0.85, roughness: 0.2 });
+        const body = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.36, 14), bottleMat);
+        body.position.y = 0.18;
+        const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.06, 0.2, 14), goldFoil);
+        neck.position.y = 0.44;
+        group.add(body, neck);
+        radius = 0.25;
+      } else if (type === 'dumbbell') {
+        const ironMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.85, roughness: 0.3 });
+        const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.55, 10), ironMat);
+        bar.rotation.z = Math.PI / 2;
+        bar.position.y = 0.14;
+        const w1 = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.08, 16), ironMat);
+        w1.rotation.z = Math.PI / 2;
+        w1.position.set(-0.22, 0.14, 0);
+        const w2 = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.08, 16), ironMat);
+        w2.rotation.z = Math.PI / 2;
+        w2.position.set(0.22, 0.14, 0);
+        group.add(bar, w1, w2);
+        radius = 0.22;
+      } else if (type === 'laptop') {
+        const bodyMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.8, roughness: 0.25 });
+        const base = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.03, 0.32), bodyMat);
+        base.position.y = 0.015;
+        const lid = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.3, 0.02), bodyMat);
+        lid.position.set(0, 0.16, -0.15);
+        lid.rotation.x = -0.25;
+        const display = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.25), new THREE.MeshBasicMaterial({ color: 0x38bdf8 }));
+        display.position.set(0, 0.16, -0.138);
+        display.rotation.x = -0.25;
+        group.add(base, lid, display);
+        radius = 0.25;
+      } else if (type === 'pizza') {
+        const boxMat = new THREE.MeshStandardMaterial({ color: 0xfde68a, roughness: 0.7 });
+        const box = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.07, 0.44), boxMat);
+        box.position.y = 0.035;
+        const slice = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.02, 3), new THREE.MeshBasicMaterial({ color: 0xef4444 }));
+        slice.position.y = 0.078;
+        group.add(box, slice);
+        radius = 0.24;
+      } else if (type === 'console') {
+        const shellMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.3 });
+        const accentMat = new THREE.MeshBasicMaterial({ color: 0x22d3ee });
+        const body = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.14, 0.28), shellMat);
+        body.position.y = 0.07;
+        const led = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.02, 0.02), accentMat);
+        led.position.set(0, 0.07, 0.145);
+        group.add(body, led);
+        radius = 0.24;
+      } else if (type === 'soccer') {
+        const ball = new THREE.Mesh(new THREE.SphereGeometry(0.22, 18, 18), new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.4 }));
+        ball.position.y = 0.22;
+        const patch = new THREE.Mesh(new THREE.CircleGeometry(0.07, 5), new THREE.MeshBasicMaterial({ color: 0x0f172a }));
+        patch.position.set(0, 0.22, 0.222);
+        group.add(ball, patch);
+        radius = 0.22;
+      } else if (type === 'crown') {
+        const gold = new THREE.MeshStandardMaterial({ color: 0xfbbf24, metalness: 0.92, roughness: 0.15 });
+        const band = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.18, 0.16, 16), gold);
+        band.position.y = 0.08;
+        const tip = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.14, 8), gold);
+        tip.position.y = 0.22;
+        group.add(band, tip);
+        radius = 0.22;
+      } else if (type === 'plant') {
+        const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.12, 0.22, 14), new THREE.MeshStandardMaterial({ color: 0xc2410c, roughness: 0.7 }));
+        pot.position.y = 0.11;
+        const foliage = new THREE.Mesh(new THREE.DodecahedronGeometry(0.22, 0), new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.6 }));
+        foliage.position.y = 0.34;
+        group.add(pot, foliage);
+        radius = 0.24;
+      }
+
+      group.traverse((child) => {
+        if (child.isMesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
+
+      scene.add(group);
+      pickableObjects.push({
+        mesh: group,
+        label,
+        radius,
+        velocity: new THREE.Vector3(0, 0, 0),
+        angularVel: new THREE.Vector3(0, 0, 0),
+        isHeld: false
+      });
+    }
+
+    function spawnInteractiveCityItems() {
+      // Items right around Central Plaza so the player immediately sees & picks them up!
+      createPickableItem('trophy', 'גביע זהב יוקרתי', -2.5, 0.3, 11.5);
+      createPickableItem('briefcase', 'מזוודת מזומנים', 2.2, 0.3, 12.0);
+      createPickableItem('basketball', 'כדורסל', -1.2, 0.3, 13.5);
+      createPickableItem('crystal', 'קריסטל אנרגיה זוהר', 3.5, 0.3, 10.5);
+      createPickableItem('champagne', 'בקבוק שמפניה', -4.2, 0.3, 10.0);
+      createPickableItem('dumbbell', 'משקולת כושר', 1.5, 0.3, 14.2);
+      createPickableItem('laptop', 'מחשב נייד', -3.2, 0.3, 12.8);
+      createPickableItem('pizza', 'קופסת פיצה חמה', 0.4, 0.3, 11.2);
+      createPickableItem('console', 'קונסולת משחקים', 4.4, 0.3, 12.4);
+      createPickableItem('soccer', 'כדורגל', -5.1, 0.3, 13.1);
+      createPickableItem('crown', 'כתר זהב מלכותי', 2.9, 0.3, 14.5);
+      createPickableItem('plant', 'עציץ נוי קטן', -0.4, 0.3, 15.2);
+
+      // Items inside & on the rooftops of the 6 Luxury Villas
+      const villaCenters = [
+        { cx: -42, cz: -46 },
+        { cx: 42, cz: -46 },
+        { cx: -42, cz: 46 },
+        { cx: 42, cz: 46 },
+        { cx: 0, cz: -56 },
+        { cx: 0, cz: 56 }
+      ];
+
+      villaCenters.forEach((v, idx) => {
+        // Ground floor items
+        createPickableItem('trophy', `גביע וילה ${idx + 1}`, v.cx - 2, 0.6, v.cz + 2);
+        createPickableItem('briefcase', 'מזוודת VIP', v.cx + 2, 0.6, v.cz + 1);
+        createPickableItem('basketball', 'כדור משחק', v.cx, 0.4, v.cz + 10);
+        createPickableItem('pizza', 'מגש פיצה', v.cx - 3.5, 0.6, v.cz + 0.5);
+        createPickableItem('console', 'קונסולת רטרו', v.cx + 1.2, 0.6, v.cz - 3.2);
+        createPickableItem('plant', 'עציץ סלון', v.cx - 6.2, 0.6, v.cz - 1.5);
+
+        // 2nd Floor items
+        createPickableItem('champagne', 'שמפניה קומה 2', v.cx - 3, 5.2, v.cz - 2);
+        createPickableItem('crystal', 'קריסטל מרפסת', v.cx + 2, 5.2, v.cz + 4);
+        createPickableItem('laptop', 'לפטופ עבודה', v.cx - 1.5, 5.2, v.cz - 3.5);
+        createPickableItem('dumbbell', 'משקולת אימון', v.cx + 4.2, 5.2, v.cz + 1.2);
+
+        // Rooftop items (rewarding climbing the stairs!)
+        createPickableItem('trophy', 'גביע גג הפנטהאוז', v.cx, 9.7, v.cz - 2);
+        createPickableItem('champagne', 'שמפניה ליד הג\'קוזי', v.cx + 3, 9.7, v.cz - 1);
+        createPickableItem('crown', 'כתר הגג', v.cx + 1.5, 9.7, v.cz - 3.5);
+        createPickableItem('soccer', 'כדור גג', v.cx - 2.2, 9.7, v.cz + 1.5);
+      });
+    }
+
+    /**
+     * ============================================================================
+     * DRIVABLE CITY CARS SYSTEM ('I' KEY TO ENTER / EXIT & DRIVE)
+     * ============================================================================
+     */
+    function createDrivableCarMesh(colorHex) {
+      const car = new THREE.Group();
+      const bodyMat = new THREE.MeshPhysicalMaterial({
+        color: colorHex,
+        roughness: 0.16,
+        metalness: 0.78,
+        clearcoat: 1.0
+      });
+      const cabinMat = new THREE.MeshPhysicalMaterial({
+        color: 0x0f172a,
+        roughness: 0.08,
+        metalness: 0.85,
+        transparent: true,
+        opacity: 0.75
+      });
+      const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.55 });
+      const hlMat = new THREE.MeshStandardMaterial({
+        color: 0xfef9c3,
+        emissive: 0xfef08a,
+        emissiveIntensity: 0.6
+      });
+      emissiveMaterials.push(hlMat);
+
+      const chassis = new THREE.Mesh(new THREE.BoxGeometry(2.15, 0.58, 4.5), bodyMat);
+      chassis.position.y = 0.55;
+      chassis.castShadow = true;
+      car.add(chassis);
+
+      const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.52, 2.0), cabinMat);
+      cabin.position.set(0, 1.02, -0.1);
+      cabin.castShadow = true;
+      car.add(cabin);
+
+      [-0.7, 0.7].forEach((hx) => {
+        const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.14, 0.08), hlMat);
+        lamp.position.set(hx, 0.62, 2.26);
+        car.add(lamp);
+      });
+
+      const hlSpotL = new THREE.SpotLight(0xfef9c3, 0, 38, Math.PI / 5, 0.45);
+      hlSpotL.position.set(-0.7, 0.7, 2.2);
+      const targetL = new THREE.Object3D();
+      targetL.position.set(-0.7, 0.1, 18);
+      car.add(hlSpotL, targetL);
+      hlSpotL.target = targetL;
+
+      const hlSpotR = new THREE.SpotLight(0xfef9c3, 0, 38, Math.PI / 5, 0.45);
+      hlSpotR.position.set(0.7, 0.7, 2.2);
+      const targetR = new THREE.Object3D();
+      targetR.position.set(0.7, 0.1, 18);
+      car.add(hlSpotR, targetR);
+      hlSpotR.target = targetR;
+
+      [[-1.08, 0.42, -1.4], [1.08, 0.42, -1.4], [-1.08, 0.42, 1.4], [1.08, 0.42, 1.4]].forEach(([wx, wy, wz]) => {
+        const tire = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.32, 18), wheelMat);
+        tire.rotation.z = Math.PI / 2;
+        tire.position.set(wx, wy, wz);
+        tire.castShadow = true;
+        car.add(tire);
+      });
+
+      return { car, headlights: [hlSpotL, hlSpotR] };
+    }
+
+    function spawnDrivableCityCars() {
+      const carConfigs = [
+        { x: 3.5, z: 18, yaw: 0, color: 0xef4444 },
+        { x: -3.5, z: -22, yaw: Math.PI, color: 0x3b82f6 },
+        { x: 22, z: 3.5, yaw: Math.PI / 2, color: 0xf59e0b },
+        { x: -24, z: -3.5, yaw: -Math.PI / 2, color: 0x10b981 },
+        { x: -42, z: -26, yaw: 0, color: 0xa855f7 },
+        { x: 42, z: 26, yaw: Math.PI, color: 0xf97316 }
+      ];
+
+      carConfigs.forEach((cfg) => {
+        const built = createDrivableCarMesh(cfg.color);
+        built.car.position.set(cfg.x, 0.14, cfg.z);
+        built.car.rotation.y = cfg.yaw;
+        scene.add(built.car);
+
+        drivableCars.push({
+          group: built.car,
+          headlights: built.headlights,
+          pos: built.car.position,
+          yaw: cfg.yaw,
+          speed: 0
+        });
+      });
+    }
+
+    function toggleCarDriveMode() {
+      if (isPcModalOpen) return;
+
+      if (activeDrivingCar) {
+        // Exit car smoothly next to the vehicle
+        const exitYaw = activeDrivingCar.yaw;
+        const sideRight = new THREE.Vector3(-Math.cos(exitYaw), 0, Math.sin(exitYaw));
+        const exitPos = activeDrivingCar.pos.clone().addScaledVector(sideRight, 2.4);
+        const floorY = computeFloorElevationAt(exitPos.x, exitPos.z, exitPos.y);
+
+        activeDrivingCar.speed = 0;
+        activeDrivingCar = null;
+
+        setNavigationMode('walk');
+        walker.pos.set(exitPos.x, floorY + EYE_HEIGHT, exitPos.z);
+        walker.velY = 0;
+        walker.isGrounded = true;
+        walker.yaw = exitYaw;
+        syncWalkerCamera();
+        updateContextHud();
+        return;
+      }
+
+      if (nearbyCar && navMode === 'walk') {
+        if (heldObject) dropOrPickupAction();
+        activeDrivingCar = nearbyCar;
+        activeDrivingCar.speed = 0;
+        controls.enabled = false;
+        cameraTransition.active = false;
+        if (document.pointerLockElement) {
+          document.exitPointerLock();
+        }
+        updateContextHud();
+      }
+    }
+
+    function updateDrivingPhysics(delta) {
+      if (!activeDrivingCar) return;
+
+      const accel = (keysPressed['ShiftLeft'] || keysPressed['ShiftRight']) ? 34 : 22;
+      const brakeDecel = 28;
+      const drag = 5.5;
+      const maxSpeed = (keysPressed['ShiftLeft'] || keysPressed['ShiftRight']) ? 34 : 22;
+
+      let throttle = 0;
+      if (keysPressed['KeyW'] || keysPressed['ArrowUp']) throttle += 1;
+      if (keysPressed['KeyS'] || keysPressed['ArrowDown']) throttle -= 1;
+      throttle -= joyMoveZ;
+
+      let steerInput = 0;
+      if (keysPressed['KeyA'] || keysPressed['ArrowLeft']) steerInput += 1;
+      if (keysPressed['KeyD'] || keysPressed['ArrowRight']) steerInput -= 1;
+      steerInput -= joyMoveX;
+
+      if (keysPressed['Space']) {
+        activeDrivingCar.speed *= Math.max(0, 1 - 7.5 * delta);
+      } else if (Math.abs(throttle) > 0.01) {
+        activeDrivingCar.speed += throttle * accel * delta;
+      } else {
+        activeDrivingCar.speed *= Math.max(0, 1 - drag * delta);
+      }
+
+      activeDrivingCar.speed = Math.max(-10, Math.min(maxSpeed, activeDrivingCar.speed));
+
+      if (Math.abs(activeDrivingCar.speed) > 0.25) {
+        const dirSign = activeDrivingCar.speed >= 0 ? 1 : -1;
+        activeDrivingCar.yaw += steerInput * 2.15 * delta * dirSign;
+      }
+
+      const forward = new THREE.Vector3(Math.sin(activeDrivingCar.yaw), 0, Math.cos(activeDrivingCar.yaw));
+      const nextX = activeDrivingCar.pos.x + forward.x * activeDrivingCar.speed * delta;
+      const nextZ = activeDrivingCar.pos.z + forward.z * activeDrivingCar.speed * delta;
+
+      const clampedX = Math.max(-108, Math.min(108, nextX));
+      const clampedZ = Math.max(-108, Math.min(108, nextZ));
+
+      if (!isPositionBlocked(clampedX, 0.2, clampedZ)) {
+        activeDrivingCar.pos.x = clampedX;
+        activeDrivingCar.pos.z = clampedZ;
+      } else {
+        activeDrivingCar.speed *= -0.35;
+      }
+
+      const groundY = computeFloorElevationAt(activeDrivingCar.pos.x, activeDrivingCar.pos.z, activeDrivingCar.pos.y);
+      activeDrivingCar.pos.y = groundY;
+      activeDrivingCar.group.rotation.y = activeDrivingCar.yaw;
+
+      const hlIntensity = currentLightingMode === 'night' ? 4.5 : currentLightingMode === 'sunset' ? 1.8 : 0;
+      activeDrivingCar.headlights.forEach((hl) => { hl.intensity = hlIntensity; });
+
+      // Smooth chase camera behind car
+      const desiredCamPos = activeDrivingCar.pos.clone()
+        .addScaledVector(forward, -7.8)
+        .add(new THREE.Vector3(0, 3.4, 0));
+      desiredCamPos.y = Math.max(groundY + 1.5, desiredCamPos.y);
+
+      camera.position.lerp(desiredCamPos, Math.min(1, delta * 9));
+      const lookTarget = activeDrivingCar.pos.clone()
+        .addScaledVector(forward, 6.5)
+        .add(new THREE.Vector3(0, 1.1, 0));
+      camera.lookAt(lookTarget);
+    }
+
+    /**
+     * ============================================================================
+     * MOUSE LOCK / UNLOCK ('M') & CONTEXTUAL PROMPTS ('P' PC / 'I' CAR)
+     * ============================================================================
+     */
+    function updateMouseLockBadge() {
+      const statusEl = document.getElementById('mouse-lock-status');
+      if (!statusEl) return;
+      isMouseLocked = (document.pointerLockElement === renderer.domElement);
+      statusEl.textContent = isMouseLocked ? 'נעול למבט (M לשחרור)' : 'משוחרר (M לנעילה)';
+      statusEl.className = isMouseLocked ? 'text-emerald-300' : 'text-amber-300';
+    }
+
+    function toggleMouseLock() {
+      const dom = renderer.domElement;
+      if (navMode !== 'walk' || activeDrivingCar || isPcModalOpen) return;
+
+      if (document.pointerLockElement === dom) {
+        if (document.exitPointerLock) document.exitPointerLock();
+      } else {
+        if (dom.requestPointerLock) dom.requestPointerLock();
+      }
+      setTimeout(updateMouseLockBadge, 50);
+    }
+
+    function updateContextHud() {
+      const statusBar = document.getElementById('active-status-bar');
+      const pcBtn = document.getElementById('hud-pc-btn');
+      const carBtn = document.getElementById('hud-car-btn');
+      const promptEl = document.getElementById('context-prompt');
+      const promptKey = document.getElementById('context-prompt-key');
+      const promptText = document.getElementById('context-prompt-text');
+
+      nearbyPcStation = null;
+      nearbyCar = null;
+
+      if (navMode === 'walk' && !activeDrivingCar && !isPcModalOpen) {
+        for (let i = 0; i < villaPcStations.length; i++) {
+          const pc = villaPcStations[i];
+          const d = Math.hypot(walker.pos.x - pc.x, walker.pos.z - pc.z);
+          const dy = Math.abs((walker.pos.y - EYE_HEIGHT) - pc.y);
+          if (d < 3.4 && dy < 1.8) {
+            nearbyPcStation = pc;
+            break;
+          }
+        }
+
+        for (let i = 0; i < drivableCars.length; i++) {
+          const c = drivableCars[i];
+          const d = Math.hypot(walker.pos.x - c.pos.x, walker.pos.z - c.pos.z);
+          if (d < 3.6) {
+            nearbyCar = c;
+            break;
+          }
+        }
+      }
+
+      if (navMode === 'walk' && !isPcModalOpen) {
+        statusBar.classList.remove('hidden');
+      } else {
+        statusBar.classList.add('hidden');
+      }
+
+      if (activeDrivingCar) {
+        pcBtn.classList.add('hidden');
+        carBtn.classList.remove('hidden');
+        carBtn.textContent = '🚗 צא מהרכב [I]';
+        promptEl.classList.remove('hidden');
+        promptKey.textContent = 'I';
+        promptText.textContent = 'לחץ I ליציאה מהרכב • WASD לנהיגה • Space לבלימה';
+      } else if (nearbyCar) {
+        pcBtn.classList.add('hidden');
+        carBtn.classList.remove('hidden');
+        carBtn.textContent = '🚗 היכנס לרכב [I]';
+        promptEl.classList.remove('hidden');
+        promptKey.textContent = 'I';
+        promptText.textContent = 'היכנס לרכב ונהג בעיר';
+      } else if (nearbyPcStation) {
+        carBtn.classList.add('hidden');
+        pcBtn.classList.remove('hidden');
+        promptEl.classList.remove('hidden');
+        promptKey.textContent = 'P';
+        promptText.textContent = `שחק במשחקי מחשב (${nearbyPcStation.villaName})`;
+      } else {
+        pcBtn.classList.add('hidden');
+        carBtn.classList.add('hidden');
+        promptEl.classList.add('hidden');
+      }
+    }
+
+    /**
+     * ============================================================================
+     * PLAYABLE 1ST-FLOOR PC MINI-GAMES ('P' TO OPEN, 'ESC' TO CLOSE)
+     * ============================================================================
+     */
+    function openPcArcadeModal() {
+      if (isPcModalOpen) return;
+      if (!nearbyPcStation && navMode === 'walk') return;
+
+      isPcModalOpen = true;
+      if (document.pointerLockElement) {
+        document.exitPointerLock();
+      }
+      const modal = document.getElementById('pc-arcade-modal');
+      const titleEl = document.getElementById('pc-villa-title');
+      titleEl.textContent = `עמדת גיימינג • ${nearbyPcStation ? nearbyPcStation.villaName : 'קומה 1'}`;
+      modal.classList.remove('hidden');
+      startCurrentMiniGame();
+    }
+
+    function closePcArcadeModal() {
+      isPcModalOpen = false;
+      miniGameRunning = false;
+      document.getElementById('pc-arcade-modal').classList.add('hidden');
+    }
+
+    function switchMiniGame(gameKey) {
+      activeMiniGame = gameKey;
+      document.getElementById('tab-racer').className =
+        (gameKey === 'racer' ? 'btn-active' : 'btn-inactive') + ' px-3 py-1.5 rounded-xl text-xs font-bold border cursor-pointer';
+      document.getElementById('tab-snake').className =
+        (gameKey === 'snake' ? 'btn-active' : 'btn-inactive') + ' px-3 py-1.5 rounded-xl text-xs font-bold border cursor-pointer';
+      startCurrentMiniGame();
+    }
+
+    function startCurrentMiniGame() {
+      miniGameScore = 0;
+      miniGameRunning = true;
+      document.getElementById('minigame-score').textContent = '0';
+      document.getElementById('minigame-status').textContent = activeMiniGame === 'racer' ? 'התחמק מרכבים ואסוף מטבעות!' : 'אסוף נקודות זהב ואל תתנגש!';
+
+      if (activeMiniGame === 'racer') {
+        racerState = {
+          playerX: 295,
+          lanes: [155, 295, 435],
+          obstacles: [],
+          coins: [],
+          spawnTimer: 0
+        };
+      } else {
+        snakeState = {
+          snake: [{ x: 10, y: 7 }, { x: 9, y: 7 }, { x: 8, y: 7 }],
+          dir: { x: 1, y: 0 },
+          food: { x: 20, y: 7 },
+          stepTimer: 0
+        };
+      }
+    }
+
+    function updateAndDrawMiniGame(delta) {
+      if (!isPcModalOpen) return;
+      const canvas = document.getElementById('minigame-canvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+
+      if (activeMiniGame === 'racer') {
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(0, 0, 640, 360);
+
+        // Road strip
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(110, 0, 420, 360);
+        ctx.strokeStyle = '#facc15';
+        ctx.setLineDash([18, 18]);
+        ctx.lineWidth = 3;
+        [250, 390].forEach((lx) => {
+          ctx.beginPath();
+          ctx.moveTo(lx, 0);
+          ctx.lineTo(lx, 360);
+          ctx.stroke();
+        });
+        ctx.setLineDash([]);
+
+        if (miniGameRunning) {
+          const moveSpeed = 330 * delta;
+          if (keysPressed['ArrowLeft'] || keysPressed['KeyA'] || miniGameInput.left) racerState.playerX -= moveSpeed;
+          if (keysPressed['ArrowRight'] || keysPressed['KeyD'] || miniGameInput.right) racerState.playerX += moveSpeed;
+          racerState.playerX = Math.max(122, Math.min(468, racerState.playerX));
+
+          racerState.spawnTimer += delta;
+          if (racerState.spawnTimer > 0.72) {
+            racerState.spawnTimer = 0;
+            const laneX = racerState.lanes[Math.floor(Math.random() * 3)] - 22;
+            racerState.obstacles.push({ x: laneX, y: -50, w: 44, h: 72, speed: 220 + miniGameScore * 4 });
+            const coinX = racerState.lanes[Math.floor(Math.random() * 3)];
+            racerState.coins.push({ x: coinX, y: -30, r: 10, speed: 210 });
+          }
+
+          for (let i = racerState.obstacles.length - 1; i >= 0; i--) {
+            const ob = racerState.obstacles[i];
+            ob.y += ob.speed * delta;
+            if (ob.y > 380) {
+              racerState.obstacles.splice(i, 1);
+              miniGameScore += 10;
+              document.getElementById('minigame-score').textContent = String(miniGameScore);
+              continue;
+            }
+            // Collision check with player car (playerX, y: 270, w: 46, h: 70)
+            if (racerState.playerX < ob.x + ob.w && racerState.playerX + 46 > ob.x && 270 < ob.y + ob.h && 340 > ob.y) {
+              miniGameRunning = false;
+              document.getElementById('minigame-status').textContent = 'התנגשות! לחץ "משחק חדש"';
+            }
+          }
+
+          for (let i = racerState.coins.length - 1; i >= 0; i--) {
+            const c = racerState.coins[i];
+            c.y += c.speed * delta;
+            if (c.y > 380) {
+              racerState.coins.splice(i, 1);
+              continue;
+            }
+            const dist = Math.hypot((racerState.playerX + 23) - c.x, 305 - c.y);
+            if (dist < 32) {
+              racerState.coins.splice(i, 1);
+              miniGameScore += 25;
+              document.getElementById('minigame-score').textContent = String(miniGameScore);
+            }
+          }
+        }
+
+        // Draw obstacles
+        racerState.obstacles.forEach((ob) => {
+          ctx.fillStyle = '#ef4444';
+          ctx.fillRect(ob.x, ob.y, ob.w, ob.h);
+        });
+
+        // Draw coins
+        racerState.coins.forEach((c) => {
+          ctx.fillStyle = '#fbbf24';
+          ctx.beginPath();
+          ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        // Draw player car
+        ctx.fillStyle = '#22d3ee';
+        ctx.fillRect(racerState.playerX, 270, 46, 70);
+      } else {
+        // Snake Mini-Game on 32x18 grid (20px cell)
+        const cols = 32;
+        const rows = 18;
+        const cell = 20;
+        ctx.fillStyle = '#090d16';
+        ctx.fillRect(0, 0, 640, 360);
+
+        if ((keysPressed['ArrowUp'] || keysPressed['KeyW']) && snakeState.dir.y !== 1) snakeState.dir = { x: 0, y: -1 };
+        if ((keysPressed['ArrowDown'] || keysPressed['KeyS']) && snakeState.dir.y !== -1) snakeState.dir = { x: 0, y: 1 };
+        if ((keysPressed['ArrowLeft'] || keysPressed['KeyA'] || miniGameInput.left) && snakeState.dir.x !== 1) snakeState.dir = { x: -1, y: 0 };
+        if ((keysPressed['ArrowRight'] || keysPressed['KeyD'] || miniGameInput.right) && snakeState.dir.x !== -1) snakeState.dir = { x: 1, y: 0 };
+
+        if (miniGameRunning) {
+          snakeState.stepTimer += delta;
+          if (snakeState.stepTimer >= 0.12) {
+            snakeState.stepTimer = 0;
+            const head = snakeState.snake[0];
+            const next = { x: head.x + snakeState.dir.x, y: head.y + snakeState.dir.y };
+
+            if (next.x < 0 || next.x >= cols || next.y < 0 || next.y >= rows || snakeState.snake.some((s) => s.x === next.x && s.y === next.y)) {
+              miniGameRunning = false;
+              document.getElementById('minigame-status').textContent = 'סיום משחק! לחץ "משחק חדש"';
+            } else {
+              snakeState.snake.unshift(next);
+              if (next.x === snakeState.food.x && next.y === snakeState.food.y) {
+                miniGameScore += 15;
+                document.getElementById('minigame-score').textContent = String(miniGameScore);
+                snakeState.food = {
+                  x: Math.floor(Math.random() * cols),
+                  y: Math.floor(Math.random() * rows)
+                };
+              } else {
+                snakeState.snake.pop();
+              }
+            }
+          }
+        }
+
+        ctx.fillStyle = '#fbbf24';
+        ctx.fillRect(snakeState.food.x * cell + 3, snakeState.food.y * cell + 3, cell - 6, cell - 6);
+
+        snakeState.snake.forEach((seg, idx) => {
+          ctx.fillStyle = idx === 0 ? '#34d399' : '#10b981';
+          ctx.fillRect(seg.x * cell + 1, seg.y * cell + 1, cell - 2, cell - 2);
+        });
+      }
+    }
+
+    function dropOrPickupAction() {
+      if (navMode !== 'walk') return;
+
+      const badge = document.getElementById('held-item-badge');
+      const nameEl = document.getElementById('held-item-name');
+
+      if (heldObject) {
+        // Gently place/drop held object in front of player
+        heldObject.isHeld = false;
+        const forward = new THREE.Vector3(Math.sin(walker.yaw), 0, Math.cos(walker.yaw)).normalize();
+        heldObject.mesh.position.copy(walker.pos)
+          .addScaledVector(forward, 1.3)
+          .add(new THREE.Vector3(0, -0.4, 0));
+        heldObject.velocity.set(forward.x * 1.5, -1.0, forward.z * 1.5);
+        heldObject = null;
+        badge.classList.add('hidden');
+      } else if (targetedObject) {
+        // Pick up targeted object
+        heldObject = targetedObject;
+        heldObject.isHeld = true;
+        heldObject.velocity.set(0, 0, 0);
+        heldObject.angularVel.set(0, 0, 0);
+        heldObject.mesh.rotation.set(0, 0, 0);
+
+        nameEl.textContent = heldObject.label;
+        badge.classList.remove('hidden');
+      }
+    }
+
+    function throwHeldObject() {
+      if (!heldObject) return;
+
+      const badge = document.getElementById('held-item-badge');
+      const throwDir = new THREE.Vector3();
+      camera.getWorldDirection(throwDir);
+
+      heldObject.isHeld = false;
+      heldObject.mesh.position.copy(camera.position).addScaledVector(throwDir, 1.1);
+      heldObject.velocity.copy(throwDir).multiplyScalar(17.5);
+      heldObject.velocity.y += 3.8;
+      heldObject.angularVel.set(
+        (Math.random() - 0.5) * 10,
+        (Math.random() - 0.5) * 10,
+        (Math.random() - 0.5) * 10
+      );
+
+      heldObject = null;
+      badge.classList.add('hidden');
+    }
+
+    /**
+     * ============================================================================
+     * FIRST-PERSON WALKING PHYSICS & ACCURATE STAIR RAMP ELEVATION
+     * ============================================================================
+     */
+    function syncWalkerCamera() {
+      camera.position.copy(walker.pos);
+      const lookDir = new THREE.Vector3(
+        Math.sin(walker.yaw) * Math.cos(walker.pitch),
+        Math.sin(walker.pitch),
+        Math.cos(walker.yaw) * Math.cos(walker.pitch)
+      );
+      camera.lookAt(walker.pos.clone().add(lookDir));
+    }
+
+    function computeFloorElevationAt(x, z, currentFeetY) {
+      // 1. Check all Stair Ramps first (with generous elevation tolerance so player never gets stuck)
+      for (let i = 0; i < stairRamps.length; i++) {
+        const r = stairRamps[i];
+        if (x >= r.minX && x <= r.maxX && z >= r.minZ && z <= r.maxZ) {
+          const minRampY = Math.min(r.startY, r.endY);
+          const maxRampY = Math.max(r.startY, r.endY);
+          // Allow seamless entry from either bottom or top landing
+          if (currentFeetY >= minRampY - 0.85 && currentFeetY <= maxRampY + 0.95) {
+            const coord = r.axis === 'z' ? z : x;
+            const t = (coord - r.startCoord) / (r.endCoord - r.startCoord);
+            const clampedT = Math.max(0, Math.min(1, t));
+            return r.startY + clampedT * (r.endY - r.startY);
+          }
+        }
+      }
+
+      // 2. Find highest walkable floor beneath player (supports step-up up to 0.75m)
+      let bestFloorY = 0.05;
+      for (let i = 0; i < walkableFloors.length; i++) {
+        const f = walkableFloors[i];
+        if (x >= f.minX && x <= f.maxX && z >= f.minZ && z <= f.maxZ) {
+          if (f.y <= currentFeetY + 0.75 && f.y > bestFloorY) {
+            bestFloorY = f.y;
+          }
+        }
+      }
+      return bestFloorY;
+    }
+
+    function isPositionBlocked(x, yFeet, z) {
+      // City boundary clamp
+      if (x < -112 || x > 112 || z < -112 || z > 112) return true;
+
+      const playerRadius = 0.38;
+      const headY = yFeet + EYE_HEIGHT;
+
+      for (let i = 0; i < solidObstacles.length; i++) {
+        const box = solidObstacles[i];
+        if (
+          x + playerRadius > box.minX &&
+          x - playerRadius < box.maxX &&
+          z + playerRadius > box.minZ &&
+          z - playerRadius < box.maxZ &&
+          headY > box.minY + 0.15 &&
+          yFeet < box.maxY - 0.15
+        ) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    function updateWalkerPhysics(delta) {
+      const isSprinting = keysPressed['ShiftLeft'] || keysPressed['ShiftRight'];
+      const speed = (isSprinting ? 16.0 : 8.8) * delta;
+
+      const forward = new THREE.Vector3(Math.sin(walker.yaw), 0, Math.cos(walker.yaw)).normalize();
+      const right = new THREE.Vector3(-Math.cos(walker.yaw), 0, Math.sin(walker.yaw)).normalize();
+
+      let moveForward = 0;
+      let moveRight = 0;
+
+      if (keysPressed['KeyW'] || keysPressed['ArrowUp']) moveForward += 1;
+      if (keysPressed['KeyS'] || keysPressed['ArrowDown']) moveForward -= 1;
+      if (keysPressed['KeyD'] || keysPressed['ArrowRight']) moveRight += 1;
+      if (keysPressed['KeyA'] || keysPressed['ArrowLeft']) moveRight -= 1;
+
+      moveForward -= joyMoveZ;
+      moveRight += joyMoveX;
+
+      const moveVec = new THREE.Vector3()
+        .addScaledVector(forward, moveForward)
+        .addScaledVector(right, moveRight);
+
+      if (moveVec.lengthSq() > 0.001) {
+        moveVec.normalize().multiplyScalar(speed);
+        const feetY = walker.pos.y - EYE_HEIGHT;
+
+        const nextX = walker.pos.x + moveVec.x;
+        if (!isPositionBlocked(nextX, feetY, walker.pos.z)) {
+          walker.pos.x = nextX;
+        }
+
+        const nextZ = walker.pos.z + moveVec.z;
+        if (!isPositionBlocked(walker.pos.x, feetY, nextZ)) {
+          walker.pos.z = nextZ;
+        }
+      }
+
+      if (keysPressed['Space'] && walker.isGrounded) {
+        walker.velY = 7.2;
+        walker.isGrounded = false;
+      }
+
+      const currentFeetY = walker.pos.y - EYE_HEIGHT;
+      const targetFloorY = computeFloorElevationAt(walker.pos.x, walker.pos.z, currentFeetY);
+
+      walker.velY -= 18.5 * delta;
+      walker.pos.y += walker.velY * delta;
+
+      // Smoothly glue player to stairs/floors when walking up or down inclines
+      if (walker.isGrounded && walker.velY <= 0 && Math.abs(currentFeetY - targetFloorY) < 0.65) {
+        walker.pos.y = targetFloorY + EYE_HEIGHT;
+        walker.velY = 0;
+      } else if (walker.pos.y - EYE_HEIGHT <= targetFloorY && walker.velY <= 0) {
+        walker.pos.y = targetFloorY + EYE_HEIGHT;
+        walker.velY = 0;
+        walker.isGrounded = true;
+      }
+
+      syncWalkerCamera();
+    }
+
+    /**
+     * ============================================================================
+     * NAVIGATION MODE & TELEPORTATION
+     * ============================================================================
+     */
+    function setNavigationMode(mode) {
+      navMode = mode;
+
+      const walkBtn = document.getElementById('nav-walk');
+      const orbitBtn = document.getElementById('nav-orbit');
+      const crosshair = document.getElementById('walk-crosshair');
+      const mobileControls = document.getElementById('mobile-walk-controls');
+      const hint = document.getElementById('controls-hint');
+
+      if (mode === 'walk') {
+        walkBtn.classList.remove('btn-inactive');
+        walkBtn.classList.add('btn-active');
+        orbitBtn.classList.remove('btn-active');
+        orbitBtn.classList.add('btn-inactive');
+
+        controls.enabled = false;
+        cameraTransition.active = false;
+        crosshair.style.display = 'flex';
+        mobileControls.style.display = '';
+        hint.textContent = 'WASD להליכה • עכבר למבט • E להרמה/הנחה • F לזריקה • Space לקפיצה';
+
+        syncWalkerCamera();
+      } else {
+        orbitBtn.classList.remove('btn-inactive');
+        orbitBtn.classList.add('btn-active');
+        walkBtn.classList.remove('btn-active');
+        walkBtn.classList.add('btn-inactive');
+
+        if (document.pointerLockElement) {
+          document.exitPointerLock();
+        }
+
+        crosshair.style.display = 'none';
+        mobileControls.style.display = 'none';
+        hint.textContent = 'גרירה לסיבוב רחפן • גלגלת לזום • WASD לתנועה אופקית';
+
+        controls.enabled = true;
+        const forward = new THREE.Vector3(Math.sin(walker.yaw), 0, Math.cos(walker.yaw));
+        controls.target.copy(walker.pos).addScaledVector(forward, 8);
+        camera.position.copy(walker.pos).add(new THREE.Vector3(0, 16, 0)).addScaledVector(forward, -20);
+        controls.update();
+      }
+    }
+
+    function goToLocation(locKey) {
+      const loc = LOCATIONS[locKey];
+      if (!loc) return;
+
+      document.querySelectorAll('.cam-btn').forEach((btn) => {
+        btn.classList.remove('btn-active');
+        btn.classList.add('btn-inactive');
+      });
+      const activeBtn = document.getElementById(`cam-${locKey}`);
+      if (activeBtn) {
+        activeBtn.classList.remove('btn-inactive');
+        activeBtn.classList.add('btn-active');
+      }
+
+      if (navMode === 'walk') {
+        if (locKey === 'aerial') {
+          setNavigationMode('orbit');
+          cameraTransition.active = true;
+          cameraTransition.progress = 0;
+          cameraTransition.startPos.copy(camera.position);
+          cameraTransition.endPos.copy(loc.dronePos);
+          cameraTransition.startTarget.copy(controls.target);
+          cameraTransition.endTarget.copy(loc.droneTarget);
+          return;
+        }
+        walker.pos.set(loc.walkPos.x, loc.walkPos.y + EYE_HEIGHT, loc.walkPos.z);
+        walker.velY = 0;
+        walker.isGrounded = true;
+        walker.yaw = loc.walkYaw;
+        walker.pitch = 0.02;
+        syncWalkerCamera();
+      } else {
+        cameraTransition.active = true;
+        cameraTransition.progress = 0;
+        cameraTransition.startPos.copy(camera.position);
+        cameraTransition.endPos.copy(loc.dronePos);
+        cameraTransition.startTarget.copy(controls.target);
+        cameraTransition.endTarget.copy(loc.droneTarget);
+      }
+    }
+
+    /**
+     * ============================================================================
+     * INPUT LISTENERS (KEYBOARD, MOUSE LOOK, CLICK TO THROW, TOUCH JOYSTICK)
+     * ============================================================================
+     */
+    function setupInputListeners() {
+      const dom = renderer.domElement;
+
+      window.addEventListener('resize', onWindowResize);
+      document.addEventListener('pointerlockchange', updateMouseLockBadge);
+
+      window.addEventListener('keydown', (e) => {
+        keysPressed[e.code] = true;
+
+        if (isPcModalOpen) {
+          if (e.code === 'Escape' || e.code === 'KeyP') {
+            closePcArcadeModal();
+          }
+          return;
+        }
+
+        if (e.code === 'KeyM') {
+          toggleMouseLock();
+        } else if (e.code === 'KeyP') {
+          openPcArcadeModal();
+        } else if (e.code === 'KeyI') {
+          toggleCarDriveMode();
+        } else if (e.code === 'KeyE') {
+          dropOrPickupAction();
+        } else if (e.code === 'KeyF') {
+          throwHeldObject();
+        }
+      });
+
+      const jumpBtn = document.getElementById('mobile-jump-btn');
+      if (jumpBtn) {
+        jumpBtn.addEventListener('touchstart', (e) => {
+          e.preventDefault();
+          if (walker.isGrounded) {
+            walker.velY = 7.2;
+            walker.isGrounded = false;
+          }
+        }, { passive: false });
+      }
+
+      dom.addEventListener('pointerdown', (e) => {
+        if (navMode !== 'walk' || activeDrivingCar || isPcModalOpen) return;
+        isDraggingLook = true;
+        prevPointerX = e.clientX;
+        prevPointerY = e.clientY;
+        pointerDownPos = { x: e.clientX, y: e.clientY };
+      });
+
+      window.addEventListener('pointermove', (e) => {
+        if (navMode !== 'walk' || activeDrivingCar || isPcModalOpen) return;
+        let dx = 0;
+        let dy = 0;
+        if (document.pointerLockElement === dom) {
+          dx = e.movementX || 0;
+          dy = e.movementY || 0;
+        } else if (isDraggingLook) {
+          dx = e.clientX - prevPointerX;
+          dy = e.clientY - prevPointerY;
+          prevPointerX = e.clientX;
+          prevPointerY = e.clientY;
+        } else {
+          return;
+        }
+        walker.yaw -= dx * 0.0042;
+        walker.pitch = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, walker.pitch - dy * 0.0042));
+      });
+
+      window.addEventListener('pointerup', (e) => {
+        if (isDraggingLook) {
+          const movedDist = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
+          if (movedDist < 6 && e.button === 0 && heldObject && navMode === 'walk' && !activeDrivingCar && !isPcModalOpen) {
+            throwHeldObject();
+          }
+        }
+        isDraggingLook = false;
+      });
+
+      window.addEventListener('keyup', (e) => {
+        keysPressed[e.code] = false;
+      });
+
+      const joyZone = document.getElementById('joystick-zone');
+      const joyKnob = document.getElementById('joystick-knob');
+      if (joyZone && joyKnob) {
+        const maxRadius = 38;
+        joyZone.addEventListener('touchmove', (e) => {
+          e.preventDefault();
+          const rect = joyZone.getBoundingClientRect();
+          const cx = rect.left + rect.width / 2;
+          const cy = rect.top + rect.height / 2;
+          const touch = e.touches[0];
+          let dx = touch.clientX - cx;
+          let dy = touch.clientY - cy;
+          const dist = Math.hypot(dx, dy);
+          if (dist > maxRadius) {
+            dx = (dx / dist) * maxRadius;
+            dy = (dy / dist) * maxRadius;
+          }
+          joyKnob.style.transform = `translate(${dx}px, ${dy}px)`;
+          joyMoveX = dx / maxRadius;
+          joyMoveZ = dy / maxRadius;
+        }, { passive: false });
+
+        const resetJoy = () => {
+          joyKnob.style.transform = 'translate(0px, 0px)';
+          joyMoveX = 0;
+          joyMoveZ = 0;
+        };
+        joyZone.addEventListener('touchend', resetJoy);
+        joyZone.addEventListener('touchcancel', resetJoy);
+      }
+    }
+
+    /**
+     * ============================================================================
+     * PICKABLE OBJECTS TARGETING & PHYSICS
+     * ============================================================================
+     */
+    function updatePickableObjectsPhysics(delta) {
+      targetedObject = null;
+      const promptEl = document.getElementById('pickup-prompt');
+      const promptTextEl = document.getElementById('pickup-prompt-text');
+      const dotEl = document.getElementById('crosshair-dot');
+
+      const camForward = new THREE.Vector3();
+      if (navMode === 'walk' && !activeDrivingCar && !isPcModalOpen) {
+        camera.getWorldDirection(camForward);
+      }
+
+      let bestScore = Infinity;
+
+      for (let i = 0; i < pickableObjects.length; i++) {
+        const obj = pickableObjects[i];
+
+        if (obj.isHeld) {
+          const holdTarget = camera.position.clone()
+            .addScaledVector(camForward, 1.35)
+            .add(new THREE.Vector3(0, -0.28, 0));
+          obj.mesh.position.lerp(holdTarget, Math.min(1, delta * 18));
+          obj.mesh.rotation.y += delta * 1.2;
+          continue;
+        }
+
+        // Apply gravity & velocity
+        obj.velocity.y -= 16.5 * delta;
+        obj.mesh.position.addScaledVector(obj.velocity, delta);
+        obj.mesh.rotation.x += obj.angularVel.x * delta;
+        obj.mesh.rotation.y += obj.angularVel.y * delta;
+        obj.mesh.rotation.z += obj.angularVel.z * delta;
+        obj.angularVel.multiplyScalar(Math.max(0, 1 - 2.5 * delta));
+
+        // Clamp within city bounds
+        obj.mesh.position.x = Math.max(-110, Math.min(110, obj.mesh.position.x));
+        obj.mesh.position.z = Math.max(-110, Math.min(110, obj.mesh.position.z));
+
+        // Ground / Floor / Stair collision
+        const floorY = computeFloorElevationAt(obj.mesh.position.x, obj.mesh.position.z, obj.mesh.position.y);
+        if (obj.mesh.position.y <= floorY) {
+          obj.mesh.position.y = floorY;
+          if (obj.velocity.y < -1.5) {
+            obj.velocity.y = -obj.velocity.y * 0.35;
+            obj.velocity.x *= 0.72;
+            obj.velocity.z *= 0.72;
+          } else {
+            obj.velocity.y = 0;
+            obj.velocity.x *= Math.max(0, 1 - 8 * delta);
+            obj.velocity.z *= Math.max(0, 1 - 8 * delta);
+            obj.angularVel.set(0, 0, 0);
+          }
+        }
+
+        // Check if player in Walk Mode is looking near this item
+        if (!heldObject && navMode === 'walk' && !activeDrivingCar && !isPcModalOpen) {
+          const toObj = obj.mesh.position.clone().sub(camera.position);
+          const dist = toObj.length();
+          if (dist > 0.2 && dist < 4.5) {
+            const dir = toObj.clone().normalize();
+            const dot = camForward.dot(dir);
+            if (dot > 0.92) {
+              const score = dist * (1.2 - dot);
+              if (score < bestScore) {
+                bestScore = score;
+                targetedObject = obj;
+              }
+            }
+          }
+        }
+      }
+
+      if (targetedObject && !heldObject && navMode === 'walk' && !activeDrivingCar && !isPcModalOpen) {
+        promptEl.classList.remove('hidden');
+        promptTextEl.textContent = `הרם: ${targetedObject.label}`;
+        dotEl.classList.add('scale-150', 'bg-amber-400');
+      } else {
+        promptEl.classList.add('hidden');
+        dotEl.classList.remove('scale-150', 'bg-amber-400');
+      }
+    }
+
+    function setLightingMode(mode) {
+      currentLightingMode = mode;
+      ['day', 'sunset', 'night'].forEach((m) => {
+        const btn = document.getElementById(`mode-${m}`);
+        if (btn) {
+          btn.classList.toggle('btn-active', m === mode);
+          btn.classList.toggle('btn-inactive', m !== mode);
+        }
+      });
+
+      if (mode === 'day') {
+        skyMaterial.uniforms.topColor.value.setHex(0x1d4ed8);
+        skyMaterial.uniforms.bottomColor.value.setHex(0xdbeafe);
+        scene.fog.color.setHex(0xdbeafe);
+        starField.material.opacity = 0;
+
+        sunLight.color.setHex(0xfffbeb);
+        sunLight.intensity = 1.85;
+        sunLight.position.set(70, 95, 55);
+
+        hemiLight.color.setHex(0x93c5fd);
+        hemiLight.groundColor.setHex(0x3f6212);
+        hemiLight.intensity = 0.65;
+        ambientLight.intensity = 0.42;
+        renderer.toneMappingExposure = 1.1;
+
+        emissiveMaterials.forEach((mat) => { mat.emissiveIntensity = 0.3; });
+      } else if (mode === 'sunset') {
+        skyMaterial.uniforms.topColor.value.setHex(0x312e81);
+        skyMaterial.uniforms.bottomColor.value.setHex(0xfb923c);
+        scene.fog.color.setHex(0xfdba74);
+        starField.material.opacity = 0.3;
+
+        sunLight.color.setHex(0xff7e33);
+        sunLight.intensity = 1.65;
+        sunLight.position.set(-85, 22, 40);
+
+        hemiLight.color.setHex(0xfdba74);
+        hemiLight.groundColor.setHex(0x431407);
+        hemiLight.intensity = 0.55;
+        ambientLight.intensity = 0.3;
+        renderer.toneMappingExposure = 1.15;
+
+        emissiveMaterials.forEach((mat) => { mat.emissiveIntensity = 1.3; });
+      } else if (mode === 'night') {
+        skyMaterial.uniforms.topColor.value.setHex(0x020617);
+        skyMaterial.uniforms.bottomColor.value.setHex(0x0f172a);
+        scene.fog.color.setHex(0x090d16);
+        starField.material.opacity = 0.95;
+
+        sunLight.color.setHex(0x93c5fd);
+        sunLight.intensity = 0.36;
+        sunLight.position.set(-50, 70, -45);
+
+        hemiLight.color.setHex(0x1e3a8a);
+        hemiLight.groundColor.setHex(0x090d16);
+        hemiLight.intensity = 0.3;
+        ambientLight.intensity = 0.22;
+        renderer.toneMappingExposure = 1.28;
+
+        emissiveMaterials.forEach((mat) => { mat.emissiveIntensity = 2.5; });
+      }
+
+      nightLights.forEach((item) => {
+        if (mode === 'day') item.light.intensity = item.dayIntensity;
+        else if (mode === 'sunset') item.light.intensity = item.sunsetIntensity;
+        else item.light.intensity = item.nightIntensity;
+      });
+    }
+
+    function toggleWaterAnimation() {
+      isWaterAnimated = !isWaterAnimated;
+      const btn = document.getElementById('toggle-water');
+      btn.classList.toggle('btn-active', isWaterAnimated);
+      btn.classList.toggle('btn-inactive', !isWaterAnimated);
+    }
+
+    function toggleHudVisibility() {
+      hudVisible = !hudVisible;
+      const dock = document.getElementById('bottom-dock');
+      dock.style.opacity = hudVisible ? '1' : '0';
+      dock.style.pointerEvents = hudVisible ? 'auto' : 'none';
+    }
+
+    function updateDroneKeyboard(delta) {
+      const moveSpeed = 30 * delta;
+      const forward = new THREE.Vector3();
+      camera.getWorldDirection(forward);
+      forward.y = 0;
+      forward.normalize();
+
+      const right = new THREE.Vector3().crossVectors(forward, camera.up).normalize();
+      let moved = false;
+
+      if (keysPressed['KeyW'] || keysPressed['ArrowUp']) {
+        camera.position.addScaledVector(forward, moveSpeed);
+        controls.target.addScaledVector(forward, moveSpeed);
+        moved = true;
+      }
+      if (keysPressed['KeyS'] || keysPressed['ArrowDown']) {
+        camera.position.addScaledVector(forward, -moveSpeed);
+        controls.target.addScaledVector(forward, -moveSpeed);
+        moved = true;
+      }
+      if (keysPressed['KeyD'] || keysPressed['ArrowRight']) {
+        camera.position.addScaledVector(right, moveSpeed);
+        controls.target.addScaledVector(right, moveSpeed);
+        moved = true;
+      }
+      if (keysPressed['KeyA'] || keysPressed['ArrowLeft']) {
+        camera.position.addScaledVector(right, -moveSpeed);
+        controls.target.addScaledVector(right, -moveSpeed);
+        moved = true;
+      }
+
+      if (moved) {
+        cameraTransition.active = false;
+        if (camera.position.y < 1.2) camera.position.y = 1.2;
+      }
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      const delta = Math.min(clock.getDelta(), 0.1);
+      const elapsed = clock.getElapsedTime();
+
+      // 1. Animate Pool Water Ripples
+      if (isWaterAnimated && waterMeshes.length > 0) {
+        waterMeshes.forEach((w) => {
+          const posAttr = w.geo.attributes.position;
+          for (let i = 0; i < posAttr.count; i++) {
+            const ix = i * 3;
+            const x = w.base[ix];
+            const z = w.base[ix + 2];
+            posAttr.array[ix + 1] =
+              Math.sin(x * 1.1 + elapsed * 2.2) * 0.025 +
+              Math.cos(z * 1.4 + elapsed * 1.8) * 0.02;
+          }
+          posAttr.needsUpdate = true;
+          w.geo.computeVertexNormals();
+        });
+      }
+
+      // 2. Animate Central Plaza Fountain Jets
+      fountainWaterDrops.forEach((d) => {
+        const t = ((elapsed * 1.3 + d.phase) % 1);
+        const r = 0.6 + t * 3.8;
+        const y = 2.6 + Math.sin(t * Math.PI) * 2.2 - t * 1.6;
+        d.mesh.position.set(Math.cos(d.angle) * r, y, Math.sin(d.angle) * r);
+      });
+
+      // 3. Spin Helicopter Rotor
+      if (heliRotor) {
+        heliRotor.rotation.y += delta * 2.6;
+      }
+
+      // 4. Update Pickable Objects & Physics
+      updatePickableObjectsPhysics(delta);
+
+      // 5. Update Active Navigation Mode (Driving Car, First-Person Walk, or Drone Orbit)
+      if (activeDrivingCar) {
+        updateDrivingPhysics(delta);
+      } else if (navMode === 'walk') {
+        updateWalkerPhysics(delta);
+      } else {
+        if (cameraTransition.active) {
+          cameraTransition.progress += delta / cameraTransition.duration;
+          if (cameraTransition.progress >= 1) {
+            cameraTransition.progress = 1;
+            cameraTransition.active = false;
+          }
+          const t = cameraTransition.progress;
+          const ease = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+          camera.position.lerpVectors(cameraTransition.startPos, cameraTransition.endPos, ease);
+          controls.target.lerpVectors(cameraTransition.startTarget, cameraTransition.endTarget, ease);
+        }
+        updateDroneKeyboard(delta);
+        controls.update();
+      }
+
+      // 6. Update Contextual Prompts (PC 'P' & Car 'I') and PC Mini-Game Canvas
+      updateContextHud();
+      updateAndDrawMiniGame(delta);
+
+      renderer.render(scene, camera);
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    window.onload = init;
+  </script>
+
+<a id="club-back" href="../index.html#products-shelf" style="position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#fff;color:#1d2433;border:2px solid #cfe0f0;border-radius:999px;padding:8px 18px;font:600 15px/1.2 Arial,sans-serif;text-decoration:none;direction:rtl;box-shadow:0 3px 0 #cfe0f0">→ חזרה לאתר החוג</a>
+<script>if (window.top !== window) document.getElementById("club-back").remove();</script>
+</body>
+</html>

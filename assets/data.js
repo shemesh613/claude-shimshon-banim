@@ -154,6 +154,11 @@ window.SITE = {
       "href": "worlds/beersheva.html"
     },
     {
+      "title": "עיר וילות יוקרה",
+      "cover": "lessons/img/ex3d-villa.jpg",
+      "href": "worlds/villa.html"
+    },
+    {
       "title": "חדר גיימינג",
       "cover": "lessons/img/ex3d-gaming.jpg",
       "href": "worlds/gaming.html"
