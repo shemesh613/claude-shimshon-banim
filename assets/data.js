@@ -212,26 +212,6 @@ window.SITE = {
       "title": "היכל סודות בראשית (חדר בריחה)",
       "cover": "lessons/img/ex3d-bereshit.jpg",
       "href": "worlds/bereshit.html"
-    },
-    {
-      "title": "הצלת המלך (משחק)",
-      "cover": "lessons/img/ex3d-save-king.jpg",
-      "href": "worlds/save-king.html"
-    },
-    {
-      "title": "סימולטור מרוצי מכוניות (משחק)",
-      "cover": "lessons/img/ex3d-racing-sim.jpg",
-      "href": "worlds/racing-sim.html"
-    },
-    {
-      "title": "מרוץ החלל (משחק)",
-      "cover": "lessons/img/ex3d-space-run.jpg",
-      "href": "worlds/space-run.html"
-    },
-    {
-      "title": "אקסטרים אופניים 3D (משחק)",
-      "cover": "lessons/img/ex3d-bikes.jpg",
-      "href": "worlds/bikes.html"
     }
   ]
 };
